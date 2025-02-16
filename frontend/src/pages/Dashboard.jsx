@@ -13,8 +13,8 @@ function Dashboard() {
               <span className="ml-2 text-xl font-semibold">Plek</span>
             </div>
             <div className="flex space-x-6">
-              <a href="#" className="text-purple-400 hover:text-purple-300">Dashboard</a>
-              <a href="#" className="text-gray-400 hover:text-gray-300">Book a room</a>
+              <a href="Dashboard" className="text-purple-400 hover:text-purple-300">Dashboard</a>
+              <a href="Booking" className="text-gray-400 hover:text-gray-300">Book a room</a>
               <a href="#" className="text-gray-400 hover:text-gray-300">My Bookings</a>
             </div>
           </div>
@@ -146,7 +146,7 @@ function Dashboard() {
       </div>
 
       {/* Footer */}
-      <footer className="border-t border-gray-800 mt-[25px] bg-plek-dark">
+      <footer className="border-t border-gray-800 mt-20 bg-plek-dark">
         <div className="container mx-auto px-4 py-4">
           <div className="flex justify-center space-x-6 text-sm text-gray-400">
             <Link to="/about" className="hover:text-white transition-colors">About us</Link>
