@@ -1,0 +1,5 @@
+numpy
+pandas
+django
+djangorestframework
+mysqlclient
