@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Search, SlidersHorizontal, Projector, Wifi, ArrowLeft, Calendar, Clock, Users, Building2, X } from 'lucide-react';
-
+import { Link } from 'react-router-dom';
 
 
 
@@ -8,6 +8,9 @@ function Booking() {
   const [searchQuery, setSearchQuery] = useState('');
   const [showBookingModal, setShowBookingModal] = useState(false);
   const [selectedRoom, setSelectedRoom] = useState(null);
+  const [selectedAmenities, setSelectedAmenities] = useState([]);
+
+  const Username = localStorage.getItem('Username');
 
   const rooms = [
     {
@@ -33,6 +36,14 @@ function Booking() {
   const handleBookClick = (room) => {
     setSelectedRoom(room);
     setShowBookingModal(true);
+  };
+
+  const toggleAmenity = (amenity) => {
+    if (selectedAmenities.includes(amenity)) {
+      setSelectedAmenities(selectedAmenities.filter((a) => a !== amenity));
+    } else {
+      setSelectedAmenities([...selectedAmenities, amenity]);
+    }
   };
 
   const BookingModal = ({ room, onClose }) => {
@@ -178,113 +189,125 @@ function Booking() {
   };
 
   return (
-    <div className="min-h-screen bg-plek-background text-white">
-      {/* Navigation */}
-      <nav className="border-b border-gray-800 px-6 py-4 bg-plek-dark">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center space-x-8">
-            <div className="flex items-center">
-              <span className="ml-2 text-xl font-semibold">Plek</span>
-            </div>
-            <div className="flex space-x-6">
-              <a href="Dashboard" className="text-gray-400 hover:text-gray-300">Dashboard</a>
-              <a href="Booking" className="text-purple-400 hover:text-purple-300">Book a room</a>
-              <a href="#" className="text-gray-400 hover:text-gray-300">My Bookings</a>
-            </div>
-          </div>
-          <div className="flex items-center space-x-2">
-            <span>Username</span>
-            <div className="w-8 h-8 bg-blue-400 rounded-full"></div>
-          </div>
-        </div>
-      </nav>
-
-      {/* Main Content */}
-      <main className="max-w-7xl mx-auto px-4 py-8">
-        {/* Search Bar */}
-        <div className="relative mb-8">
-          <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-300" />
-          <input
-            type="text"
-            placeholder="Search for rooms..."
-            className="w-full pl-12 pr-4 py-3 bg-gray-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-400 placeholder-gray-300"
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-          />
-          <button className="absolute right-4 top-1/2 transform -translate-y-1/2">
-            <SlidersHorizontal className="text-gray-300" />
-          </button>
-        </div>
-
-        {/* Filters */}
-        <div className="grid grid-cols-4 gap-6 mb-8">
-          <div className="space-y-2">
-            <label className="block text-gray-300">Building</label>
-            <select className="w-full bg-gray-800 rounded-lg p-3 focus:outline-none focus:ring-2 focus:ring-blue-400">
-              <option>Any Buildings</option>
-            </select>
-          </div>
-          <div className="space-y-2">
-            <label className="block text-gray-300">Time Slot</label>
-            <select className="w-full bg-gray-800 rounded-lg p-3 focus:outline-none focus:ring-2 focus:ring-blue-400">
-              <option>All Time Slots</option>
-            </select>
-          </div>
-          <div className="space-y-2">
-            <label className="block text-gray-300">Capacity</label>
-            <select className="w-full bg-gray-800 rounded-lg p-3 focus:outline-none focus:ring-2 focus:ring-blue-400">
-              <option>Any Capacity</option>
-            </select>
-          </div>
-          <div className="space-y-2">
-            <label className="block text-gray-300">Amenities</label>
-            <div className="flex space-x-2">
-              <button className="px-4 py-2 bg-gray-700 rounded-lg flex items-center space-x-2">
-                <Projector size={18} />
-                <span>Projector</span>
-              </button>
-              <button className="px-4 py-2 bg-gray-700 rounded-lg flex items-center space-x-2">
-                <Wifi size={18} />
-                <span>Wi-Fi</span>
-              </button>
-            </div>
-          </div>
-        </div>
-
-        {/* Room Cards */}
-        <div className="grid grid-cols-3 gap-6">
-          {rooms.map(room => (
-            <div key={room.id} className="bg-gray-800 rounded-lg p-6 space-y-4">
-              <h3 className="text-xl font-semibold">Room: {room.name}</h3>
-              <p>Building: {room.building}</p>
-              <p>Capacity: {room.capacity}</p>
-              <p>Slot: {room.timeSlot}</p>
-              <p>Date: {room.date}</p>
-              <div className="flex space-x-2">
-                {room.amenities.includes('projector') && (
-                  <Projector size={18} className="text-gray-400" />
-                )}
-                {room.amenities.includes('wifi') && (
-                  <Wifi size={18} className="text-gray-400" />
-                )}
+    <div className="flex flex-col min-h-screen">
+      <main className="flex-grow">
+        <div className="min-h-screen bg-plek-background text-white">
+          {/* Navigation */}
+          <nav className="border-b border-gray-800 px-6 py-4 bg-plek-dark">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center space-x-8">
+                <div className="flex items-center">
+                  <span className="ml-2 text-xl font-semibold">Plek</span>
+                </div>
+                <div className="flex space-x-6">
+                  <a href="Dashboard" className="text-gray-400 hover:text-gray-300">Dashboard</a>
+                  <a href="Booking" className="text-purple-400 hover:text-purple-300">Book a room</a>
+                  <a href="#" className="text-gray-400 hover:text-gray-300">My Bookings</a>
+                </div>
               </div>
-              <button
-                onClick={() => handleBookClick(room)}
-                className="w-full py-2 bg-purple-600 hover:bg-purple-700 rounded-lg transition-colors"
-              >
-                Book
+              <div className="flex items-center space-x-2">
+                <div className="w-8 h-8 bg-blue-400 rounded-full"></div>
+                <span>{Username}</span>
+                
+              </div>
+            </div>
+          </nav>
+
+          {/* Main Content */}
+          <main className="max-w-7xl mx-auto px-4 py-8">
+            {/* Search Bar */}
+            <div className="relative mb-8">
+              <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-300" />
+              <input
+                type="text"
+                placeholder="Search for rooms..."
+                className="w-full pl-12 pr-4 py-3 bg-gray-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-400 placeholder-gray-300"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+              />
+              <button className="absolute right-4 top-1/2 transform -translate-y-1/2">
+                <SlidersHorizontal className="text-gray-300" />
               </button>
             </div>
-          ))}
+
+            {/* Filters */}
+            <div className="grid grid-cols-4 gap-6 mb-8">
+              <div className="space-y-2">
+                <label className="block text-gray-300">Building</label>
+                <select className="w-full bg-gray-600 rounded-lg p-3 focus:outline-none focus:ring-2 focus:ring-blue-400">
+                  <option>Any Buildings</option>
+                </select>
+              </div>
+              <div className="space-y-2">
+                <label className="block text-gray-300">Time Slot</label>
+                <select className="w-full bg-gray-600 rounded-lg p-3 focus:outline-none focus:ring-2 focus:ring-blue-400">
+                  <option>All Time Slots</option>
+                </select>
+              </div>
+              <div className="space-y-2">
+                <label className="block text-gray-300">Capacity</label>
+                <select className="w-full bg-gray-600 rounded-lg p-3 focus:outline-none focus:ring-2 focus:ring-blue-400">
+                  <option>Any Capacity</option>
+                </select>
+              </div>
+              <div className="space-y-2">
+                <label className="block text-gray-300">Amenities</label>
+                <div className="flex space-x-2">
+                  <button
+                    className={`px-4 py-2 ${selectedAmenities.includes('projector') ? 'bg-purple-600' : 'bg-gray-600'} rounded-lg flex items-center space-x-2`}
+                    onClick={() => toggleAmenity('projector')}
+                  >
+                    <Projector size={18} />
+                    <span>Projector</span>
+                  </button>
+                  <button
+                    className={`px-4 py-2 ${selectedAmenities.includes('wifi') ? 'bg-purple-600' : 'bg-gray-600'} rounded-lg flex items-center space-x-2`}
+                    onClick={() => toggleAmenity('wifi')}
+                  >
+                    <Wifi size={18} />
+                    <span>Wi-Fi</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            {/* Room Cards */}
+            <div className="grid grid-cols-3 gap-6">
+              {rooms.map(room => (
+                <div key={room.id} className="bg-plek-dark rounded-lg p-6 space-y-4">
+                  <h3 className="text-xl font-semibold">Room: {room.name}</h3>
+                  <p>Building: {room.building}</p>
+                  <p>Capacity: {room.capacity}</p>
+                  <p>Slot: {room.timeSlot}</p>
+                  <p>Date: {room.date}</p>
+                  <div className="flex space-x-2">
+                    {room.amenities.includes('projector') && (
+                      <Projector size={18} className="text-gray-400" />
+                    )}
+                    {room.amenities.includes('wifi') && (
+                      <Wifi size={18} className="text-gray-400" />
+                    )}
+                  </div>
+                  <button
+                    onClick={() => handleBookClick(room)}
+                    className="w-full py-2 bg-purple-600 hover:bg-purple-700 rounded-lg transition-colors"
+                  >
+                    Book
+                  </button>
+                </div>
+              ))}
+            </div>
+          </main>
         </div>
       </main>
 
-      {/* Footer */}
-      <footer className="border-t border-gray-800 mt-12">
-        <div className="max-w-7xl mx-auto px-4 py-6 flex justify-end space-x-6 text-gray-400">
-          <a href="#" className="hover:text-white">About us</a>
-          <a href="#" className="hover:text-white">Help Center</a>
-          <a href="#" className="hover:text-white">Contact us</a>
+      <footer className="border-t border-gray-800 bg-plek-dark">
+        <div className="container mx-auto px-4 py-4">
+          <div className="flex justify-center space-x-6 text-sm text-gray-400">
+            <Link to="/about" className="hover:text-white transition-colors">About us</Link>
+            <Link to="/help" className="hover:text-white transition-colors">Help Center</Link>
+            <Link to="/contact" className="hover:text-white transition-colors">Contact us</Link>
+          </div>
         </div>
       </footer>
 

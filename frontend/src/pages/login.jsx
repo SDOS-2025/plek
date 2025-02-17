@@ -1,14 +1,52 @@
-import React, { useState } from 'react';
+import React, { use, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useNavigate } from 'react-router-dom';
+import axios from 'axios';
+import bcrypt from 'bcryptjs';
+
+
+
 
 export default function Login() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const navigate = useNavigate();
+  const [username, setUsername] = useState('');
+
+
+
+  const salt = bcrypt.genSaltSync(10)
+
+  function makePostRequest(url) {
+    const hashedPassword = bcrypt.hashSync(password, salt)
+
+    const queryObj = {email, password: hashedPassword}
+
+    axios.post(url, queryObj).then(
+      (response) => {
+          let result = response.data;
+          return result;
+      },
+      (error) => {
+          console.log(error);
+          return null;
+      }
+    );
+  }
+
   const handleSubmit = (e) => {
     e.preventDefault();
     if (email && password) {
+      const data = { email, password };
+      
+      // if (makePostRequest('http://localhost:5173/api/auth/login', data)) {
+      //   setUsername(result.username);
+      //   navigate('/dashboard', { state: { username } });
+      // } else {
+      //   console.error('Invalid email or password');
+      //   navigate('/login');
+      // }
+      localStorage.setItem('Username', 'User');
       navigate('/dashboard');
     } else {
       console.error('Email and password are required');

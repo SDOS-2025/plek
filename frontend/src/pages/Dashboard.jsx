@@ -1,10 +1,13 @@
 import React from 'react';
 import {Calendar, Clock, Users, Activity, BookMarked } from 'lucide-react';
-import { Link } from 'react-router-dom';
+import { Link} from 'react-router-dom';
+
 
 function Dashboard() {
+  const Username = localStorage.getItem('Username');
+
   return (
-    <div className="min-h-screen bg-plek-background text-gray-100">
+    <div className="flex flex-col min-h-screen bg-plek-background text-gray-100">
       {/* Navigation */}
       <nav className="border-b border-gray-800 px-6 py-4 bg-plek-dark">
         <div className="flex items-center justify-between">
@@ -21,9 +24,9 @@ function Dashboard() {
           <div className="flex items-center">
             <div className="flex items-center">
               <div className="h-8 w-8 rounded-full bg-sky-500 flex items-center justify-center">
-                <span className="text-sm font-medium">U</span>
+                <span className="text-sm font-medium"></span>
               </div>
-              <span className="ml-2 text-gray-300">Username</span>
+              <span className="ml-2">{Username}</span>
             </div>
           </div>
         </div>
