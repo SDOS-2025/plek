@@ -10,7 +10,7 @@ function Booking() {
   const [selectedRoom, setSelectedRoom] = useState(null);
   const [selectedAmenities, setSelectedAmenities] = useState([]);
 
-  const Username = localStorage.getItem('Username');
+  const firstName = localStorage.getItem('FirstName');
 
   const rooms = [
     {
@@ -207,7 +207,7 @@ function Booking() {
               </div>
               <div className="flex items-center space-x-2">
                 <div className="w-8 h-8 bg-blue-400 rounded-full"></div>
-                <span>{Username}</span>
+                <span>{firstName}</span>
                 
               </div>
             </div>

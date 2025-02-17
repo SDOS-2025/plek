@@ -11,7 +11,7 @@ export default function Login() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const navigate = useNavigate();
-  const [username, setUsername] = useState('');
+  const [firstName, setFirstName] = useState('');
 
 
 
@@ -40,13 +40,13 @@ export default function Login() {
       const data = { email, password };
       
       // if (makePostRequest('http://localhost:5173/api/auth/login', data)) {
-      //   setUsername(result.username);
-      //   navigate('/dashboard', { state: { username } });
+      //   setFirstName(result.firstName);
+      //   navigate('/dashboard', { state: { firstName } });
       // } else {
       //   console.error('Invalid email or password');
       //   navigate('/login');
       // }
-      localStorage.setItem('Username', 'User');
+      localStorage.setItem('FirstName', 'firstName');
       navigate('/dashboard');
     } else {
       console.error('Email and password are required');

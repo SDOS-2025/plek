@@ -4,7 +4,7 @@ import { Link} from 'react-router-dom';
 
 
 function Dashboard() {
-  const Username = localStorage.getItem('Username');
+  const firstName = localStorage.getItem('FirstName');
 
   return (
     <div className="flex flex-col min-h-screen bg-plek-background text-gray-100">
@@ -26,7 +26,7 @@ function Dashboard() {
               <div className="h-8 w-8 rounded-full bg-sky-500 flex items-center justify-center">
                 <span className="text-sm font-medium"></span>
               </div>
-              <span className="ml-2">{Username}</span>
+              <span className="ml-2">{firstName}</span>
             </div>
           </div>
         </div>
