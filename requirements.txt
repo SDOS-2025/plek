@@ -3,3 +3,4 @@ pandas
 django
 djangorestframework
 mysqlclient
+django-cors-headers
