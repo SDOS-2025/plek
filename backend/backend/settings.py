@@ -37,7 +37,7 @@ INSTALLED_APPS = [
     "django.contrib.sessions",
     "django.contrib.messages",
     "django.contrib.staticfiles",
-    "account",
+    "account.apps.AccountConfig",
     "corsheaders",
     "rest_framework",
 ]
@@ -53,7 +53,22 @@ MIDDLEWARE = [
     "corsheaders.middleware.CorsMiddleware",
 ]
 
+'''
+The corsheaders are basically used to tell our 
+browser that our app is running at an origin and we want 
+to access our backend through different origin which in
+our case is react frontend.
+'''
+
 ROOT_URLCONF = "backend.urls"
+
+REST_FRAMEWORK = {
+    'DEFAULT_PERMISSION_CLASSES': [
+        'rest_framework.permissions.AllowAny',
+    ]
+}
+
+CORS_ORIGIN_ALLOW_ALL = True
 
 TEMPLATES = [
     {

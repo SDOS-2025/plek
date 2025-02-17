@@ -19,12 +19,18 @@ from django.contrib import admin
 from django.urls import path, include
 from account import views
 from rest_framework import routers
+from account.views import AccountView
+
+try:
+    from django.conf.urls import url # For older versions of Django
+except ImportError:
+    from django.urls import re_path as url
 
 router = routers.DefaultRouter()
 router.register(r"login", views.AccountView, "login")
 
 urlpatterns = [
     path("admin/", admin.site.urls),
-
-    path("api/", include(router.urls)),
+    path('api/accounts/', AccountView.as_view(), name='accounts'),
+    path('', AccountView.as_view(), name='account'),
 ]
