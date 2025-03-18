@@ -37,10 +37,15 @@ INSTALLED_APPS = [
     "django.contrib.sessions",
     "django.contrib.messages",
     "django.contrib.staticfiles",
-    "account.apps.AccountConfig",
     "corsheaders",
+    "account",
     "rest_framework",
+    "rest_framework_simplejwt",
+    "rest_framework.authtoken",
 ]
+
+# tells Django to use your custom user model
+AUTH_USER_MODEL = "account.CustomUser"
 
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
@@ -53,22 +58,34 @@ MIDDLEWARE = [
     "corsheaders.middleware.CorsMiddleware",
 ]
 
-'''
-The corsheaders are basically used to tell our 
-browser that our app is running at an origin and we want 
+"""
+The corsheaders are basically used to tell our
+browser that our app is running at an origin and we want
 to access our backend through different origin which in
 our case is react frontend.
-'''
+"""
 
 ROOT_URLCONF = "backend.urls"
 
 REST_FRAMEWORK = {
-    'DEFAULT_PERMISSION_CLASSES': [
-        'rest_framework.permissions.AllowAny',
-    ]
+    "DEFAULT_PERMISSION_CLASSES": [
+        "rest_framework.permissions.IsAuthenticated",
+    ],
+    "DEFAULT_AUTHENTICATION_CLASSES": [
+        "rest_framework_simplejwt.authentication.JWTAuthentication",
+    ],
 }
 
-CORS_ORIGIN_ALLOW_ALL = True
+# JWT settings
+from datetime import timedelta
+
+SIMPLE_JWT = {
+    "ACCESS_TOKEN_LIFETIME": timedelta(minutes=60),
+    "REFRESH_TOKEN_LIFETIME": timedelta(days=1),
+}
+
+
+CORS_ALLOW_ALL_ORIGINS = True
 
 TEMPLATES = [
     {
