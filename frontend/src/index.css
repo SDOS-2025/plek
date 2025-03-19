@@ -27,17 +27,17 @@ body {
   }
 
   .custom-scrollbar::-webkit-scrollbar-track {
-    background: theme('colors.gray.800');
+    background: rgba(31, 41, 55, 0.5);
     border-radius: 4px;
   }
 
   .custom-scrollbar::-webkit-scrollbar-thumb {
-    background-color: theme('colors.purple.600');
+    background: rgba(139, 92, 246, 0.5);
     border-radius: 4px;
     border: 2px solid theme('colors.gray.800');
   }
 
   .custom-scrollbar::-webkit-scrollbar-thumb:hover {
-    background-color: theme('colors.purple.500');
+    background: rgba(139, 92, 246, 0.8);
   }
 }

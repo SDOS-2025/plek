@@ -401,6 +401,9 @@ function Dashboard() {
               <a href="#" className="text-gray-400 hover:text-gray-300">
                 My Bookings
               </a>
+              <a href="ManageBookings" className="text-gray-400 hover:text-gray-300">
+                Manage Bookings
+              </a>
             </div>
           </div>
           <div className="flex items-center">
