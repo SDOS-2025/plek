@@ -109,6 +109,7 @@ function ManageBookings() {
               >
                 Manage Bookings
               </a>
+              <a href="/ManageRooms" className="text-gray-400 hover:text-gray-300">Manage Rooms</a>
             </div>
           </div>
           <div className="flex items-center space-x-2">
