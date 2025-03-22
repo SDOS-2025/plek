@@ -89,22 +89,22 @@ function ManageBookings() {
             </div>
             <div className="flex space-x-6">
               <a
-                href="/dashboard"
+                href="Dashboard"
                 className="text-gray-400 hover:text-gray-300"
               >
                 Dashboard
               </a>
-              <a href="/booking" className="text-gray-400 hover:text-gray-300">
+              <a href="booking" className="text-gray-400 hover:text-gray-300">
                 Book a room
               </a>
               <a
-                href="/my-bookings"
+                href="MyBookings"
                 className="text-gray-400 hover:text-gray-300"
               >
                 My Bookings
               </a>
               <a
-                href="/manage-bookings"
+                href="ManageBookings"
                 className="text-purple-400 hover:text-purple-300"
               >
                 Manage Bookings

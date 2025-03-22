@@ -7,6 +7,7 @@ import Signup from './pages/signup';
 import Dashboard from './pages/Dashboard';
 import Booking from './pages/booking'; 
 import ManageBookings from './pages/ManageBookings';
+import MyBookings from './pages/MyBookings';  
 
 
 
@@ -21,6 +22,7 @@ function App() {
         <Route path="/dashboard" element={<Dashboard />} />
         <Route path="/booking" element={<Booking/>} />
         <Route path="ManageBookings" element={<ManageBookings />} />
+        <Route path="MyBookings" element={<MyBookings />} />
       </Routes>
     </BrowserRouter>
   );

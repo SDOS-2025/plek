@@ -398,7 +398,7 @@ function Dashboard() {
               <a href="Booking" className="text-gray-400 hover:text-gray-300">
                 Book a room
               </a>
-              <a href="#" className="text-gray-400 hover:text-gray-300">
+              <a href="MyBookings" className="text-gray-400 hover:text-gray-300">
                 My Bookings
               </a>
               <a href="ManageBookings" className="text-gray-400 hover:text-gray-300">

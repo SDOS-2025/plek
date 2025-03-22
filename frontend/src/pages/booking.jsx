@@ -202,7 +202,8 @@ function Booking() {
                 <div className="flex space-x-6">
                   <a href="Dashboard" className="text-gray-400 hover:text-gray-300">Dashboard</a>
                   <a href="Booking" className="text-purple-400 hover:text-purple-300">Book a room</a>
-                  <a href="#" className="text-gray-400 hover:text-gray-300">My Bookings</a>
+                  <a href="MyBookings" className="text-gray-400 hover:text-gray-300">My Bookings</a>
+                  <a href="ManageBookings" className="text-gray-400 hover:text-gray-300">Manage Bookings</a>
                 </div>
               </div>
               <div className="flex items-center space-x-2">
