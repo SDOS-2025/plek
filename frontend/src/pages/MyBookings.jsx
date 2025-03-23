@@ -1,6 +1,15 @@
 import React, { useState } from "react";
 import { Link } from "react-router-dom";
-import { Building2, CalendarDays, CalendarClock, Users, Projector, Wifi, X, Trash2 } from "lucide-react";
+import {
+  Building2,
+  CalendarDays,
+  CalendarClock,
+  Users,
+  Projector,
+  Wifi,
+  X,
+  Trash2,
+} from "lucide-react";
 
 function MyBookings() {
   const [activeTab, setActiveTab] = useState("upcoming");
@@ -79,31 +88,9 @@ function MyBookings() {
   };
 
   const ModifyBookingModal = ({ booking, onClose }) => {
-    const [purpose, setPurpose] = useState('Team Meeting');
-    const [attendees, setAttendees] = useState('6');
-    const [notes, setNotes] = useState('Need whiteboard markers');
-    const [date, setDate] = useState(booking.date);
-    const [timeSlot, setTimeSlot] = useState(booking.slot);
-    const [showDatePicker, setShowDatePicker] = useState(false);
-    const [showTimePicker, setShowTimePicker] = useState(false);
-
-    const availableDates = [
-      "6th February 2025",
-      "7th February 2025",
-      "8th February 2025",
-      "9th February 2025",
-      "10th February 2025"
-    ];
-
-    const availableTimeSlots = [
-      "9 - 10 am",
-      "10 - 11 am",
-      "11 - 12 pm",
-      "1 - 2 pm",
-      "2 - 3 pm",
-      "3 - 4 pm",
-      "4 - 5 pm"
-    ];
+    const [purpose, setPurpose] = useState("Team Meeting");
+    const [attendees, setAttendees] = useState("6");
+    const [notes, setNotes] = useState("Need whiteboard markers");
 
     const handleSubmit = (e) => {
       e.preventDefault();
@@ -140,70 +127,26 @@ function MyBookings() {
                 <Building2 size={20} />
                 <div>
                   <p className="text-sm text-gray-400">Room</p>
-                  <p>{booking.room} - {booking.building}</p>
+                  <p>
+                    {booking.room} - {booking.building}
+                  </p>
                 </div>
               </div>
-              <div className="relative">
-                <div 
-                  className="flex items-center space-x-3 text-gray-300 cursor-pointer p-2 hover:bg-gray-700 rounded-lg"
-                  onClick={() => setShowDatePicker(!showDatePicker)}
-                >
-                  <CalendarDays size={20} />
-                  <div>
-                    <p className="text-sm text-gray-400">Date</p>
-                    <p>{date}</p>
-                  </div>
+              <div className="flex items-center space-x-3 text-gray-300">
+                <CalendarDays size={20} />
+                <div>
+                  <p className="text-sm text-gray-400">Date</p>
+                  <p>{booking.date}</p>
                 </div>
-                {showDatePicker && (
-                  <div className="absolute top-full left-0 mt-2 bg-gray-700 rounded-lg shadow-lg p-3 z-10 w-full">
-                    <div className="space-y-2 max-h-48 overflow-y-auto custom-scrollbar">
-                      {availableDates.map((d, index) => (
-                        <div 
-                          key={index} 
-                          className={`p-2 rounded-lg cursor-pointer ${d === date ? 'bg-purple-600' : 'hover:bg-gray-600'}`}
-                          onClick={() => {
-                            setDate(d);
-                            setShowDatePicker(false);
-                          }}
-                        >
-                          {d}
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
               </div>
             </div>
             <div className="space-y-4">
-              <div className="relative">
-                <div 
-                  className="flex items-center space-x-3 text-gray-300 cursor-pointer p-2 hover:bg-gray-700 rounded-lg"
-                  onClick={() => setShowTimePicker(!showTimePicker)}
-                >
-                  <CalendarClock size={20} />
-                  <div>
-                    <p className="text-sm text-gray-400">Time Slot</p>
-                    <p>{timeSlot}</p>
-                  </div>
+              <div className="flex items-center space-x-3 text-gray-300">
+                <CalendarClock size={20} />
+                <div>
+                  <p className="text-sm text-gray-400">Time Slot</p>
+                  <p>{booking.slot}</p>
                 </div>
-                {showTimePicker && (
-                  <div className="absolute top-full left-0 mt-2 bg-gray-700 rounded-lg shadow-lg p-3 z-10 w-full">
-                    <div className="space-y-2 max-h-48 overflow-y-auto custom-scrollbar">
-                      {availableTimeSlots.map((slot, index) => (
-                        <div 
-                          key={index} 
-                          className={`p-2 rounded-lg cursor-pointer ${slot === timeSlot ? 'bg-purple-600' : 'hover:bg-gray-600'}`}
-                          onClick={() => {
-                            setTimeSlot(slot);
-                            setShowTimePicker(false);
-                          }}
-                        >
-                          {slot}
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
               </div>
               <div className="flex items-center space-x-3 text-gray-300">
                 <Users size={20} />
@@ -316,21 +259,33 @@ function MyBookings() {
               <a href="booking" className="text-gray-400 hover:text-gray-300">
                 Book a room
               </a>
-              <a href="MyBookings" className="text-purple-400 hover:text-purple-300">
+              <a
+                href="MyBookings"
+                className="text-purple-400 hover:text-purple-300"
+              >
                 My Bookings
               </a>
-              <a href="ManageBookings" className="text-gray-400 hover:text-gray-300">
+              <a
+                href="ManageBookings"
+                className="text-gray-400 hover:text-gray-300"
+              >
                 Manage Bookings
+              </a>
+              <a
+                href="ManageRooms"
+                className="text-gray-400 hover:text-gray-300"
+              >
+                Manage Rooms
               </a>
             </div>
           </div>
           <div className="flex items-center space-x-2">
             <div className="w-8 h-8 bg-sky-500 rounded-full flex items-center justify-center">
               <span className="text-white font-medium">
-                {firstName?.charAt(0) || 'U'}
+                {firstName?.charAt(0) || "U"}
               </span>
             </div>
-            <span>{firstName || 'User'}</span>
+            <span>{firstName || "User"}</span>
           </div>
         </div>
       </nav>
@@ -385,11 +340,13 @@ function MyBookings() {
                           <p className="text-gray-300">
                             Capacity: {booking.capacity}
                           </p>
-                          <p className={`${
-                            booking.status === "Approved" 
-                              ? "text-green-400" 
-                              : "text-yellow-400"
-                          }`}>
+                          <p
+                            className={`${
+                              booking.status === "Approved"
+                                ? "text-green-400"
+                                : "text-yellow-400"
+                            }`}
+                          >
                             Status: {booking.status}
                           </p>
                         </div>
@@ -433,11 +390,13 @@ function MyBookings() {
                           <p className="text-gray-300">
                             Capacity: {booking.capacity}
                           </p>
-                          <p className={`${
-                            booking.status === "Completed" 
-                              ? "text-green-400" 
-                              : "text-red-400"
-                          }`}>
+                          <p
+                            className={`${
+                              booking.status === "Completed"
+                                ? "text-green-400"
+                                : "text-red-400"
+                            }`}
+                          >
                             Status: {booking.status}
                           </p>
                         </div>
