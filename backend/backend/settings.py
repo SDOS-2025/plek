@@ -42,6 +42,12 @@ INSTALLED_APPS = [
     "rest_framework",
     "rest_framework_simplejwt",
     "rest_framework.authtoken",
+    'rooms',          # Room details (Amenities stored in MongoDB)
+    'bookings',       # Booking system (Stored in MySQL)
+    'notifications',  # Notifications (Stored in MongoDB)
+    'logs',           # System logs (Stored in MongoDB)
+    'policies',       # Booking policies (Stored in MySQL)
+    'reports',        # Analytics (Stored in MySQL)
 ]
 
 # tells Django to use your custom user model
@@ -159,3 +165,11 @@ STATIC_URL = "static/"
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
 CORS_ORIGIN_WHITELIST = ("http://localhost:3000",)
+
+from pymongo import MongoClient
+
+# MongoDB Connection
+MONGO_URI = "mongodb://192.168.47.37:27017/"
+mongo_client = MongoClient(MONGO_URI)
+mongo_db = mongo_client["plek_db"]  # Database name
+
