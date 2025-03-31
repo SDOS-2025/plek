@@ -2,6 +2,9 @@
 from django.contrib.auth.models import (AbstractUser, BaseUserManager,
                                         PermissionsMixin)
 from django.db import models
+from django.contrib.auth.models import Group, Permission
+from django.db.models.signals import post_migrate
+from django.dispatch import receiver
 
 
 class Department(models.Model):
@@ -58,3 +61,35 @@ class CustomUser(AbstractUser):
 
     def __str__(self):
         return self.username
+
+@receiver(post_migrate)
+def create_roles(sender, **kwargs):
+    if sender.name == 'accounts':  # Ensures it only runs for the accounts app
+        student_group, _ = Group.objects.get_or_create(name="Student")
+        coordinator_group, _ = Group.objects.get_or_create(name="Coordinator")
+        admin_group, _ = Group.objects.get_or_create(name="Admin")
+
+        # Define permissions
+        student_permissions = [
+            "view_room", "view_booking", "add_booking"
+        ]
+        coordinator_permissions = [
+            "view_room", "view_booking", "add_booking", "change_booking", "delete_booking"
+        ]
+        admin_permissions = [
+            "view_room", "add_room", "change_room", "delete_room",
+            "view_booking", "add_booking", "change_booking", "delete_booking"
+        ]
+
+        # Assign permissions
+        for perm in student_permissions:
+            permission = Permission.objects.get(codename=perm)
+            student_group.permissions.add(permission)
+
+        for perm in coordinator_permissions:
+            permission = Permission.objects.get(codename=perm)
+            coordinator_group.permissions.add(permission)
+
+        for perm in admin_permissions:
+            permission = Permission.objects.get(codename=perm)
+            admin_group.permissions.add(permission)

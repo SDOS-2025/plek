@@ -42,11 +42,11 @@ INSTALLED_APPS = [
     "rest_framework",
     "rest_framework_simplejwt",
     "rest_framework.authtoken",
-    'rooms',          # Room details (Amenities stored in MongoDB)
+    'room',          # Room details (Amenities stored in MongoDB)
     'bookings',       # Booking system (Stored in MySQL)
-    'notifications',  # Notifications (Stored in MongoDB)
-    'logs',           # System logs (Stored in MongoDB)
-    'policies',       # Booking policies (Stored in MySQL)
+    'notification',  # Notifications (Stored in MongoDB)
+    'log',           # System logs (Stored in MongoDB)
+    'policy',       # Booking policies (Stored in MySQL)
     'reports',        # Analytics (Stored in MySQL)
 ]
 

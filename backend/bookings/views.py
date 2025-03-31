@@ -1,8 +1,11 @@
-from django.shortcuts import render
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
-from .models import Booking
 from backend.mongo_service import add_log, add_notification
+from django.shortcuts import render, redirect
+from .models import Booking
+from room.models import Room
+from django.contrib.auth.decorators import login_required
+
 
 @api_view(['POST'])
 def book_room(request):
@@ -25,3 +28,19 @@ def book_room(request):
     add_notification(user_id, "Your room booking is pending approval")
 
     return Response({"message": "Booking successful, check notifications!"})
+
+
+@login_required
+def book_room(request, room_id):
+    room = Room.objects.get(id=room_id)
+    if request.method == "POST":
+        booking = Booking.objects.create(
+            user=request.user,
+            room=room,
+            start_time=request.POST["start_time"],
+            end_time=request.POST["end_time"]
+        )
+        room.available = False  # Mark room as booked
+        room.save()
+        return redirect("list_rooms")
+    return render(request, "booking/book.html", {"room": room})
