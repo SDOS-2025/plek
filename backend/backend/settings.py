@@ -38,10 +38,10 @@ INSTALLED_APPS = [
     "django.contrib.messages",
     "django.contrib.staticfiles",
     "corsheaders",
-    "account",
     "rest_framework",
     "rest_framework_simplejwt",
-    "rest_framework.authtoken",
+    "oauth2_provider",
+    "account",
     "room",  # Room details (Amenities stored in MongoDB)
     "bookings",  # Booking system (Stored in MySQL)
     "notification",  # Notifications (Stored in MongoDB)
@@ -79,6 +79,7 @@ REST_FRAMEWORK = {
     ],
     "DEFAULT_AUTHENTICATION_CLASSES": [
         "rest_framework_simplejwt.authentication.JWTAuthentication",
+        "oauth2_provider.contrib.rest_framework.OAuth2Authentication",
     ],
 }
 
@@ -87,7 +88,15 @@ from datetime import timedelta
 
 SIMPLE_JWT = {
     "ACCESS_TOKEN_LIFETIME": timedelta(minutes=60),
-    "REFRESH_TOKEN_LIFETIME": timedelta(days=1),
+    "REFRESH_TOKEN_LIFETIME": timedelta(days=3),
+    "ROTATE_REFRESH_TOKENS": True,
+    "BLACKLIST_AFTER_ROTATION": True,
+    "AUTH_HEADER_TYPES": ("Bearer",),
+}
+
+OAUTH2_PROVIDER = {
+    "ACCESS_TOKEN_EXPIRE_SECONDS": 60 * 60,
+    "REFRESH_TOKEN_EXPIRE_SECONDS": 60 * 60 * 24 * 3,
 }
 
 
