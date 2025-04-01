@@ -42,12 +42,12 @@ INSTALLED_APPS = [
     "rest_framework",
     "rest_framework_simplejwt",
     "rest_framework.authtoken",
-    'room',          # Room details (Amenities stored in MongoDB)
-    'bookings',       # Booking system (Stored in MySQL)
-    'notification',  # Notifications (Stored in MongoDB)
-    'log',           # System logs (Stored in MongoDB)
-    'policy',       # Booking policies (Stored in MySQL)
-    'reports',        # Analytics (Stored in MySQL)
+    "room",  # Room details (Amenities stored in MongoDB)
+    "bookings",  # Booking system (Stored in MySQL)
+    "notification",  # Notifications (Stored in MongoDB)
+    "log",  # System logs (Stored in MongoDB)
+    "policy",  # Booking policies (Stored in MySQL)
+    "reports",  # Analytics (Stored in MySQL)
 ]
 
 # tells Django to use your custom user model
@@ -172,4 +172,3 @@ from pymongo import MongoClient
 MONGO_URI = "mongodb://192.168.47.37:27017/"
 mongo_client = MongoClient(MONGO_URI)
 mongo_db = mongo_client["plek_db"]  # Database name
-
