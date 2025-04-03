@@ -30,6 +30,7 @@ ALLOWED_HOSTS = []
 
 # Application definition
 
+
 INSTALLED_APPS = [
     "django.contrib.admin",
     "django.contrib.auth",
@@ -37,39 +38,48 @@ INSTALLED_APPS = [
     "django.contrib.sessions",
     "django.contrib.messages",
     "django.contrib.staticfiles",
+    "django.contrib.sites",
     "corsheaders",
     "rest_framework",
     "rest_framework_simplejwt",
-    "oauth2_provider",
+    "dj_rest_auth",
+    "allauth",
+    "allauth.account",
+    "dj_rest_auth.registration",
+    "allauth.socialaccount",
+    "allauth.socialaccount.providers.google",
     "account",
-    "room",  # Room details (Amenities stored in MongoDB)
-    "bookings",  # Booking system (Stored in MySQL)
-    "notification",  # Notifications (Stored in MongoDB)
-    "log",  # System logs (Stored in MongoDB)
-    "policy",  # Booking policies (Stored in MySQL)
-    "reports",  # Analytics (Stored in MySQL)
+    "room",
+    "bookings",
+    "notification",
+    "log",
+    "policy",
+    "reports",
 ]
+
+SITE_ID = 1
 
 # tells Django to use your custom user model
 AUTH_USER_MODEL = "account.CustomUser"
 
+AUTHENTICATION_BACKENDS = (
+    "django.contrib.auth.backends.ModelBackend",
+    "allauth.account.auth_backends.AuthenticationBackend",
+)
+
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
+    "corsheaders.middleware.CorsMiddleware",
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
     "django.contrib.auth.middleware.AuthenticationMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
-    "corsheaders.middleware.CorsMiddleware",
+    "allauth.account.middleware.AuthenticationMiddleware",
 ]
 
-"""
-The corsheaders are basically used to tell our
-browser that our app is running at an origin and we want
-to access our backend through different origin which in
-our case is react frontend.
-"""
+CORS_ALLOW_ALL_ORIGINS = True
 
 ROOT_URLCONF = "backend.urls"
 
@@ -78,8 +88,7 @@ REST_FRAMEWORK = {
         "rest_framework.permissions.IsAuthenticated",
     ],
     "DEFAULT_AUTHENTICATION_CLASSES": [
-        "rest_framework_simplejwt.authentication.JWTAuthentication",
-        "oauth2_provider.contrib.rest_framework.OAuth2Authentication",
+        "dj_rest_auth.jwt_auth.JWTCookieAuthentication",
     ],
 }
 
@@ -91,16 +100,11 @@ SIMPLE_JWT = {
     "REFRESH_TOKEN_LIFETIME": timedelta(days=3),
     "ROTATE_REFRESH_TOKENS": True,
     "BLACKLIST_AFTER_ROTATION": True,
+    "ALGORITHM": "HS256",
+    "SIGNING_KEY": SECRET_KEY,
     "AUTH_HEADER_TYPES": ("Bearer",),
 }
 
-OAUTH2_PROVIDER = {
-    "ACCESS_TOKEN_EXPIRE_SECONDS": 60 * 60,
-    "REFRESH_TOKEN_EXPIRE_SECONDS": 60 * 60 * 24 * 3,
-}
-
-
-CORS_ALLOW_ALL_ORIGINS = True
 
 TEMPLATES = [
     {
@@ -117,6 +121,35 @@ TEMPLATES = [
         },
     },
 ]
+
+ACCOUNT_AUTHENTICATION_METHOD = "email"
+ACCOUNT_EMAIL_REQUIRED = True
+ACCOUNT_EMAIL_VERIFICATION = "optional"
+ACCOUNT_USERNAME_REQUIRED = False
+
+SOCIALACCOUNT_PROVIDERS = {
+    "google": {
+        "EMAIL_AUTHENTICATION": True,
+        "EMAIL_AUTHENTICATION_AUTO_CONNECT": True,
+        "APPS": [
+            {
+                "client_id": "YOUR_GOOGLE_CLIENT_ID",
+                "secret": "YOUR_GOOGLE_CLIENT_SECRET",
+            },
+        ],
+        "SCOPE": ["profile", "email"],
+        "AUTH_PARAMS": {
+            "access_type": "online",
+        },
+    }
+}
+
+REST_AUTH = {
+    "USE_JWT": True,
+    "JWT_AUTH_COOKIE": "plek-access",
+    "JWT_AUTH_REFRESH_COOKIE": "plek-refresh",
+    "JWT_AUTH_HTTPONLY": True,
+}
 
 WSGI_APPLICATION = "backend.wsgi.application"
 

@@ -3,6 +3,9 @@ import { Link, useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import bcrypt from 'bcryptjs';
 
+axios.defaults.baseURL = 'http://localhost:5173/api/auth/';
+axios.defaults.withCredentials = true;
+
 export default function Signup() {
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
@@ -29,14 +32,14 @@ export default function Signup() {
   const handleSubmit = (e) => {
     e.preventDefault();
     if (password === confirmPassword) {
-      // const success = makePostRequest('http://localhost:5173/api/auth/signup');
-      // if (success) {
-      //   localStorage.setItem('Username', `${firstName} ${lastName}`);
-      //   navigate('/dashboard');
-      // } else {
-      //   console.error('Invalid email or password');
-      //   navigate('/signup');
-      // }
+      const success = makePostRequest('http://localhost:5173/api/auth/register/');
+      if (success) {
+        localStorage.setItem('Username', `${firstName} ${lastName}`);
+        navigate('/dashboard');
+      } else {
+        console.error('Invalid email or password');
+        navigate('/signup');
+      }
       localStorage.setItem('Username', `${firstName}`);
       navigate('/dashboard');
     } else {
