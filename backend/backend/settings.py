@@ -48,19 +48,19 @@ INSTALLED_APPS = [
     "dj_rest_auth.registration",
     "allauth.socialaccount",
     "allauth.socialaccount.providers.google",
-    "account",
-    "room",
+    "accounts",
+    "rooms",
     "bookings",
-    "notification",
-    "log",
-    "policy",
+    "notifications",
+    "logs",
+    "policies",
     "reports",
 ]
 
 SITE_ID = 1
 
 # tells Django to use your custom user model
-AUTH_USER_MODEL = "account.CustomUser"
+AUTH_USER_MODEL = "accounts.CustomUser"
 
 AUTHENTICATION_BACKENDS = (
     "django.contrib.auth.backends.ModelBackend",
@@ -76,10 +76,14 @@ MIDDLEWARE = [
     "django.contrib.auth.middleware.AuthenticationMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
-    "allauth.account.middleware.AuthenticationMiddleware",
+    "allauth.account.middleware.AccountMiddleware",
 ]
 
 CORS_ALLOW_ALL_ORIGINS = True
+CORS_ALLOWED_ORIGINS = ["http://localhost:5173"]
+CORS_ALLOW_CREDENTIALS = True
+CORS_ALLOW_METHODS = ["GET", "POST", "OPTIONS"]
+
 
 ROOT_URLCONF = "backend.urls"
 
@@ -103,6 +107,8 @@ SIMPLE_JWT = {
     "ALGORITHM": "HS256",
     "SIGNING_KEY": SECRET_KEY,
     "AUTH_HEADER_TYPES": ("Bearer",),
+    "AUTH_COOKIE_SAMESITE": "None",
+    "AUTH_COOKIE_SECURE": False,
 }
 
 
@@ -122,15 +128,17 @@ TEMPLATES = [
     },
 ]
 
-ACCOUNT_AUTHENTICATION_METHOD = "email"
-ACCOUNT_EMAIL_REQUIRED = True
+ACCOUNT_LOGIN_METHODS = {"email"}
+ACCOUNT_SIGNUP_FIELDS = ["email*", "password1*", "password2*"]
 ACCOUNT_EMAIL_VERIFICATION = "optional"
-ACCOUNT_USERNAME_REQUIRED = False
+ACCOUNT_USER_MODEL_USERNAME_FIELD = None
 
 SOCIALACCOUNT_PROVIDERS = {
     "google": {
         "EMAIL_AUTHENTICATION": True,
         "EMAIL_AUTHENTICATION_AUTO_CONNECT": True,
+        "EMAIL_REQUIRED": True,
+        "AUTO_SIGN_UP": True,
         "APPS": [
             {
                 "client_id": "YOUR_GOOGLE_CLIENT_ID",
@@ -149,9 +157,17 @@ REST_AUTH = {
     "JWT_AUTH_COOKIE": "plek-access",
     "JWT_AUTH_REFRESH_COOKIE": "plek-refresh",
     "JWT_AUTH_HTTPONLY": True,
+    "JWT_AUTH_SAMESITE": "Lax",
+    "JWT_AUTH_SECURE": False,
+    "REGISTER_SERIALIZER": "accounts.serializers.RegisterSerializer",
+    "LOGIN_SERIALIZER": "accounts.serializers.LoginSerializer",
+    "TOKEN_MODEL": None,
 }
 
 WSGI_APPLICATION = "backend.wsgi.application"
+
+# For Testing Purposes need to be changed to production
+EMAIL_BACKEND = "django.core.mail.backends.console.EmailBackend"
 
 
 # Database
@@ -205,8 +221,6 @@ STATIC_URL = "static/"
 # https://docs.djangoproject.com/en/5.1/ref/settings/#default-auto-field
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
-
-CORS_ORIGIN_WHITELIST = ("http://localhost:3000",)
 
 from pymongo import MongoClient
 

@@ -1,8 +1,7 @@
-# account/models.py
-from django.contrib.auth.models import (AbstractUser, BaseUserManager,
-                                        PermissionsMixin)
+# accounts/models.py
+from django.contrib.auth.models import (AbstractBaseUser, BaseUserManager,
+                                        Group, Permission, PermissionsMixin)
 from django.db import models
-from django.contrib.auth.models import Group, Permission
 from django.db.models.signals import post_migrate
 from django.dispatch import receiver
 
@@ -18,7 +17,6 @@ class CustomUserManager(BaseUserManager):
     def create_user(self, email, password=None, **extra_fields):
         if not email:
             raise TypeError("Email is required.")
-
         email = self.normalize_email(email)
         user = self.model(email=email, **extra_fields)
         user.set_password(password)
@@ -31,7 +29,7 @@ class CustomUserManager(BaseUserManager):
         return self.create_user(email, password, **extra_fields)
 
 
-class CustomUser(AbstractUser):
+class CustomUser(AbstractBaseUser, PermissionsMixin):
     email = models.EmailField(unique=True)
     first_name = models.CharField(max_length=100)
     last_name = models.CharField(max_length=100)
@@ -60,36 +58,4 @@ class CustomUser(AbstractUser):
     REQUIRED_FIELDS = ["first_name", "last_name"]
 
     def __str__(self):
-        return self.username
-
-@receiver(post_migrate)
-def create_roles(sender, **kwargs):
-    if sender.name == 'accounts':  # Ensures it only runs for the accounts app
-        student_group, _ = Group.objects.get_or_create(name="Student")
-        coordinator_group, _ = Group.objects.get_or_create(name="Coordinator")
-        admin_group, _ = Group.objects.get_or_create(name="Admin")
-
-        # Define permissions
-        student_permissions = [
-            "view_room", "view_booking", "add_booking"
-        ]
-        coordinator_permissions = [
-            "view_room", "view_booking", "add_booking", "change_booking", "delete_booking"
-        ]
-        admin_permissions = [
-            "view_room", "add_room", "change_room", "delete_room",
-            "view_booking", "add_booking", "change_booking", "delete_booking"
-        ]
-
-        # Assign permissions
-        for perm in student_permissions:
-            permission = Permission.objects.get(codename=perm)
-            student_group.permissions.add(permission)
-
-        for perm in coordinator_permissions:
-            permission = Permission.objects.get(codename=perm)
-            coordinator_group.permissions.add(permission)
-
-        for perm in admin_permissions:
-            permission = Permission.objects.get(codename=perm)
-            admin_group.permissions.add(permission)
+        return self.email
