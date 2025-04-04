@@ -44,7 +44,7 @@ function ManageRooms() {
   ];
 
   // Get unique buildings and capacity ranges
-  const buildings = useMemo(() => 
+  const buildings = useMemo(() =>
     ['all', ...new Set(rooms.map(room => room.building))],
     [rooms]
   );
@@ -60,17 +60,17 @@ function ManageRooms() {
   // Filter rooms based on search query and filters
   const filteredRooms = useMemo(() => {
     return rooms.filter(room => {
-      const matchesSearch = 
+      const matchesSearch =
         room.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
         room.building.toLowerCase().includes(searchQuery.toLowerCase());
-      
-      const matchesBuilding = 
+
+      const matchesBuilding =
         selectedBuilding === 'all' || room.building === selectedBuilding;
-      
-      const matchesCapacity = selectedCapacity === 'all' || 
-        capacityRanges.find(range => 
-          range.value === selectedCapacity && 
-          room.capacity >= range.min && 
+
+      const matchesCapacity = selectedCapacity === 'all' ||
+        capacityRanges.find(range =>
+          range.value === selectedCapacity &&
+          room.capacity >= range.min &&
           room.capacity <= range.max
         );
 
@@ -245,11 +245,11 @@ function ManageRooms() {
                   <span className="ml-2 text-xl font-semibold">Plek</span>
                 </div>
                 <div className="flex space-x-6">
-                  <a href="/dashboard" className="text-gray-400 hover:text-gray-300">Dashboard</a>
-                  <a href="/booking" className="text-gray-400 hover:text-gray-300">Book a room</a>
-                  <a href="/MyBookings" className="text-gray-400 hover:text-gray-300">My Bookings</a>
-                  <a href="/ManageBookings" className="text-gray-400 hover:text-gray-300">Manage Bookings</a>
-                  <a href="/ManageRooms" className="text-purple-400 hover:text-purple-300">Manage Rooms</a>
+                  <a href="dashboard" className="text-gray-400 hover:text-gray-300">Dashboard</a>
+                  <a href="booking" className="text-gray-400 hover:text-gray-300">Book a room</a>
+                  <a href="my-bookings" className="text-gray-400 hover:text-gray-300">My Bookings</a>
+                  <a href="manage-bookings" className="text-gray-400 hover:text-gray-300">Manage Bookings</a>
+                  <a href="manage-rooms" className="text-purple-400 hover:text-purple-300">Manage Rooms</a>
                 </div>
               </div>
               <div className="flex items-center space-x-2">
@@ -285,7 +285,7 @@ function ManageRooms() {
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                 />
-                <button 
+                <button
                   className="absolute right-4 top-1/2 transform -translate-y-1/2"
                   onClick={() => setShowFilters(!showFilters)}
                 >

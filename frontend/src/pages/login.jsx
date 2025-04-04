@@ -1,54 +1,58 @@
-import React, { use, useState } from "react";
-import { Link } from "react-router-dom";
-import { useNavigate } from "react-router-dom";
-import axios from "axios";
-import bcrypt from "bcryptjs";
-
-axios.defaults.baseURL = "http://localhost:5173/api/auth/";
-axios.defaults.withCredentials = true;
+import React, { useState, useContext, useEffect } from "react";
+import { Link, useNavigate } from "react-router-dom";
+import api from "../api";
+import { AuthContext } from "../context/AuthContext";
 
 export default function Login() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [error, setError] = useState("");
   const navigate = useNavigate();
-  const [firstName, setFirstName] = useState("");
+  const { isAuthenticated, checkAuth } = useContext(AuthContext);
 
-  const salt = bcrypt.genSaltSync(10);
-
-  function makePostRequest(url) {
-    const hashedPassword = bcrypt.hashSync(password, salt);
-
-    const queryObj = { email, password: hashedPassword };
-
-    axios.post(url, queryObj).then(
-      (response) => {
-        let result = response.data;
-        return result;
-      },
-      (error) => {
-        console.log(error);
-        return null;
-      },
-    );
-  }
-
-  const handleSubmit = (e) => {
-    e.preventDefault();
-    if (email && password) {
-      const data = { email, password };
-
-      if (makePostRequest("http://localhost:5173/api/auth/login/", data)) {
-        setFirstName(result.firstName);
-        navigate("/dashboard", { state: { firstName } });
-      } else {
-        console.error("Invalid email or password");
-        navigate("/login");
-      }
-      localStorage.setItem("FirstName", "firstName");
-      navigate("/dashboard");
-    } else {
-      console.error("Email and password are required");
+  // Navigate to dashboard when isAuthenticated becomes true
+  useEffect(() => {
+    if (isAuthenticated === true) {
+      const firstName = localStorage.getItem("FirstName") || "User";
+      console.log("isAuthenticated updated to true, navigating to dashboard with firstName:", firstName);
+      navigate("/dashboard", { state: { firstName } });
     }
+  }, [isAuthenticated, navigate]);
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setError("");
+
+    if (!email || !password) {
+      setError("Email and password are required");
+      return;
+    }
+
+    try {
+      console.log("Sending login request with email:", email);
+      const response = await api.post("/api/auth/login/", { email, password });
+      console.log("Login response:", response.data);
+
+      // Sync auth state
+      const userData = await checkAuth();
+      if (!userData) {
+        throw new Error("Failed to fetch user data after login");
+      }
+      const firstName = userData.first_name || email.split("@")[0] || "User";
+      localStorage.setItem("FirstName", firstName);
+      // Navigation handled by useEffect
+    } catch (err) {
+      console.error("Login error:", err.response?.data || err.message);
+      setError(
+        err.response?.data?.non_field_errors?.[0] ||
+        err.response?.data?.email?.[0] ||
+        "Invalid email or password"
+      );
+    }
+  };
+
+  const handleGoogleLogin = () => {
+    window.location.href = "http://127.0.0.1:8000/accounts/google/login/";
   };
 
   return (
@@ -60,13 +64,16 @@ export default function Login() {
           </div>
 
           <div className="bg-plek-dark p-8 rounded-lg shadow-xl">
+            {error && (
+              <div className="mb-4 text-red-500 text-center">{error}</div>
+            )}
             <form onSubmit={handleSubmit} className="space-y-6">
               <div>
                 <input
                   type="email"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  placeholder="email"
+                  placeholder="Email"
                   className="w-full p-3 rounded bg-[#2a2a2a] border border-gray-700 text-white placeholder-gray-400 focus:outline-none focus:border-plek-purple"
                   required
                 />
@@ -77,7 +84,7 @@ export default function Login() {
                   type="password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  placeholder="password"
+                  placeholder="Password"
                   className="w-full p-3 rounded bg-[#2a2a2a] border border-gray-700 text-white placeholder-gray-400 focus:outline-none focus:border-plek-purple"
                   required
                 />
@@ -88,7 +95,7 @@ export default function Login() {
                   to="/forgot-password"
                   className="text-sm text-plek-purple hover:text-purple-400"
                 >
-                  forgot your password?
+                  Forgot your password?
                 </Link>
               </div>
 
@@ -101,11 +108,12 @@ export default function Login() {
 
               <button
                 type="button"
+                onClick={handleGoogleLogin}
                 className="w-full flex items-center justify-center gap-2 bg-white hover:bg-gray-100 text-gray-800 font-semibold py-3 px-4 rounded transition-colors"
               >
                 <img
                   src="https://www.google.com/favicon.ico"
-                  alt=""
+                  alt="Google"
                   className="w-4 h-4"
                 />
                 Sign in with Google

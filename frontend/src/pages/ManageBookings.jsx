@@ -169,7 +169,7 @@ function ManageBookings() {
           <div className="grid grid-cols-2 gap-6 mb-8">
             <div className="space-y-4">
               <div className="relative">
-                <div 
+                <div
                   className="flex items-center space-x-3 text-gray-300 cursor-pointer p-2 hover:bg-gray-700 rounded-lg"
                   onClick={() => setShowRoomPicker(!showRoomPicker)}
                 >
@@ -183,8 +183,8 @@ function ManageBookings() {
                   <div className="absolute top-full left-0 mt-2 bg-gray-700 rounded-lg shadow-lg p-3 z-10 w-full">
                     <div className="space-y-2 max-h-48 overflow-y-auto custom-scrollbar">
                       {availableRooms.map((room, index) => (
-                        <div 
-                          key={index} 
+                        <div
+                          key={index}
                           className={`p-2 rounded-lg cursor-pointer ${
                             room.room === selectedRoom.room ? 'bg-purple-600' : 'hover:bg-gray-600'
                           }`}
@@ -201,7 +201,7 @@ function ManageBookings() {
                 )}
               </div>
               <div className="relative">
-                <div 
+                <div
                   className="flex items-center space-x-3 text-gray-300 cursor-pointer p-2 hover:bg-gray-700 rounded-lg"
                   onClick={() => setShowDatePicker(!showDatePicker)}
                 >
@@ -215,8 +215,8 @@ function ManageBookings() {
                   <div className="absolute top-full left-0 mt-2 bg-gray-700 rounded-lg shadow-lg p-3 z-10 w-full">
                     <div className="space-y-2 max-h-48 overflow-y-auto custom-scrollbar">
                       {availableDates.map((d, index) => (
-                        <div 
-                          key={index} 
+                        <div
+                          key={index}
                           className={`p-2 rounded-lg cursor-pointer ${d === date ? 'bg-purple-600' : 'hover:bg-gray-600'}`}
                           onClick={() => {
                             setDate(d);
@@ -233,7 +233,7 @@ function ManageBookings() {
             </div>
             <div className="space-y-4">
               <div className="relative">
-                <div 
+                <div
                   className="flex items-center space-x-3 text-gray-300 cursor-pointer p-2 hover:bg-gray-700 rounded-lg"
                   onClick={() => setShowTimePicker(!showTimePicker)}
                 >
@@ -247,8 +247,8 @@ function ManageBookings() {
                   <div className="absolute top-full left-0 mt-2 bg-gray-700 rounded-lg shadow-lg p-3 z-10 w-full">
                     <div className="space-y-2 max-h-48 overflow-y-auto custom-scrollbar">
                       {availableTimeSlots.map((slot, index) => (
-                        <div 
-                          key={index} 
+                        <div
+                          key={index}
                           className={`p-2 rounded-lg cursor-pointer ${slot === timeSlot ? 'bg-purple-600' : 'hover:bg-gray-600'}`}
                           onClick={() => {
                             setTimeSlot(slot);
@@ -368,7 +368,7 @@ function ManageBookings() {
             </div>
             <div className="flex space-x-6">
               <a
-                href="Dashboard"
+                href="dashboard"
                 className="text-gray-400 hover:text-gray-300"
               >
                 Dashboard
@@ -377,18 +377,18 @@ function ManageBookings() {
                 Book a room
               </a>
               <a
-                href="MyBookings"
+                href="my-bookings"
                 className="text-gray-400 hover:text-gray-300"
               >
                 My Bookings
               </a>
               <a
-                href="ManageBookings"
+                href="manage-bookings"
                 className="text-purple-400 hover:text-purple-300"
               >
                 Manage Bookings
               </a>
-              <a href="/ManageRooms" className="text-gray-400 hover:text-gray-300">Manage Rooms</a>
+              <a href="manage-rooms" className="text-gray-400 hover:text-gray-300">Manage Rooms</a>
             </div>
           </div>
           <div className="flex items-center space-x-2">

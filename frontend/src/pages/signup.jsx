@@ -1,50 +1,79 @@
-import React, { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
-import axios from 'axios';
-import bcrypt from 'bcryptjs';
-
-axios.defaults.baseURL = 'http://localhost:5173/api/auth/';
-axios.defaults.withCredentials = true;
+import React, { useState, useContext, useEffect } from "react";
+import { Link, useNavigate } from "react-router-dom";
+import api from "../api";
+import { AuthContext } from "../context/AuthContext";
 
 export default function Signup() {
-  const [firstName, setFirstName] = useState('');
-  const [lastName, setLastName] = useState('');
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [confirmPassword, setConfirmPassword] = useState('');
+  const [firstName, setFirstName] = useState("");
+  const [lastName, setLastName] = useState("");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [error, setError] = useState("");
   const navigate = useNavigate();
+  const { isAuthenticated, checkAuth } = useContext(AuthContext);
 
-  const salt = bcrypt.genSaltSync(10);
-
-  function makePostRequest(url) {
-    const hashedPassword = bcrypt.hashSync(password, salt);
-    const queryObj = {firstName, lastName, email, password: hashedPassword };
-
-    axios.post(url, queryObj).then(
-      (response) => response.data,
-      (error) => {
-        console.log(error);
-        return null;
-      }
-    );
-  }
-
-  const handleSubmit = (e) => {
-    e.preventDefault();
-    if (password === confirmPassword) {
-      const success = makePostRequest('http://localhost:5173/api/auth/register/');
-      if (success) {
-        localStorage.setItem('Username', `${firstName} ${lastName}`);
-        navigate('/dashboard');
-      } else {
-        console.error('Invalid email or password');
-        navigate('/signup');
-      }
-      localStorage.setItem('Username', `${firstName}`);
-      navigate('/dashboard');
-    } else {
-      console.error('Email and password are required');
+  // Navigate to dashboard when isAuthenticated becomes true
+  useEffect(() => {
+    if (isAuthenticated === true) {
+      const firstNameFromStorage = localStorage.getItem("FirstName") || "User";
+      console.log("isAuthenticated updated to true, navigating to dashboard with firstName:", firstNameFromStorage);
+      navigate("/dashboard", { state: { firstName: firstNameFromStorage } });
     }
+  }, [isAuthenticated, navigate]);
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setError("");
+
+    if (!firstName || !lastName || !email || !password || !confirmPassword) {
+      setError("All fields are required");
+      return;
+    }
+
+    if (password !== confirmPassword) {
+      setError("Passwords do not match");
+      return;
+    }
+
+    try {
+      console.log("Sending signup request:", { firstName, lastName, email, password });
+      const response = await api.post(
+        "api/auth/register/",
+        {
+          first_name: firstName,
+          last_name: lastName,
+          email,
+          password1: password,
+          password2: confirmPassword,
+          user_category: "student", // Default, adjust if needed
+        },
+        { withCredentials: true }
+      );
+      console.log("Signup response:", response.data);
+
+        const loginResponse = await api.post("api/auth/login/", { email, password });
+
+      // Sync auth state with checkAuth
+      const userData = await checkAuth();
+      if (!userData) {
+        throw new Error("Failed to fetch user data after signup");
+      }
+      const fullName = `${userData.first_name || firstName} ${userData.last_name || lastName}`.trim();
+      localStorage.setItem("FirstName", userData.first_name || firstName); // Store firstName for consistency
+      // Navigation handled by useEffect
+    } catch (err) {
+      console.error("Signup error:", err.response?.data || err.message);
+      const errorMsg =
+        err.response?.data?.email?.[0] ||
+        err.response?.data?.non_field_errors?.[0] ||
+        "Signup failed. Please try again.";
+      setError(errorMsg);
+    }
+  };
+
+  const handleGoogleSignup = () => {
+    window.location.href = "http://127.0.0.1:8000/accounts/google/login/";
   };
 
   return (
@@ -55,6 +84,7 @@ export default function Signup() {
             <h1 className="text-6xl font-bold text-white">Plek</h1>
           </div>
           <div className="bg-plek-dark p-8 rounded-lg shadow-xl">
+            {error && <div className="mb-4 text-red-500 text-center">{error}</div>}
             <form onSubmit={handleSubmit} className="space-y-6">
               <div>
                 <input
@@ -81,7 +111,7 @@ export default function Signup() {
                   type="email"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  placeholder="email"
+                  placeholder="Email"
                   className="w-full p-3 rounded bg-[#2a2a2a] border border-gray-700 text-white placeholder-gray-400 focus:outline-none focus:border-plek-purple"
                   required
                 />
@@ -91,7 +121,7 @@ export default function Signup() {
                   type="password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  placeholder="password"
+                  placeholder="Password"
                   className="w-full p-3 rounded bg-[#2a2a2a] border border-gray-700 text-white placeholder-gray-400 focus:outline-none focus:border-plek-purple"
                   required
                 />
@@ -101,7 +131,7 @@ export default function Signup() {
                   type="password"
                   value={confirmPassword}
                   onChange={(e) => setConfirmPassword(e.target.value)}
-                  placeholder="confirm password"
+                  placeholder="Confirm Password"
                   className="w-full p-3 rounded bg-[#2a2a2a] border border-gray-700 text-white placeholder-gray-400 focus:outline-none focus:border-plek-purple"
                   required
                 />
@@ -112,14 +142,14 @@ export default function Signup() {
               >
                 Create an account
               </button>
-
               <button
                 type="button"
+                onClick={handleGoogleSignup}
                 className="w-full flex items-center justify-center gap-2 bg-white hover:bg-gray-100 text-gray-800 font-semibold py-3 px-4 rounded transition-colors"
               >
                 <img
                   src="https://www.google.com/favicon.ico"
-                  alt=""
+                  alt="Google"
                   className="w-4 h-4"
                 />
                 Sign up with Google
