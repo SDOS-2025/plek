@@ -1,0 +1,22 @@
+meta {
+  name: Create Booking
+  type: http
+  seq: 1
+}
+
+post {
+  url: {{BASE_URL}}/book/add/
+  body: json
+  auth: inherit
+}
+
+body:json {
+  {
+    "room": 1,
+    "user": 1,
+    "start_time": "2025-04-11T10:00:00Z",
+    "end_time": "2025-04-11T11:00:00Z",
+    "purpose": "Faculty"
+  }
+  
+}

@@ -1,0 +1,15 @@
+meta {
+  name: Add Room
+  type: http
+  seq: 2
+}
+
+post {
+  url: {{BASE_URL}}/rooms/add
+  body: formUrlEncoded
+  auth: inherit
+}
+
+body:form-urlencoded {
+  available: true
+}
