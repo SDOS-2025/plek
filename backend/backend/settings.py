@@ -52,9 +52,8 @@ INSTALLED_APPS = [
     "rooms",
     "bookings",
     "notifications",
-    "logs",
-    "policies",
-    "reports",
+    "settings",
+    "analytics",
 ]
 
 SITE_ID = 1
@@ -100,8 +99,8 @@ REST_FRAMEWORK = {
 from datetime import timedelta
 
 SIMPLE_JWT = {
-    "ACCESS_TOKEN_LIFETIME": timedelta(minutes=60),
-    "REFRESH_TOKEN_LIFETIME": timedelta(days=3),
+    "ACCESS_TOKEN_LIFETIME": timedelta(minutes=5),
+    "REFRESH_TOKEN_LIFETIME": timedelta(days=1),
     "ROTATE_REFRESH_TOKENS": True,
     "BLACKLIST_AFTER_ROTATION": True,
     "ALGORITHM": "HS256",
@@ -159,6 +158,7 @@ REST_AUTH = {
     "JWT_AUTH_HTTPONLY": True,
     "JWT_AUTH_SAMESITE": "Lax",
     "JWT_AUTH_SECURE": False,
+    "JWT_AUTH_COOKIE_USE_CSRF": True,
     "REGISTER_SERIALIZER": "accounts.serializers.RegisterSerializer",
     "LOGIN_SERIALIZER": "accounts.serializers.LoginSerializer",
     "TOKEN_MODEL": None,
