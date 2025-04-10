@@ -32,7 +32,7 @@ export const AuthProvider = ({ children }) => {
       console.log("logout: Sending /api/auth/logout/");
       api.post("/api/auth/logout/").catch((err) => {
         console.error("logout: Failed - Error:", err.response?.data || err.message);
-      }
+      });
       setIsAuthenticated(false);
       setUser(null);
       localStorage.removeItem("FirstName");

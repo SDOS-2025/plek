@@ -6,6 +6,7 @@ from django.contrib.auth import authenticate
 from rest_framework import serializers
 
 from .models import CustomUser
+from .views import assign_role
 
 
 class RegisterSerializer(DefaultRegisterSerializer):

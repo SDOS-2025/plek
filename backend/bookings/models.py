@@ -6,16 +6,11 @@ from rooms.models import Room
 
 
 class Booking(models.Model):
-    PENDING = "pending"
-    APPROVED = "approved"
-    REJECTED = "rejected"
-    CANCELLED = "cancelled"
-
     STATUS_CHOICES = [
-        (PENDING, "Pending"),
-        (APPROVED, "Approved"),
-        (REJECTED, "Rejected"),
-        (CANCELLED, "Cancelled"),
+        ("pending", "Pending"),
+        ("approved", "Approved"),
+        ("rejected", "Rejected"),
+        ("cancelled", "Cancelled"),
     ]
 
     room = models.ForeignKey(Room, on_delete=models.CASCADE)
@@ -29,11 +24,13 @@ class Booking(models.Model):
         blank=True,
         related_name="approved_bookings",
     )
+
     start_time = models.DateTimeField()
     end_time = models.DateTimeField()
-    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default=PENDING)
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default="pending")
+    # Will be in the mongoDB log
+    # created_at = models.DateTimeField(auto_now_add=True)
+    # updated_at = models.DateTimeField(auto_now=True)
     purpose = models.TextField(blank=True)
     participants = models.TextField(null=True, blank=True)
     cancellation_reason = models.TextField(null=True, blank=True)
@@ -49,4 +46,3 @@ class Booking(models.Model):
 
     def __str__(self):
         return f"{self.user.email} - {self.room.name} - {self.start_time}"
-
