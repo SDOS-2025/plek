@@ -1,7 +1,0 @@
-numpy
-pandas
-django
-djangorestframework
-djangorestframework_simplejwt
-mysqlclient
-django-cors-headers

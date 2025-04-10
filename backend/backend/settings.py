@@ -158,7 +158,7 @@ REST_AUTH = {
     "JWT_AUTH_HTTPONLY": True,
     "JWT_AUTH_SAMESITE": "Lax",
     "JWT_AUTH_SECURE": False,
-    "JWT_AUTH_COOKIE_USE_CSRF": True,
+    "JWT_AUTH_COOKIE_USE_CSRF": False,
     "REGISTER_SERIALIZER": "accounts.serializers.RegisterSerializer",
     "LOGIN_SERIALIZER": "accounts.serializers.LoginSerializer",
     "TOKEN_MODEL": None,
