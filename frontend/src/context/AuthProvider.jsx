@@ -7,6 +7,18 @@ export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
 
+  // Fetch CSRF token on initial load
+  useEffect(() => {
+    const fetchInitialCsrfToken = async () => {
+      try {
+        await api.ensureCsrfToken();
+      } catch (err) {
+        console.error("Failed to fetch initial CSRF token:", err);
+      }
+    };
+    
+    fetchInitialCsrfToken();
+  }, []);
 
   useEffect(() => {
     const checkAuth = async () => {
@@ -25,7 +37,6 @@ export const AuthProvider = ({ children }) => {
     checkAuth();
   }, []);
 
-
   const login = async (credentials) => {
     try {
       console.log("login: Attempting to post /api/auth/login/");
@@ -39,7 +50,6 @@ export const AuthProvider = ({ children }) => {
     }
   }
 
-
   const logout = async () => {
     try {
       console.log("logout: Attempting to post /api/auth/logout/");
@@ -47,6 +57,7 @@ export const AuthProvider = ({ children }) => {
       setUser(null);
       document.cookie = "plek-access=; Max-Age=0; path=/;";
       document.cookie = "plek-refresh=; Max-Age=0; path=/;";
+      document.cookie = "csrftoken=; Max-Age=0; path=/;";
     } catch (err) {
       console.error("logout: Failed - Error:", err.response?.data || err.message);
       throw err;
