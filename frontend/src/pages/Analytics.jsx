@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import axios from "axios";
-import ProfileMenu from '../components/ProfileMenu';
+import NavBar from '../components/NavBar';
 
 function Analytics() {
   const [activeTab, setActiveTab] = useState("totalBookings");
@@ -59,20 +59,7 @@ function Analytics() {
   return (
     <div className="flex flex-col h-screen overflow-y-auto bg-plek-background text-gray-100">
       {/* Navigation */}
-      <nav className="border-b border-gray-800 px-6 py-4 bg-plek-dark">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center space-x-8">
-            <div className="flex items-center">
-              <span className="ml-2 text-xl font-semibold">Plek</span>
-            </div>
-            <div className="flex space-x-6">
-              <a href="dashboard" className="text-gray-400 hover:text-gray-300">Dashboard</a>
-              <a href="analytics" className="text-purple-400 hover:text-purple-300">Analytics</a>
-            </div>
-          </div>
-          <ProfileMenu />
-        </div>
-      </nav>
+      <NavBar activePage="analytics" />
 
       {/* Main Content */}
       <div className="min-w-[99vw] mx-auto px-4 py-10 flex-grow">

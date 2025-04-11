@@ -61,16 +61,39 @@ const BookingModal = ({ room, onClose }) => {
         "4:00 PM - 5:00 PM"
       ];
       
-      // API call to get available time slots for this room on the selected date
-      const response = await api.get(`/rooms/${room.id}/availability?date=${selectedDate}`);
+      // API call to get bookings for this room on the selected date
+      const response = await api.get(`/rooms/${room.id}/?date=${selectedDate}`);
       
-      // Get the available slots from API response
-      const availableFromApi = response.data.availableSlots || [];
+      // Get the bookings from API response
+      const bookings = response.data.bookings || [];
+      console.log("Received bookings:", bookings);
+      
+      // Extract booked time slots from bookings data
+      const bookedTimeSlots = bookings.map(booking => {
+        const start = new Date(booking.start_time);
+        const end = new Date(booking.end_time);
+        
+        const startHour = start.getHours();
+        const startMinute = start.getMinutes();
+        const endHour = end.getHours();
+        const endMinute = end.getMinutes();
+        
+        // Format to match our time slot format
+        const startPeriod = startHour >= 12 ? 'PM' : 'AM';
+        const endPeriod = endHour >= 12 ? 'PM' : 'AM';
+        
+        const formattedStartHour = startHour > 12 ? startHour - 12 : (startHour === 0 ? 12 : startHour);
+        const formattedEndHour = endHour > 12 ? endHour - 12 : (endHour === 0 ? 12 : endHour);
+        
+        return `${formattedStartHour}:${startMinute === 0 ? '00' : startMinute} ${startPeriod} - ${formattedEndHour}:${endMinute === 0 ? '00' : endMinute} ${endPeriod}`;
+      });
+      
+      console.log("Booked time slots:", bookedTimeSlots);
       
       // Create array with both available and booked slots
       const slotsWithStatus = allTimeSlots.map(time => ({
         time,
-        isBooked: !availableFromApi.includes(time)
+        isBooked: bookedTimeSlots.includes(time)
       }));
       
       setAvailableTimeSlots(slotsWithStatus);

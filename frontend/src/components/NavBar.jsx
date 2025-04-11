@@ -45,6 +45,12 @@ const NavBar = ({ activePage }) => {
             >
               Manage Rooms
             </Link>
+            <Link
+              to="/analytics"
+              className={`${activePage === 'analytics' ? 'text-purple-400 hover:text-purple-300' : 'text-gray-400 hover:text-gray-300'}`}
+            >
+              Analytics
+            </Link>
           </div>
         </div>
         <ProfileMenu />
