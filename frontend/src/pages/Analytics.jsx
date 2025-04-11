@@ -10,24 +10,25 @@ function Analytics() {
     const fetchData = async () => {
       try {
         let response;
+        const BASE_URL = process.env.REACT_APP_API_URL || 'http://127.0.0.1:8000';
         switch (activeTab) {
           case "totalBookings":
-            response = await axios.get("/api/analytics/bookings/?stat_type=totals");
+            response = await axios.get(`${BASE_URL}/api/analytics/bookings/?stat_type=totals`);
             break;
           case "peakHours":
-            response = await axios.get("/api/analytics/bookings/?stat_type=peak_hours");
+            response = await axios.get(`${BASE_URL}/api/analytics/bookings/?stat_type=peak_hours`);
             break;
           case "topUsers":
-            response = await axios.get("/api/analytics/bookings/?stat_type=top_users");
+            response = await axios.get(`${BASE_URL}/api/analytics/bookings/?stat_type=top_users`);
             break;
           case "mostBookedRooms":
-            response = await axios.get("/api/analytics/rooms/?stat_type=most_booked");
+            response = await axios.get(`${BASE_URL}/api/analytics/rooms/?stat_type=most_booked`);
             break;
           case "leastBookedRooms":
-            response = await axios.get("/api/analytics/rooms/?stat_type=least_booked");
+            response = await axios.get(`${BASE_URL}/api/analytics/rooms/?stat_type=least_booked`);
             break;
           case "utilization":
-            response = await axios.get("/api/analytics/rooms/?stat_type=utilization");
+            response = await axios.get(`${BASE_URL}/api/analytics/rooms/?stat_type=utilization`);
             break;
           default:
             response = { data: [] };
