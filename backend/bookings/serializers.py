@@ -1,6 +1,8 @@
 from django.utils import timezone
 from rest_framework import serializers
 from .models import Booking
+from rooms.serializers import RoomSerializer
+from rooms.models import Room
 '''
 STATUS_CHOICES = [
         ("pending", "Pending"),
@@ -31,11 +33,22 @@ STATUS_CHOICES = [
 '''
 
 class BookingSerializer(serializers.ModelSerializer):
+
+    room = RoomSerializer(read_only=True)
+
+    room_id = serializers.PrimaryKeyRelatedField(
+        queryset=Room.objects.all(),
+        source='room',
+        write_only=True,
+        required=True  # Make room_id required for POST requests
+    )
+
     class Meta:
         model = Booking
         fields = [
             "id",
             "room",
+            "room_id",
             "user",
             "approved_by",
             "start_time",
@@ -59,7 +72,7 @@ class BookingSerializer(serializers.ModelSerializer):
                 {"start_time": "Booking times must be in the future.",
                 "end_time": "Booking times must be in the future."}
             )
-        if data["room"].available == False:
+        if "room" in data and data["room"].available == False:
             raise serializers.ValidationError(
                 {"room": "Room is not available for booking."}
             )
@@ -75,3 +88,13 @@ class BookingSerializer(serializers.ModelSerializer):
         Create a new booking instance with the provided validated data.
         """
         return Booking.objects.create(**validated_data)
+    
+    def to_representation(self, instance):
+        # Get the default representation
+        representation = super().to_representation(instance)
+        
+        # If this is a POST/PUT request with a room_id, remove the empty room object
+        if 'room' in representation and not representation['room']:
+            representation.pop('room')
+            
+        return representation

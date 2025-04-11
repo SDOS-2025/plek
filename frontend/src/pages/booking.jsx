@@ -1,18 +1,16 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   Search,
   SlidersHorizontal,
   Projector,
   Wifi,
   Square,
-  Link,
-  Calendar,
-  Clock,
-  Users,
   Building2,
   X,
+  Users,
 } from "lucide-react";
 import BookingModal from "../components/ConfirmBooking";
+import api from "../api";
 
 function Booking() {
   const [searchQuery, setSearchQuery] = useState("");
@@ -22,33 +20,62 @@ function Booking() {
   const [showFilters, setShowFilters] = useState(false);
   const [selectedBuilding, setSelectedBuilding] = useState("all");
   const [selectedCapacity, setSelectedCapacity] = useState("all");
-  const [selectedTimeSlot, setSelectedTimeSlot] = useState("all");
+  const [rooms, setRooms] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
 
   const firstName = localStorage.getItem("FirstName");
 
-  const rooms = [
-    {
-      id: 1,
-      name: "B512",
-      building: "R&D Building",
-      capacity: 100,
-      timeSlot: "4 - 5 pm",
-      date: "6th february 2025",
-      amenities: ["projector", "wifi", "whiteboard"],
-    },
-    {
-      id: 2,
-      name: "B512",
-      building: "R&D Building",
-      capacity: 100,
-      timeSlot: "4 - 5 pm",
-      date: "6th february 2025",
-      amenities: ["projector", "wifi"],
-    },
-  ];
+  // Modify the useEffect hook to refresh data every minute
+  useEffect(() => {
+    // Create a reference to track if component is mounted
+    let isMounted = true;
+
+    const fetchRooms = async () => {
+      // Only proceed if component is still mounted
+      if (!isMounted) return;
+      
+      try {
+        setLoading(prevLoading => {
+          // Only show loading indicator on first load, not refreshes
+          return prevLoading && rooms.length === 0;
+        });
+        
+        const response = await api.get("rooms/");
+        
+        if (isMounted) {
+          setRooms(response.data);
+          setError(null);
+        }
+      } catch (err) {
+        console.error("Error fetching rooms:", err);
+        if (isMounted) {
+          setError("Failed to load available rooms");
+        }
+      } finally {
+        if (isMounted) {
+          setLoading(false);
+        }
+      }
+    };
+
+    // Initial fetch
+    fetchRooms();
+    
+    // Set up interval for fetching every minute (60000 milliseconds)
+    const intervalId = setInterval(() => {
+      console.log("Refreshing room data...");
+      fetchRooms();
+    }, 60000);
+    
+    // Cleanup function to run when component unmounts
+    return () => {
+      isMounted = false;
+      clearInterval(intervalId);
+    };
+  }, []); // Empty dependency array means this runs once on mount
 
   const buildings = ["all", ...new Set(rooms.map((room) => room.building))];
-  const timeSlots = ["all", ...new Set(rooms.map((room) => room.timeSlot))];
 
   const capacityRanges = [
     { label: "All", value: "all" },
@@ -93,15 +120,11 @@ function Booking() {
       selectedAmenities.length === 0 ||
       selectedAmenities.every((amenity) => room.amenities.includes(amenity));
 
-    const matchesTimeSlot =
-      selectedTimeSlot === "all" || room.timeSlot === selectedTimeSlot;
-
     return (
       matchesSearch &&
       matchesBuilding &&
       matchesCapacity &&
-      matchesAmenities &&
-      matchesTimeSlot
+      matchesAmenities
     );
   });
 
@@ -181,7 +204,7 @@ function Booking() {
                 </button>
               </div>
 
-              {/* Filters */}
+              {/* Filters - Removed Time Slot filter */}
               {showFilters && (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6 p-4 bg-gray-700 rounded-lg">
                   <div className="space-y-2">
@@ -193,7 +216,7 @@ function Booking() {
                     >
                       {buildings.map((building) => (
                         <option key={building} value={building}>
-                          {building === "all" ? "Any Buildings" : building}
+                          {building === "all" ? "Any Building" : building}
                         </option>
                       ))}
                     </select>
@@ -208,20 +231,6 @@ function Booking() {
                       {capacityRanges.map((range) => (
                         <option key={range.value} value={range.value}>
                           {range.label}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                  <div className="space-y-2">
-                    <label className="block text-gray-300">Time Slot</label>
-                    <select
-                      className="w-full bg-gray-600 rounded-lg p-3 focus:outline-none focus:ring-2 focus:ring-blue-400"
-                      value={selectedTimeSlot}
-                      onChange={(e) => setSelectedTimeSlot(e.target.value)}
-                    >
-                      {timeSlots.map((timeSlot) => (
-                        <option key={timeSlot} value={timeSlot}>
-                          {timeSlot === "all" ? "Any Time Slot" : timeSlot}
                         </option>
                       ))}
                     </select>
@@ -270,37 +279,57 @@ function Booking() {
               )}
             </div>
 
-            {/* Room Cards */}
+            {/* Room Cards - Removed time slot and date display */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {filteredRooms.map((room) => (
-                <div
-                  key={room.id}
-                  className="bg-plek-dark rounded-lg p-6 space-y-4"
-                >
-                  <h3 className="text-xl font-semibold">Room: {room.name}</h3>
-                  <p>Building: {room.building}</p>
-                  <p>Capacity: {room.capacity}</p>
-                  <p>Slot: {room.timeSlot}</p>
-                  <p>Date: {room.date}</p>
-                  <div className="flex space-x-2">
-                    {room.amenities.includes("projector") && (
-                      <Projector size={18} className="text-gray-400" />
-                    )}
-                    {room.amenities.includes("wifi") && (
-                      <Wifi size={18} className="text-gray-400" />
-                    )}
-                    {room.amenities.includes("whiteboard") && (
-                      <Square size={18} className="text-gray-400" />
-                    )}
-                  </div>
-                  <button
-                    onClick={() => handleBookClick(room)}
-                    className="w-full py-2 bg-purple-600 hover:bg-purple-700 rounded-lg transition-colors"
-                  >
-                    Book
-                  </button>
+              {loading ? (
+                <div className="col-span-3 text-center py-10">
+                  <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-purple-500 mx-auto"></div>
+                  <p className="mt-4 text-gray-300">Loading rooms...</p>
                 </div>
-              ))}
+              ) : error ? (
+                <div className="col-span-3 text-center py-10">
+                  <div className="text-red-400 text-xl mb-2">⚠️</div>
+                  <p className="text-gray-300">{error}</p>
+                </div>
+              ) : filteredRooms.length === 0 ? (
+                <div className="col-span-3 text-center py-10">
+                  <p className="text-gray-300">No rooms match your search criteria.</p>
+                </div>
+              ) : (
+                filteredRooms.map((room) => (
+                  <div
+                    key={room.id}
+                    className="bg-plek-dark rounded-lg p-6 space-y-4"
+                  >
+                    <h3 className="text-xl font-semibold">Room: {room.name}</h3>
+                    <div className="flex items-center space-x-2 text-gray-300">
+                      <Building2 size={16} />
+                      <span>{room.building}</span>
+                    </div>
+                    <div className="flex items-center space-x-2 text-gray-300">
+                      <Users size={16} />
+                      <span>Capacity: {room.capacity}</span>
+                    </div>
+                    <div className="flex space-x-3 pt-1">
+                      {room.amenities?.includes("projector") && (
+                        <Projector size={18} className="text-gray-400" />
+                      )}
+                      {room.amenities?.includes("wifi") && (
+                        <Wifi size={18} className="text-gray-400" />
+                      )}
+                      {room.amenities?.includes("whiteboard") && (
+                        <Square size={18} className="text-gray-400" />
+                      )}
+                    </div>
+                    <button
+                      onClick={() => handleBookClick(room)}
+                      className="w-full py-2 bg-purple-600 hover:bg-purple-700 rounded-lg transition-colors"
+                    >
+                      Book
+                    </button>
+                  </div>
+                ))
+              )}
             </div>
           </main>
         </div>
@@ -309,15 +338,15 @@ function Booking() {
       <footer className="border-t border-gray-800 bg-plek-dark">
         <div className="container mx-auto px-4 py-4">
           <div className="flex justify-center space-x-6 text-sm text-gray-400">
-            <Link to="/about" className="hover:text-white transition-colors">
+            <a href="/about" className="hover:text-white transition-colors">
               About us
-            </Link>
-            <Link to="/help" className="hover:text-white transition-colors">
+            </a>
+            <a href="/help" className="hover:text-white transition-colors">
               Help Center
-            </Link>
-            <Link to="/contact" className="hover:text-white transition-colors">
+            </a>
+            <a href="/contact" className="hover:text-white transition-colors">
               Contact us
-            </Link>
+            </a>
           </div>
         </div>
       </footer>

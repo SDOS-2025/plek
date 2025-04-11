@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
 import {
   Building2,
@@ -9,238 +9,132 @@ import {
   Wifi,
   X,
   Trash2,
+  Loader2
 } from "lucide-react";
+import api from "../api";
+// Import the ModifyBookingModal component
+import ModifyBookingModal from "../components/ModifyBooking";
 
 function MyBookings() {
   const [activeTab, setActiveTab] = useState("upcoming");
   const [showModifyModal, setShowModifyModal] = useState(false);
   const [selectedBooking, setSelectedBooking] = useState(null);
+  const [upcomingBookings, setUpcomingBookings] = useState([]);
+  const [previousBookings, setPreviousBookings] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  
   const firstName = localStorage.getItem("FirstName");
 
-  const upcomingBookings = [
-    {
-      id: 1,
-      room: "B512",
-      building: "Research and Development Building",
-      slot: "4 - 5 pm",
-      date: "6th February 2025",
-      capacity: 8,
-      status: "Pending",
-    },
-    {
-      id: 2,
-      room: "A204",
-      building: "Administration Building",
-      slot: "2 - 3 pm",
-      date: "7th February 2025",
-      capacity: 12,
-      status: "Approved",
-    },
-    {
-      id: 3,
-      room: "C110",
-      building: "Conference Center",
-      slot: "10 - 11 am",
-      date: "8th February 2025",
-      capacity: 20,
-      status: "Pending",
-    },
-  ];
-
-  const previousBookings = [
-    {
-      id: 101,
-      room: "B512",
-      building: "Research and Development Building",
-      slot: "1 - 2 pm",
-      date: "1st February 2025",
-      capacity: 8,
-      status: "Completed",
-    },
-    {
-      id: 102,
-      room: "A204",
-      building: "Administration Building",
-      slot: "3 - 4 pm",
-      date: "2nd February 2025",
-      capacity: 12,
-      status: "Cancelled",
-    },
-    {
-      id: 103,
-      room: "C110",
-      building: "Conference Center",
-      slot: "11 - 12 pm",
-      date: "3rd February 2025",
-      capacity: 20,
-      status: "Completed",
-    },
-  ];
+  // Fetch bookings when component mounts
+  useEffect(() => {
+    const fetchBookings = async () => {
+      try {
+        setLoading(true);
+        
+        // Make API call to get user's bookings
+        const response = await api.get("bookings/?all=false");
+        
+        // Process the response data
+        const bookings = response.data;
+        const now = new Date();
+        
+        // Split bookings into upcoming and previous
+        const upcoming = [];
+        const previous = [];
+        
+        bookings.forEach(booking => {
+          // Use start_time instead of just date for more accurate comparison
+          const bookingDateTime = new Date(booking.start_time || booking.date);
+          
+          // Format the date for display - extract from start_time if available
+          const bookingDate = new Date(booking.start_time || booking.date);
+          const formattedDate = bookingDate.toLocaleDateString('en-US', {
+            day: 'numeric',
+            month: 'long',
+            year: 'numeric'
+          });
+          
+          // Format the time from start_time and end_time
+          let timeSlot = booking.time_slot;
+          if (!timeSlot && booking.start_time && booking.end_time) {
+            const startTime = new Date(booking.start_time);
+            const endTime = new Date(booking.end_time);
+            
+            const formatTime = (date) => {
+              return date.toLocaleTimeString('en-US', {
+                hour: 'numeric',
+                minute: '2-digit',
+                hour12: true
+              });
+            };
+            
+            timeSlot = `${formatTime(startTime)} - ${formatTime(endTime)}`;
+          }
+          
+          // Create a formatted booking object
+          const formattedBooking = {
+            id: booking.id,
+            room: booking.room.name,
+            building: booking.room.building,
+            slot: timeSlot || "Time not specified",
+            date: formattedDate,
+            capacity: booking.room.capacity,
+            status: booking.status || "Pending",
+            purpose: booking.purpose,
+            attendees: booking.attendees,
+            notes: booking.notes,
+            // Store raw datetime for sorting
+            rawDateTime: bookingDateTime
+          };
+          
+          // Add to appropriate array based on date/time and not status
+          if (bookingDateTime > now) {
+            upcoming.push(formattedBooking);
+          } else {
+            previous.push(formattedBooking);
+          }
+        });
+        
+        // Sort upcoming bookings by date (nearest first)
+        upcoming.sort((a, b) => a.rawDateTime - b.rawDateTime);
+        
+        // Sort previous bookings by date (most recent first)
+        previous.sort((a, b) => b.rawDateTime - a.rawDateTime);
+        
+        // Update state with the fetched bookings
+        setUpcomingBookings(upcoming);
+        setPreviousBookings(previous);
+        setError(null);
+      } catch (err) {
+        console.error("Error fetching bookings:", err);
+        setError("Failed to load your bookings. Please try again later.");
+      } finally {
+        setLoading(false);
+      }
+    };
+    
+    fetchBookings();
+  }, []);
 
   const handleModify = (booking) => {
     setSelectedBooking(booking);
     setShowModifyModal(true);
   };
 
-  const handleCancel = (bookingId) => {
-    // Handle cancel logic
-    console.log("Cancelling booking:", bookingId);
-  };
-
-  const ModifyBookingModal = ({ booking, onClose }) => {
-    const [purpose, setPurpose] = useState("Team Meeting");
-    const [attendees, setAttendees] = useState("6");
-    const [notes, setNotes] = useState("Need whiteboard markers");
-
-    const handleSubmit = (e) => {
-      e.preventDefault();
-      // Handle booking modification here
-      onClose();
-    };
-
-    const handleDelete = () => {
-      // Handle booking deletion here
-      if (confirm("Are you sure you want to cancel this booking?")) {
-        // Delete booking logic
-        onClose();
-      }
-    };
-
-    return (
-      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-        <div className="bg-gray-800 rounded-xl w-full max-w-3xl p-6 relative max-h-[90vh] overflow-y-auto">
-          <button
-            onClick={onClose}
-            className="absolute right-4 top-4 text-gray-400 hover:text-white"
-          >
-            <X size={24} />
-          </button>
-
-          <div className="mb-6">
-            <h2 className="text-2xl font-bold mb-2">Modify Booking</h2>
-            <p className="text-gray-400">Update your room booking details</p>
-          </div>
-
-          <div className="grid grid-cols-2 gap-6 mb-8">
-            <div className="space-y-4">
-              <div className="flex items-center space-x-3 text-gray-300">
-                <Building2 size={20} />
-                <div>
-                  <p className="text-sm text-gray-400">Room</p>
-                  <p>
-                    {booking.room} - {booking.building}
-                  </p>
-                </div>
-              </div>
-              <div className="flex items-center space-x-3 text-gray-300">
-                <CalendarDays size={20} />
-                <div>
-                  <p className="text-sm text-gray-400">Date</p>
-                  <p>{booking.date}</p>
-                </div>
-              </div>
-            </div>
-            <div className="space-y-4">
-              <div className="flex items-center space-x-3 text-gray-300">
-                <CalendarClock size={20} />
-                <div>
-                  <p className="text-sm text-gray-400">Time Slot</p>
-                  <p>{booking.slot}</p>
-                </div>
-              </div>
-              <div className="flex items-center space-x-3 text-gray-300">
-                <Users size={20} />
-                <div>
-                  <p className="text-sm text-gray-400">Capacity</p>
-                  <p>{booking.capacity} people</p>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <div className="bg-gray-700 rounded-lg p-4 mb-6">
-            <h3 className="font-semibold mb-2">Available Amenities</h3>
-            <div className="flex space-x-4">
-              <div className="flex items-center space-x-2 text-gray-300">
-                <Projector size={18} />
-                <span>Projector</span>
-              </div>
-              <div className="flex items-center space-x-2 text-gray-300">
-                <Wifi size={18} />
-                <span>Wi-Fi</span>
-              </div>
-            </div>
-          </div>
-
-          <form onSubmit={handleSubmit} className="space-y-6">
-            <div>
-              <label className="block text-sm font-medium text-gray-300 mb-2">
-                Purpose of Booking
-              </label>
-              <input
-                type="text"
-                value={purpose}
-                onChange={(e) => setPurpose(e.target.value)}
-                className="w-full bg-gray-700 rounded-lg p-3 focus:outline-none focus:ring-2 focus:ring-blue-400"
-                placeholder="e.g., Team Meeting, Workshop, Training"
-                required
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-300 mb-2">
-                Number of Attendees
-              </label>
-              <input
-                type="number"
-                value={attendees}
-                onChange={(e) => setAttendees(e.target.value)}
-                max={booking.capacity}
-                className="w-full bg-gray-700 rounded-lg p-3 focus:outline-none focus:ring-2 focus:ring-blue-400"
-                placeholder="Enter number of attendees"
-                required
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-300 mb-2">
-                Additional Notes
-              </label>
-              <textarea
-                value={notes}
-                onChange={(e) => setNotes(e.target.value)}
-                className="w-full bg-gray-700 rounded-lg p-3 focus:outline-none focus:ring-2 focus:ring-blue-400 h-32"
-                placeholder="Any special requirements or notes"
-              />
-            </div>
-
-            <div className="flex space-x-4">
-              <button
-                type="button"
-                onClick={handleDelete}
-                className="flex items-center justify-center space-x-2 py-3 px-4 bg-red-600 hover:bg-red-700 rounded-lg transition-colors"
-              >
-                <Trash2 size={18} />
-                <span>Cancel Booking</span>
-              </button>
-              <button
-                type="button"
-                onClick={onClose}
-                className="flex-1 py-3 bg-gray-700 hover:bg-gray-600 rounded-lg transition-colors"
-              >
-                Discard Changes
-              </button>
-              <button
-                type="submit"
-                className="flex-1 py-3 bg-purple-600 hover:bg-purple-700 rounded-lg transition-colors"
-              >
-                Save Changes
-              </button>
-            </div>
-          </form>
-        </div>
-      </div>
-    );
+  const handleCancel = async (bookingId) => {
+    try {
+      // Call the API to cancel/delete the booking
+      await api.delete(`book/delete/${bookingId}/`);
+      
+      // Remove the canceled booking from the state
+      setUpcomingBookings(upcomingBookings.filter(booking => booking.id !== bookingId));
+      
+      alert("Booking canceled successfully");
+    } catch (err) {
+      console.error("Error canceling booking:", err);
+      alert("Failed to cancel booking. Please try again.");
+    }
   };
 
   return (
@@ -319,92 +213,134 @@ function MyBookings() {
 
           {/* Scrollable Content */}
           <div className="max-h-[75vh] overflow-y-auto custom-scrollbar rounded-lg p-2 max-w-full w-full mx-auto">
-            {activeTab === "upcoming" ? (
-              <div className="space-y-4">
-                {upcomingBookings.map((booking) => (
-                  <div
-                    key={booking.id}
-                    className="bg-plek-dark rounded-lg p-6 space-y-4"
-                  >
-                    <div className="flex justify-between items-start">
-                      <div>
-                        <h3 className="text-lg font-medium mb-2">
-                          Room: {booking.room}
-                        </h3>
-                        <p className="text-gray-400">
-                          Building: {booking.building}
-                        </p>
-                        <div className="mt-4 space-y-2">
-                          <p className="text-gray-300">SLOT: {booking.slot}</p>
-                          <p className="text-gray-300">Date: {booking.date}</p>
-                          <p className="text-gray-300">
-                            Capacity: {booking.capacity}
+            {loading ? (
+              <div className="flex flex-col items-center justify-center py-10">
+                <Loader2 size={40} className="animate-spin text-purple-500 mb-4" />
+                <p className="text-gray-400">Loading your bookings...</p>
+              </div>
+            ) : error ? (
+              <div className="bg-red-900/20 border border-red-800 text-red-300 p-4 rounded-lg text-center">
+                <p>{error}</p>
+              </div>
+            ) : activeTab === "upcoming" ? (
+              upcomingBookings.length === 0 ? (
+                <div className="text-center py-10 text-gray-400">
+                  <p>You don't have any upcoming bookings.</p>
+                  <Link to="/booking" className="text-purple-400 hover:text-purple-300 mt-2 inline-block">
+                    Book a room now
+                  </Link>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {upcomingBookings.map((booking) => (
+                    <div
+                      key={booking.id}
+                      className="bg-plek-dark rounded-lg p-6 space-y-4"
+                    >
+                      <div className="flex justify-between items-start">
+                        <div>
+                          <h3 className="text-lg font-medium mb-2">
+                            Room: {booking.room}
+                          </h3>
+                          <p className="text-gray-400">
+                            Building: {booking.building}
                           </p>
-                          <p
-                            className={`${
-                              booking.status === "Approved"
-                                ? "text-green-400"
-                                : "text-yellow-400"
-                            }`}
+                          <div className="mt-4 space-y-2">
+                            {/* Updated date and time display */}
+                            <div className="flex items-center space-x-2 text-gray-300">
+                              <CalendarDays size={16} />
+                              <span>{booking.date}</span>
+                            </div>
+                            <div className="flex items-center space-x-2 text-gray-300">
+                              <CalendarClock size={16} />
+                              <span>{booking.slot}</span>
+                            </div>
+                            <div className="flex items-center space-x-2 text-gray-300">
+                              <Users size={16} />
+                              <span>Capacity: {booking.capacity}</span>
+                            </div>
+                            <p
+                              className={`flex items-center space-x-2 ${
+                                booking.status.toLowerCase() === "approved"
+                                  ? "text-green-400"
+                                  : booking.status.toLowerCase() === "pending"
+                                  ? "text-yellow-400"
+                                  : "text-red-400"
+                              }`}
+                            >
+                              <span>Status: {booking.status}</span>
+                            </p>
+                          </div>
+                        </div>
+                        <div className="flex space-x-3">
+                          <button
+                            onClick={() => handleCancel(booking.id)}
+                            className="px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded-lg transition-colors"
                           >
-                            Status: {booking.status}
-                          </p>
+                            Cancel
+                          </button>
+                          <button
+                            onClick={() => handleModify(booking)}
+                            className="px-4 py-2 bg-purple-600 hover:bg-purple-700 rounded-lg transition-colors"
+                          >
+                            Modify
+                          </button>
                         </div>
                       </div>
-                      <div className="flex space-x-3">
-                        <button
-                          onClick={() => handleCancel(booking.id)}
-                          className="px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded-lg transition-colors"
-                        >
-                          Cancel
-                        </button>
-                        <button
-                          onClick={() => handleModify(booking)}
-                          className="px-4 py-2 bg-purple-600 hover:bg-purple-700 rounded-lg transition-colors"
-                        >
-                          Modify
-                        </button>
-                      </div>
                     </div>
-                  </div>
-                ))}
-              </div>
+                  ))}
+                </div>
+              )
             ) : (
-              <div className="space-y-4">
-                {previousBookings.map((booking) => (
-                  <div
-                    key={booking.id}
-                    className="bg-plek-dark rounded-lg p-6 space-y-4"
-                  >
-                    <div className="flex justify-between items-start">
-                      <div>
-                        <h3 className="text-lg font-medium mb-2">
-                          Room: {booking.room}
-                        </h3>
-                        <p className="text-gray-400">
-                          Building: {booking.building}
-                        </p>
-                        <div className="mt-4 space-y-2">
-                          <p className="text-gray-300">SLOT: {booking.slot}</p>
-                          <p className="text-gray-300">Date: {booking.date}</p>
-                          <p className="text-gray-300">
-                            Capacity: {booking.capacity}
+              previousBookings.length === 0 ? (
+                <div className="text-center py-10 text-gray-400">
+                  <p>No previous bookings found.</p>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {previousBookings.map((booking) => (
+                    <div
+                      key={booking.id}
+                      className="bg-plek-dark rounded-lg p-6 space-y-4"
+                    >
+                      <div className="flex justify-between items-start">
+                        <div>
+                          <h3 className="text-lg font-medium mb-2">
+                            Room: {booking.room}
+                          </h3>
+                          <p className="text-gray-400">
+                            Building: {booking.building}
                           </p>
-                          <p
-                            className={`${
-                              booking.status === "Completed"
-                                ? "text-green-400"
-                                : "text-red-400"
-                            }`}
-                          >
-                            Status: {booking.status}
-                          </p>
+                          <div className="mt-4 space-y-2">
+                            {/* Updated date and time display */}
+                            <div className="flex items-center space-x-2 text-gray-300">
+                              <CalendarDays size={16} />
+                              <span>{booking.date}</span>
+                            </div>
+                            <div className="flex items-center space-x-2 text-gray-300">
+                              <CalendarClock size={16} />
+                              <span>{booking.slot}</span>
+                            </div>
+                            <div className="flex items-center space-x-2 text-gray-300">
+                              <Users size={16} />
+                              <span>Capacity: {booking.capacity}</span>
+                            </div>
+                            <p
+                              className={`flex items-center space-x-2 ${
+                                booking.status.toLowerCase() === "completed"
+                                  ? "text-green-400"
+                                  : "text-red-400"
+                              }`}
+                            >
+                              <span>Status: {booking.status}</span>
+                            </p>
+                          </div>
                         </div>
                       </div>
                     </div>
-                  </div>
-                ))}
-              </div>
+                  ))}
+                </div>
+              )
             )}
           </div>
         </div>
@@ -427,11 +363,15 @@ function MyBookings() {
         </div>
       </footer>
 
-      {/* Modify Booking Modal */}
+      {/* Modify Booking Modal - replaced with imported component */}
       {showModifyModal && selectedBooking && (
         <ModifyBookingModal
           booking={selectedBooking}
           onClose={() => setShowModifyModal(false)}
+          onCancel={(id) => {
+            handleCancel(id);
+            setShowModifyModal(false);
+          }}
         />
       )}
     </div>
