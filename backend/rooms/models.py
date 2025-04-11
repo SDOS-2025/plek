@@ -13,7 +13,7 @@ class Room(models.Model):
     capacity = models.IntegerField(default=50)
     available = models.BooleanField(default=True)
     building = models.CharField(max_length=100, default="Lecture Hall Complex")
-    amenities = models.JSONField(default=dict)  # Store amenities as a JSON object
+    amenities = models.JSONField(default=list)  # Store amenities as a JSON object
     # image = models.ImageField(upload_to='room_images/', blank=True, null=True)
 
     def __str__(self):
