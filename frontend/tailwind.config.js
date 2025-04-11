@@ -10,6 +10,7 @@ export default {
         'plek-purple': '#9333EA',
         'plek-light': '#F9FAFB',
         'plek-dark': '#1A1A1A',
+        'plek-lightgray' : '#374151',
       },
     },
   },

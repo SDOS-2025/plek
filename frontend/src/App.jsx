@@ -9,6 +9,7 @@ import MyBookings from './pages/MyBookings';
 import ManageBookings from './pages/ManageBookings';
 import ManageRooms from './pages/ManageRooms';
 import LandingPage from './pages/landingPage';
+import Analytics from './pages/Analytics';
 
 function App() {
   return (
@@ -25,6 +26,7 @@ function App() {
         <Route path="/my-bookings" element={<MyBookings />} />
         <Route path="/manage-bookings" element={<ManageBookings />} />
         <Route path="/manage-rooms" element={<ManageRooms />} />
+        <Route path="/analytics" element={<Analytics />} />
       </Route>
     </Routes>
   );

@@ -37,7 +37,7 @@ export default function Signup() {
     try {
       console.log("Sending signup request:", { firstName, lastName, email, password });
       const response = await api.post(
-        "/api/auth/register",
+        "/api/auth/register/",
         {
           first_name: firstName,
           last_name: lastName,
