@@ -1,5 +1,6 @@
 # accounts/serializers.py
-from dj_rest_auth.registration.serializers import RegisterSerializer as DefaultRegisterSerializer
+from dj_rest_auth.registration.serializers import \
+    RegisterSerializer as DefaultRegisterSerializer
 from dj_rest_auth.serializers import LoginSerializer as DefaultLoginSerializer
 from django.contrib.auth import authenticate
 from rest_framework import serializers

@@ -67,3 +67,15 @@ class RoomView(APIView):
 
         room.delete()
         return Response(status=204)
+
+    def patch(self, request, id):
+        try:
+            room = Room.objects.get(id=id)
+        except Room.DoesNotExist:
+            return Response({"error": "Room not found"}, status=404)
+
+        serializer = RoomSerializer(room, data=request.data, partial=True)
+        if serializer.is_valid():
+            serializer.save()
+            return Response(serializer.data)
+        return Response(serializer.errors, status=400)

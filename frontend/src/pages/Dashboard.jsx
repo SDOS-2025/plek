@@ -14,7 +14,6 @@ import {
   Trash2,
 } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
-import { AuthContext } from "../context/AuthContext";
 import BookingModal from "../components/ConfirmBooking";
 import ModifyBookingModal from "../components/ModifyBooking";
 import api from "../api";
