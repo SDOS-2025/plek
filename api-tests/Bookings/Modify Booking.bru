@@ -1,0 +1,26 @@
+meta {
+  name: Modify Booking
+  type: http
+  seq: 2
+}
+
+put {
+  url: {{BASE_URL}}/book/update/:id
+  body: json
+  auth: inherit
+}
+
+params:path {
+  id: 1
+}
+
+body:json {
+  {
+    "room": 1,
+    "user": 1,
+    "start_time": "2025-04-11T10:00:00Z",
+    "end_time": "2025-04-11T11:00:00Z",
+    "purpose": "Admin meeting"
+  }
+  
+}

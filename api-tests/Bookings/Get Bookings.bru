@@ -1,0 +1,15 @@
+meta {
+  name: Get Bookings
+  type: http
+  seq: 4
+}
+
+get {
+  url: {{BASE_URL}}/bookings/:id/
+  body: none
+  auth: inherit
+}
+
+params:path {
+  id: 1
+}

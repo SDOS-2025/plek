@@ -17,4 +17,5 @@ urlpatterns = [
     path("api/token/blacklist/", TokenBlacklistView.as_view(), name="token_blacklist"),
     path("accounts/", include("allauth.urls")),
     path("", include("rooms.urls")),
+    path("", include("bookings.urls")),
 ]

@@ -1,11 +1,22 @@
 from backend.mongo_service import get_amenities
 from django.shortcuts import render
-from rest_framework.permissions import IsAuthenticated
+from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from .models import Room
 from .serializers import RoomSerializer
+
+"""
+fields = [
+            "name",
+            "description",
+            "capacity",
+            "available",
+            "building",
+            "amenities",
+        ]
+"""
 
 
 class ListRoomsView(APIView):
@@ -43,7 +54,7 @@ class RoomView(APIView):
             return Response({"error": "Room not found"}, status=404)
 
         serializer = RoomSerializer(room, data=request.data)
-        if serializer.is_valid():
+        if serializer.ids_valid():
             serializer.save()
             return Response(serializer.data)
         return Response(serializer.errors, status=400)

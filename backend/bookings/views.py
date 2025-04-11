@@ -3,44 +3,81 @@ from rest_framework.response import Response
 from backend.mongo_service import add_log, add_notification
 from django.shortcuts import render, redirect
 from .models import Booking
-from room.models import Room
 from django.contrib.auth.decorators import login_required
+from rest_framework.permissions import IsAuthenticated
+from rest_framework.views import APIView
+from .serializers import BookingSerializer
+from django.utils import timezone
+from rest_framework import serializers
+from rest_framework import status
 
 
-@api_view(['POST'])
-def book_room(request):
-    user_id = request.data['user_id']
-    room_id = request.data['room_id']
+class BookingView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, id=None):
+        '''Returns the details of a booking'''
+        try:
+            booking = Booking.objects.get(id=id)
+            serializer = BookingSerializer(booking)
+            return Response(serializer.data)
+        except Booking.DoesNotExist:
+            return Response({"message": "Booking not found"}, status=status.HTTP_404_NOT_FOUND)
+
+    def post(self, request, id=None):
+        '''Creates a new booking'''
+        serializer = BookingSerializer(data=request.data)
+        if serializer.is_valid():
+            serializer.save()
+            # add_log(
+            #     event="Booking Created",
+            #     user_id=request.user.id,
+            #     room_id=serializer.validated_data['room'].id,
+            #     details=f"Booking created for room {serializer.validated_data['room'].name}",
+            # )
+            # add_notification(
+            #     user_id=request.user.id,
+            #     message=f"Booking created for room {serializer.validated_data['room'].name}",
+            # )
+            return Response(serializer.data, status=201)
+        return Response(serializer.errors, status=status.HTTP_404_NOT_FOUND)
     
-    # Create booking in MySQL
-    booking = Booking.objects.create(
-        user_id=user_id,
-        room_id=room_id,
-        start_time=request.data['start_time'],
-        end_time=request.data['end_time'],
-        status="Pending"
-    )
-    
-    # Add log entry in MongoDB
-    add_log("Room booked", user_id, room_id, "User booked a room")
+    def delete(self, request, id):
+        '''Deletes a booking'''
+        try:
+            booking = Booking.objects.get(id=id)
+            booking.delete()
+            return Response(status=204)
+        except Booking.DoesNotExist:
+            return Response({"message": "Booking not found"}, status=status.HTTP_404_NOT_FOUND)
+        
+    def put(self, request, id):
+        '''Updates a booking'''
+        try:
+            booking = Booking.objects.get(id=id)
+            serializer = BookingSerializer(booking, data=request.data, partial=True)
+            if serializer.is_valid():
+                serializer.save()
+                # add_log(
+                #     user=request.user,
+                #     action="Booking Updated",
+                #     details=f"Booking updated for room {serializer.validated_data['room'].name}",
+                # )
+                # add_notification(
+                #     user=request.user,
+                #     message=f"Booking updated for room {serializer.validated_data['room'].name}",
+                # )
+                return Response(serializer.data, status=200)
+            return Response(serializer.errors, status=400)
+        except Booking.DoesNotExist:
+            return Response({"message": "Booking not found"}, status=status.HTTP_404_NOT_FOUND)
+        
+        
+class BookingListView(APIView):
+    permission_classes = [IsAuthenticated]
 
-    # Add notification in MongoDB
-    add_notification(user_id, "Your room booking is pending approval")
-
-    return Response({"message": "Booking successful, check notifications!"})
-
-
-@login_required
-def book_room(request, room_id):
-    room = Room.objects.get(id=room_id)
-    if request.method == "POST":
-        booking = Booking.objects.create(
-            user=request.user,
-            room=room,
-            start_time=request.POST["start_time"],
-            end_time=request.POST["end_time"]
-        )
-        room.available = False  # Mark room as booked
-        room.save()
-        return redirect("list_rooms")
-    return render(request, "booking/book.html", {"room": room})
+    def get(self, request):
+        '''Returns the list of all bookings'''
+        bookings = Booking.objects.all()
+        serializer = BookingSerializer(bookings, many=True)
+        return Response(serializer.data)
