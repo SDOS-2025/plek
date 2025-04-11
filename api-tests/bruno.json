@@ -1,0 +1,15 @@
+{
+  "version": "1",
+  "name": "Plek",
+  "type": "collection",
+  "ignore": [
+    "node_modules",
+    ".git"
+  ],
+  "size": 0.0013799667358398438,
+  "filesCount": 8,
+  "presets": {
+    "requestType": "http",
+    "requestUrl": "{{BASE_URL}}"
+  }
+}

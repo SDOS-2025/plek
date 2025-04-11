@@ -1,23 +1,21 @@
 import React, { useState, useContext, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import api from "../api";
-import { AuthContext } from "../context/AuthContext";
+import { AuthContext } from "../context/AuthProvider";
 
 export default function Login() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const navigate = useNavigate();
-  const { isAuthenticated, checkAuth } = useContext(AuthContext);
+  const { user, login, loading } = useContext(AuthContext);
 
-  // Navigate to dashboard when isAuthenticated becomes true
+  // Navigate to dashboard when user is authenticated
   useEffect(() => {
-    if (isAuthenticated === true) {
-      const firstName = localStorage.getItem("FirstName") || "User";
-      console.log("isAuthenticated updated to true, navigating to dashboard with firstName:", firstName);
-      navigate("/dashboard", { state: { firstName } });
+    if (user && !loading) {
+      navigate("/dashboard");
     }
-  }, [isAuthenticated, navigate]);
+  }, [user, loading, navigate]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -30,17 +28,9 @@ export default function Login() {
 
     try {
       console.log("Sending login request with email:", email);
-      const response = await api.post("/api/auth/login/", { email, password });
-      console.log("Login response:", response.data);
+      const response = await login({ email, password });
+      console.log("Login response:", response);
 
-      // Sync auth state
-      const userData = await checkAuth();
-      if (!userData) {
-        throw new Error("Failed to fetch user data after login");
-      }
-      const firstName = userData.first_name || email.split("@")[0] || "User";
-      localStorage.setItem("FirstName", firstName);
-      // Navigation handled by useEffect
     } catch (err) {
       console.error("Login error:", err.response?.data || err.message);
       setError(

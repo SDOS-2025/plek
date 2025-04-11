@@ -42,6 +42,7 @@ INSTALLED_APPS = [
     "corsheaders",
     "rest_framework",
     "rest_framework_simplejwt",
+    "rest_framework_simplejwt.token_blacklist",
     "dj_rest_auth",
     "allauth",
     "allauth.account",
@@ -78,10 +79,11 @@ MIDDLEWARE = [
     "allauth.account.middleware.AccountMiddleware",
 ]
 
-CORS_ALLOW_ALL_ORIGINS = True
-CORS_ALLOWED_ORIGINS = ["http://localhost:5173"]
+# CORS_ALLOW_ALL_ORIGINS = True
+CORS_ALLOWED_ORIGINS = ["http://127.0.0.1:3000"]
 CORS_ALLOW_CREDENTIALS = True
 CORS_ALLOW_METHODS = ["GET", "POST", "OPTIONS", "PUT", "DELETE", "PATCH"]
+CSRF_TRUSTED_ORIGINS = ["http://127.0.0.1:3000"]
 
 
 ROOT_URLCONF = "backend.urls"
@@ -105,9 +107,9 @@ SIMPLE_JWT = {
     "BLACKLIST_AFTER_ROTATION": True,
     "ALGORITHM": "HS256",
     "SIGNING_KEY": SECRET_KEY,
-    "AUTH_HEADER_TYPES": ("Bearer",),
-    "AUTH_COOKIE_SAMESITE": "None",
-    "AUTH_COOKIE_SECURE": False,
+    # "AUTH_HEADER_TYPES": ("Bearer",),
+    # "AUTH_COOKIE_SAMESITE": "Lax",
+    # "AUTH_COOKIE_SECURE": False,
 }
 
 
@@ -158,10 +160,11 @@ REST_AUTH = {
     "JWT_AUTH_HTTPONLY": True,
     "JWT_AUTH_SAMESITE": "Lax",
     "JWT_AUTH_SECURE": False,
-    "JWT_AUTH_COOKIE_USE_CSRF": False,
+    "JWT_AUTH_COOKIE_USE_CSRF": True,
     "REGISTER_SERIALIZER": "accounts.serializers.RegisterSerializer",
     "LOGIN_SERIALIZER": "accounts.serializers.LoginSerializer",
     "TOKEN_MODEL": None,
+    "SESSION_LOGIN": False,
 }
 
 WSGI_APPLICATION = "backend.wsgi.application"

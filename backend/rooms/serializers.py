@@ -1,5 +1,4 @@
 from rest_framework import serializers
-
 from .models import Room
 
 """
@@ -34,7 +33,7 @@ class RoomSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError(
                 {"capacity": "Capacity must be a positive integer."}
             )
-        if "name" in data and not data["name"]:
+        if "name" in data and not data["name"].strip():
             raise serializers.ValidationError({"name": "Name cannot be empty."})
         return data
 

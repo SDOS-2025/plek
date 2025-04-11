@@ -17,6 +17,8 @@ import { Link, useNavigate } from "react-router-dom";
 import { AuthContext } from "../context/AuthContext";
 import BookingModal from "../components/ConfirmBooking";
 import ModifyBookingModal from "../components/ModifyBooking";
+import api from "../api";
+import { AuthContext } from "../context/AuthProvider";
 
 function Dashboard() {
   const { user, logout } = useContext(AuthContext);
@@ -65,15 +67,14 @@ function Dashboard() {
     setSelectedRoom(room);
     setShowBookingModal(true);
   };
+  const handleLogout = () => {
+    logout();
+    navigate("/");
+  };
 
   const handleModifyClick = (booking) => {
     setSelectedBooking(booking);
     setShowModifyModal(true);
-  };
-
-  const handleLogout = () => {
-    logout();
-    navigate("/login");
   };
 
   return (
