@@ -1,4 +1,5 @@
-import React, { useState, useMemo, useEffect } from "react";
+import React, { useState, useMemo, useEffect, useContext, useCallback } from "react";
+import PropTypes from "prop-types";
 import {
   Search,
   SlidersHorizontal,
@@ -14,10 +15,11 @@ import {
 import { Link } from "react-router-dom";
 import api from "../api"; // Adjust the import path as needed
 import { AuthContext } from "../context/AuthProvider";
-import Alert from "../components/AlertToast";
 import Toast, { DeleteConfirmation } from "../components/AlertToast";
+import NavBar from "../components/NavBar";
 
 function ManageRooms() {
+  const { user } = useContext(AuthContext);
   const [searchQuery, setSearchQuery] = useState("");
   const [showAddModal, setShowAddModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
@@ -25,54 +27,72 @@ function ManageRooms() {
   const [selectedBuilding, setSelectedBuilding] = useState("all");
   const [selectedCapacity, setSelectedCapacity] = useState("all");
   const [showFilters, setShowFilters] = useState(false);
-  const firstName = localStorage.getItem("FirstName");
-  // const [rooms, setRooms] = useState(initialRooms);
   const [rooms, setRooms] = useState([]); // Initialize with an empty array
   const [error, setError] = useState(null);
+  const [loading, setLoading] = useState(false);
   const [alert, setAlert] = useState({
     show: false,
-    type: 'success', // 'success', 'danger', or 'warning'
-    message: ''
+    type: "success", // 'success', 'danger', or 'warning'
+    message: "",
   });
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [roomToDelete, setRoomToDelete] = useState(null);
+  const firstName = user?.first_name || "User";
 
   const showAlert = (type, message) => {
     setAlert({ show: true, type, message });
   };
 
   const hideAlert = () => {
-    setAlert(prev => ({ ...prev, show: false }));
+    setAlert((prev) => ({ ...prev, show: false }));
   };
 
   useEffect(() => {
-    let isMounted = true; // Flag to prevent updates if component unmounts
+    let isMounted = true;
+    let intervalId;
 
-    // Fetch function
     const fetchRooms = async () => {
+      setLoading(true);
       try {
         const response = await api.get("rooms/");
-        // Only update state if component is still mounted
         if (isMounted) {
           setRooms(response.data);
+          setError(null);
         }
       } catch (error) {
         if (isMounted) {
           setError("Failed to fetch rooms");
         }
+      } finally {
+        if (isMounted) {
+          setLoading(false);
+        }
       }
     };
 
-    fetchRooms(); // Initial fetch
-    const intervalId = setInterval(fetchRooms, 60000); // Every minute
+    const startPolling = () => {
+      fetchRooms(); // Initial fetch
+      intervalId = setInterval(fetchRooms, 6000); // Every minute
+    };
+
+    const stopPolling = () => {
+      if (intervalId) {
+        clearInterval(intervalId);
+      }
+    };
+
+    if (!showAddModal && !showEditModal) {
+      startPolling();
+    } else {
+      stopPolling();
+    }
 
     // This is the cleanup function
     return () => {
-      isMounted = false; // Prevent state updates
-      clearInterval(intervalId); // Stop the interval
-      console.log("Cleanup: stopped room data polling");
+      isMounted = false;
+      stopPolling();
     };
-  }, []); // Fetch rooms on component mount
+  }, [showAddModal, showEditModal]); // Fetch rooms on component mount
 
   {
     error && (
@@ -88,13 +108,16 @@ function ManageRooms() {
     [rooms]
   );
 
-  const capacityRanges = [
-    { label: "All", value: "all" },
-    { label: "1-50", value: "1-50", min: 1, max: 50 },
-    { label: "51-100", value: "51-100", min: 51, max: 100 },
-    { label: "101-200", value: "101-200", min: 101, max: 200 },
-    { label: "200+", value: "200+", min: 200, max: Infinity },
-  ];
+  const capacityRanges = useMemo(
+    () => [
+      { label: "All", value: "all" },
+      { label: "1-50", value: "1-50", min: 1, max: 50 },
+      { label: "51-100", value: "51-100", min: 51, max: 100 },
+      { label: "101-200", value: "101-200", min: 101, max: 200 },
+      { label: "200+", value: "200+", min: 200, max: Infinity },
+    ],
+    []
+  );
 
   // Filter rooms based on search query and filters
   const filteredRooms = useMemo(() => {
@@ -117,17 +140,17 @@ function ManageRooms() {
 
       return matchesSearch && matchesBuilding && matchesCapacity;
     });
-  }, [rooms, searchQuery, selectedBuilding, selectedCapacity]);
+  }, [rooms, searchQuery, selectedBuilding, selectedCapacity, capacityRanges]);
 
-  const handleEditClick = (room) => {
+  const handleEditClick = useCallback((room) => {
     setSelectedRoom(room);
     setShowEditModal(true);
-  };
+  }, []);
 
-  const handleDeleteClick = (roomId) => {
+  const handleDeleteClick = useCallback((roomId) => {
     setRoomToDelete(roomId);
     setShowDeleteConfirm(true);
-  };
+  }, []);
 
   const confirmDelete = async () => {
     if (roomToDelete) {
@@ -135,14 +158,14 @@ function ManageRooms() {
         console.log("Deleting room:", roomToDelete);
         const response = await api.delete(`rooms/delete/${roomToDelete}/`);
         console.log("response:", response.data);
-        showAlert('success', 'Room deleted successfully!');
-        
+        showAlert("success", "Room deleted successfully!");
+
         // Refresh the rooms list
         const updatedRooms = await api.get("rooms/");
         setRooms(updatedRooms.data);
       } catch (error) {
         console.error("Error deleting room:", error);
-        showAlert('danger', 'Failed to delete room');
+        showAlert("danger", "Failed to delete room");
       } finally {
         setShowDeleteConfirm(false);
         setRoomToDelete(null);
@@ -150,11 +173,20 @@ function ManageRooms() {
     }
   };
 
-  const RoomModal = ({ room, onClose, isEdit }) => {
+  const RoomModal = React.memo(({ room, onClose, isEdit, setRooms }) => {
     const [name, setName] = useState(room ? room.name : "");
     const [building, setBuilding] = useState(room ? room.building : "");
     const [capacity, setCapacity] = useState(room ? room.capacity : "");
     const [amenities, setAmenities] = useState(room ? room.amenities : []);
+
+    useEffect(() => {
+      console.log("Modal state initialized:", {
+        name,
+        building,
+        capacity,
+        amenities,
+      });
+    }, [name, building, capacity, amenities]);
 
     const toggleAmenity = (amenity) => {
       if (amenities.includes(amenity)) {
@@ -174,24 +206,22 @@ function ManageRooms() {
         amenities,
       };
       try {
-        if (isEdit) {
-          console.log("Updating room:", roomData);
-          const response = await api.patch(`rooms/${room.id}/`, roomData);
-          console.log("response:", response.data);
-          showAlert('success', 'Room updated successfully!');
+        if (isEdit && room) {
+          await api.patch(`rooms/${room.id}/`, roomData);
+          showAlert("success", "Room updated successfully!");
         } else {
-          console.log("Creating room:", roomData);
-          const response = await api.post("rooms/add/", roomData);
-          console.log("response:", response.data);
-          showAlert('success', 'Room created successfully!');
+          await api.post("rooms/add/", roomData);
+          showAlert("success", "Room created successfully!");
         }
         // Fetch updated rooms
         const response = await api.get("rooms/");
         setRooms(response.data);
+        setError(null);
       } catch (err) {
-        const errorMessage = err.response?.data?.name?.[0] || 
-                            "An error occurred while saving the room.";
-        showAlert('danger', errorMessage);
+        const errorMessage =
+          err.response?.data?.name?.[0] ||
+          "An error occurred while saving the room.";
+        showAlert("danger", errorMessage);
         console.error("Error:", err.response?.data || err.message);
       }
       onClose();
@@ -323,58 +353,29 @@ function ManageRooms() {
         </div>
       </div>
     );
+  });
+
+  RoomModal.propTypes = {
+    room: PropTypes.shape({
+      id: PropTypes.number,
+      name: PropTypes.string,
+      building: PropTypes.string,
+      capacity: PropTypes.number,
+      amenities: PropTypes.arrayOf(PropTypes.string),
+    }),
+    onClose: PropTypes.func.isRequired,
+    isEdit: PropTypes.bool.isRequired,
+    setRooms: PropTypes.func.isRequired,
   };
+
+  RoomModal.displayName = "RoomModal";
 
   return (
     <div className="flex flex-col min-h-screen">
       <main className="flex-grow">
         <div className="min-h-screen bg-plek-background text-white">
           {/* Navigation */}
-          <nav className="border-b border-gray-800 px-6 py-4 bg-plek-dark">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center space-x-8">
-                <div className="flex items-center">
-                  <span className="ml-2 text-xl font-semibold">Plek</span>
-                </div>
-                <div className="flex space-x-6">
-                  <a
-                    href="dashboard"
-                    className="text-gray-400 hover:text-gray-300"
-                  >
-                    Dashboard
-                  </a>
-                  <a
-                    href="booking"
-                    className="text-gray-400 hover:text-gray-300"
-                  >
-                    Book a room
-                  </a>
-                  <a
-                    href="my-bookings"
-                    className="text-gray-400 hover:text-gray-300"
-                  >
-                    My Bookings
-                  </a>
-                  <a
-                    href="manage-bookings"
-                    className="text-gray-400 hover:text-gray-300"
-                  >
-                    Manage Bookings
-                  </a>
-                  <a
-                    href="manage-rooms"
-                    className="text-purple-400 hover:text-purple-300"
-                  >
-                    Manage Rooms
-                  </a>
-                </div>
-              </div>
-              <div className="flex items-center space-x-2">
-                <div className="w-8 h-8 bg-blue-400 rounded-full"></div>
-                <span>{firstName}</span>
-              </div>
-            </div>
-          </nav>
+          <NavBar activePage="manage-rooms" />
 
           {/* Main Content */}
           <main className="max-w-7xl mx-auto px-4 py-8">
@@ -516,23 +517,34 @@ function ManageRooms() {
 
       {/* Add Room Modal */}
       {showAddModal && (
-        <RoomModal onClose={() => setShowAddModal(false)} isEdit={false} />
+        <RoomModal
+          onClose={() => {
+            setShowAddModal(false);
+            if (!showEditModal) startPolling();
+          }}
+          isEdit={false}
+          setRooms={setRooms}
+        />
       )}
 
       {/* Edit Room Modal */}
       {showEditModal && selectedRoom && (
         <RoomModal
           room={selectedRoom}
-          onClose={() => setShowEditModal(false)}
+          onClose={() => {
+            setShowEditModal(false);
+            if (!showAddModal) startPolling();
+          }}
           isEdit={true}
+          setRooms={setRooms}
         />
       )}
 
       {/* Add this before the closing </div> of your return statement */}
       {alert.show && (
-        <Toast 
-          type={alert.type} 
-          message={alert.message} 
+        <Toast
+          type={alert.type}
+          message={alert.message}
           show={alert.show}
           onClose={hideAlert}
         />

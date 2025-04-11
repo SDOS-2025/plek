@@ -1,8 +1,4 @@
-  
-import { useNavigate } from 'react-router-dom';
-
-
-
+import { useNavigate, Link } from 'react-router-dom';
 
 function LandingPage() {
   const navigate = useNavigate();
@@ -77,9 +73,9 @@ function LandingPage() {
         <footer className="border-t border-gray-800 bg-plek-dark">
           <div className="container mx-auto px-4 py-4">  
             <div className="flex justify-center space-x-6 text-sm text-gray-400">
-              <a href="#" className="hover:text-white transition-colors">About us</a>
-              <a href="#" className="hover:text-white transition-colors">Help Center</a>
-              <a href="#" className="hover:text-white transition-colors">Contact us</a>
+              <Link to="/about" className="hover:text-white transition-colors">About us</Link>
+              <Link to="/help" className="hover:text-white transition-colors">Help Center</Link>
+              <Link to="/contact" className="hover:text-white transition-colors">Contact us</Link>
             </div>
           </div>
         </footer>

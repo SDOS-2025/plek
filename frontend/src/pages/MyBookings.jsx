@@ -14,6 +14,7 @@ import {
 import api from "../api";
 // Import the ModifyBookingModal component
 import ModifyBookingModal from "../components/ModifyBooking";
+import NavBar from "../components/NavBar";
 
 function MyBookings() {
   const [activeTab, setActiveTab] = useState("upcoming");
@@ -140,49 +141,7 @@ function MyBookings() {
   return (
     <div className="flex flex-col h-screen overflow-y-auto bg-plek-background text-gray-100">
       {/* Navigation */}
-      <nav className="border-b border-gray-800 px-6 py-4 bg-plek-dark">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center space-x-8">
-            <div className="flex items-center">
-              <span className="ml-2 text-xl font-semibold">Plek</span>
-            </div>
-            <div className="flex space-x-6">
-              <a href="dashboard" className="text-gray-400 hover:text-gray-300">
-                Dashboard
-              </a>
-              <a href="booking" className="text-gray-400 hover:text-gray-300">
-                Book a room
-              </a>
-              <a
-                href="my-bookings"
-                className="text-purple-400 hover:text-purple-300"
-              >
-                My Bookings
-              </a>
-              <a
-                href="manage-bookings"
-                className="text-gray-400 hover:text-gray-300"
-              >
-                Manage Bookings
-              </a>
-              <a
-                href="manage-rooms"
-                className="text-gray-400 hover:text-gray-300"
-              >
-                Manage Rooms
-              </a>
-            </div>
-          </div>
-          <div className="flex items-center space-x-2">
-            <div className="w-8 h-8 bg-sky-500 rounded-full flex items-center justify-center">
-              <span className="text-white font-medium">
-                {firstName?.charAt(0) || "U"}
-              </span>
-            </div>
-            <span>{firstName || "User"}</span>
-          </div>
-        </div>
-      </nav>
+      <NavBar activePage="my-bookings" />
 
       {/* Main Content */}
       <div className="min-w-[99vw] mx-auto px-4 py-10 flex-grow">

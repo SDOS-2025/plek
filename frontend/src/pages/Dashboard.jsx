@@ -18,6 +18,7 @@ import BookingModal from "../components/ConfirmBooking";
 import ModifyBookingModal from "../components/ModifyBooking";
 import api from "../api";
 import { AuthContext } from "../context/AuthProvider";
+import NavBar from "../components/NavBar";
 
 function Dashboard() {
   const { user, logout } = useContext(AuthContext);
@@ -66,11 +67,7 @@ function Dashboard() {
     setSelectedRoom(room);
     setShowBookingModal(true);
   };
-  const handleLogout = () => {
-    logout();
-    navigate("/");
-  };
-
+  
   const handleModifyClick = (booking) => {
     setSelectedBooking(booking);
     setShowModifyModal(true);
@@ -78,59 +75,8 @@ function Dashboard() {
 
   return (
     <div className="flex flex-col min-h-screen bg-plek-background text-gray-100">
-      {/* Navigation */}
-      <nav className="border-b border-gray-800 px-6 py-4 bg-plek-dark">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center space-x-8">
-            <div className="flex items-center">
-              <span className="ml-2 text-xl font-semibold">Plek</span>
-            </div>
-            <div className="flex space-x-6">
-              <a
-                href="dashboard"
-                className="text-purple-400 hover:text-purple-300"
-              >
-                Dashboard
-              </a>
-              <a href="booking" className="text-gray-400 hover:text-gray-300">
-                Book a room
-              </a>
-              <a
-                href="my-bookings"
-                className="text-gray-400 hover:text-gray-300"
-              >
-                My Bookings
-              </a>
-              <a
-                href="manage-bookings"
-                className="text-gray-400 hover:text-gray-300"
-              >
-                Manage Bookings
-              </a>
-              <a
-                href="manage-rooms"
-                className="text-gray-400 hover:text-gray-300"
-              >
-                Manage Rooms
-              </a>
-            </div>
-          </div>
-          <div className="flex items-center">
-            <div className="flex items-center">
-              <div className="h-8 w-8 rounded-full bg-sky-500 flex items-center justify-center">
-                <span className="text-sm font-medium"></span>
-              </div>
-              <span className="ml-2">{firstName}</span>
-            </div>
-            <button
-              onClick={handleLogout}
-              className="text-gray-400 hover:text-white"
-            >
-              Logout
-            </button>
-          </div>
-        </div>
-      </nav>
+      {/* Navigation Bar */}
+      <NavBar activePage="dashboard" />
 
       {/* Main Content */}
       <div className="container mx-auto px-6 py-8 flex-grow mb-32">

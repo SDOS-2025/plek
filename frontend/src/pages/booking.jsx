@@ -9,8 +9,10 @@ import {
   X,
   Users,
 } from "lucide-react";
+import { Link } from "react-router-dom";
 import BookingModal from "../components/ConfirmBooking";
 import api from "../api";
+import NavBar from "../components/NavBar";
 
 function Booking() {
   const [searchQuery, setSearchQuery] = useState("");
@@ -133,51 +135,7 @@ function Booking() {
       <main className="flex-grow">
         <div className="min-h-screen bg-plek-background text-white">
           {/* Navigation */}
-          <nav className="border-b border-gray-800 px-6 py-4 bg-plek-dark">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center space-x-8">
-                <div className="flex items-center">
-                  <span className="ml-2 text-xl font-semibold">Plek</span>
-                </div>
-                <div className="flex space-x-6">
-                  <a
-                    href="dashboard"
-                    className="text-gray-400 hover:text-gray-300"
-                  >
-                    Dashboard
-                  </a>
-                  <a
-                    href="booking"
-                    className="text-purple-400 hover:text-purple-300"
-                  >
-                    Book a room
-                  </a>
-                  <a
-                    href="my-bookings"
-                    className="text-gray-400 hover:text-gray-300"
-                  >
-                    My Bookings
-                  </a>
-                  <a
-                    href="manage-bookings"
-                    className="text-gray-400 hover:text-gray-300"
-                  >
-                    Manage Bookings
-                  </a>
-                  <a
-                    href="manage-rooms"
-                    className="text-gray-400 hover:text-gray-300"
-                  >
-                    Manage Rooms
-                  </a>
-                </div>
-              </div>
-              <div className="flex items-center space-x-2">
-                <div className="w-8 h-8 bg-blue-400 rounded-full"></div>
-                <span>{firstName}</span>
-              </div>
-            </div>
-          </nav>
+          <NavBar activePage="booking" />
 
           {/* Main Content */}
           <main className="max-w-7xl mx-auto px-4 py-8">
