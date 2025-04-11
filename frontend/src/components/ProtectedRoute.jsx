@@ -1,13 +1,11 @@
-import React from "react";
-import { useContext } from "react";
-import { AuthContext } from "../context/AuthContext";
+import React, { useContext } from "react";
 import { Navigate, Outlet } from "react-router-dom";
+import { AuthContext } from "../context/AuthProvider";
 
 const ProtectedRoute = () => {
-  const { isAuthenticated } = useContext(AuthContext);
-  console.log("ProtectedRoute - isAuthenticated:", isAuthenticated);
+    const { user, loading } = useContext(AuthContext);
 
-  if (isAuthenticated === null) {
+  if (loading) {
     console.log("ProtectedRoute - Showing loading state");
     return (
       <div className="min-h-screen bg-plek-background flex items-center justify-center">
@@ -16,7 +14,7 @@ const ProtectedRoute = () => {
     );
   }
 
-  return isAuthenticated ? <Outlet /> : <Navigate to="/login" replace />;
+  return user ? <Outlet /> : <Navigate to="/login" replace />;
 };
 
 export default ProtectedRoute;

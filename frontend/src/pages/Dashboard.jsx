@@ -15,7 +15,7 @@ import {
 } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
 import api from "../api";
-import { AuthContext } from "../context/AuthContext";
+import { AuthContext } from "../context/AuthProvider";
 
 function Dashboard() {
     const { user, logout } = useContext(AuthContext);
@@ -38,7 +38,7 @@ function Dashboard() {
 
     const handleLogout = () => {
         logout();
-        navigate("/login");
+        navigate("/");
     }
 
     const BookingModal = ({ room, onClose }) => {

@@ -1,7 +1,7 @@
 import React, { useState, useContext, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import api from "../api";
-import { AuthContext } from "../context/AuthContext";
+import { AuthContext } from "../context/AuthProvider";
 
 export default function Signup() {
   const [firstName, setFirstName] = useState("");
@@ -11,16 +11,14 @@ export default function Signup() {
   const [confirmPassword, setConfirmPassword] = useState("");
   const [error, setError] = useState("");
   const navigate = useNavigate();
-  const { isAuthenticated, checkAuth } = useContext(AuthContext);
+  const { user, login, loading } = useContext(AuthContext);
 
-  // Navigate to dashboard when isAuthenticated becomes true
+  // Navigate to dashboard if user is already authenticated
   useEffect(() => {
-    if (isAuthenticated === true) {
-      const firstNameFromStorage = localStorage.getItem("FirstName") || "User";
-      console.log("isAuthenticated updated to true, navigating to dashboard with firstName:", firstNameFromStorage);
-      navigate("/dashboard", { state: { firstName: firstNameFromStorage } });
+    if (user && !loading) {
+      navigate("/dashboard");
     }
-  }, [isAuthenticated, navigate]);
+  }, [user, loading, navigate, firstName, lastName]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -39,29 +37,20 @@ export default function Signup() {
     try {
       console.log("Sending signup request:", { firstName, lastName, email, password });
       const response = await api.post(
-        "api/auth/register/",
+        "/api/auth/register",
         {
           first_name: firstName,
           last_name: lastName,
           email,
           password1: password,
           password2: confirmPassword,
-          user_category: "student", // Default, adjust if needed
+          user_category: "student",
         },
         { withCredentials: true }
       );
       console.log("Signup response:", response.data);
+      await login({email, password}); // Login after signup
 
-        const loginResponse = await api.post("api/auth/login/", { email, password });
-
-      // Sync auth state with checkAuth
-      const userData = await checkAuth();
-      if (!userData) {
-        throw new Error("Failed to fetch user data after signup");
-      }
-      const fullName = `${userData.first_name || firstName} ${userData.last_name || lastName}`.trim();
-      localStorage.setItem("FirstName", userData.first_name || firstName); // Store firstName for consistency
-      // Navigation handled by useEffect
     } catch (err) {
       console.error("Signup error:", err.response?.data || err.message);
       const errorMsg =
