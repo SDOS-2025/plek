@@ -1,47 +1,57 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { Search, SlidersHorizontal, Projector, Wifi, Building2, X, Plus, Pencil, Trash2, Square } from 'lucide-react';
 import { Link } from 'react-router-dom';
+import api from '../api'; // Adjust the import path as needed
+
 
 function ManageRooms() {
   const [searchQuery, setSearchQuery] = useState('');
-  const [showAddModal, setShowAddModal] = useState(false);
+  const [showAddModal, setShowAddModal] = useState(false);  
   const [showEditModal, setShowEditModal] = useState(false);
   const [selectedRoom, setSelectedRoom] = useState(null);
   const [selectedBuilding, setSelectedBuilding] = useState('all');
   const [selectedCapacity, setSelectedCapacity] = useState('all');
   const [showFilters, setShowFilters] = useState(false);
   const firstName = localStorage.getItem('FirstName');
+  // const [rooms, setRooms] = useState(initialRooms);
+  const [rooms, setRooms] = useState([]); // Initialize with an empty array
+  const [error, setError] = useState(null);
 
-  const rooms = [
-    {
-      id: 1,
-      name: 'B512',
-      building: 'R&D Building',
-      capacity: 100,
-      amenities: ['projector', 'wifi', 'whiteboard']
-    },
-    {
-      id: 2,
-      name: 'A204',
-      building: 'R&D Building',
-      capacity: 50,
-      amenities: ['wifi', 'whiteboard']
-    },
-    {
-      id: 3,
-      name: 'C101',
-      building: 'Main Building',
-      capacity: 30,
-      amenities: ['projector', 'wifi']
-    },
-    {
-      id: 4,
-      name: 'D405',
-      building: 'Conference Center',
-      capacity: 200,
-      amenities: ['projector', 'wifi', 'whiteboard']
-    }
-  ];
+  useEffect(() => {
+    let isMounted = true; // Flag to prevent updates if component unmounts
+    
+    // Fetch function
+    const fetchRooms = async () => {
+      try {
+        const response = await api.get('rooms/');
+        // Only update state if component is still mounted
+        if (isMounted) {
+          setRooms(response.data);
+        }
+      } catch (error) {
+        if (isMounted) {
+          setError('Failed to fetch rooms');
+        }
+      }
+    };
+    
+    fetchRooms(); // Initial fetch
+    const intervalId = setInterval(fetchRooms, 60000); // Every minute
+    
+    // This is the cleanup function
+    return () => {
+      isMounted = false; // Prevent state updates
+      clearInterval(intervalId); // Stop the interval
+      console.log('Cleanup: stopped room data polling');
+    };
+  }, []); // Fetch rooms on component mount
+
+  {error && (
+    <div className="p-3 bg-red-900/50 border border-red-500 rounded-lg text-red-200">
+      {error}
+    </div>
+  )}
+
 
   // Get unique buildings and capacity ranges
   const buildings = useMemo(() =>
@@ -83,10 +93,15 @@ function ManageRooms() {
     setShowEditModal(true);
   };
 
-  const handleDeleteClick = (roomId) => {
+  const handleDeleteClick = async (roomId) => {
     if (confirm('Are you sure you want to delete this room?')) {
       // Handle room deletion logic
+      console.log("Deleting room:", roomId);
+      const response = await api.delete(`rooms/delete/?room_id=${roomId}/`);
+      console.log("response:", response.data);
       console.log('Deleting room:', roomId);
+      const updatedRooms = await api.get('rooms/');
+      setRooms(updatedRooms.data); // Update the rooms state with the fetched data
     }
   };
 
@@ -104,7 +119,7 @@ function ManageRooms() {
       }
     };
 
-    const handleSubmit = (e) => {
+    const handleSubmit = async (e) => {
       e.preventDefault();
       // Handle room creation/update logic
       const roomData = {
@@ -113,6 +128,30 @@ function ManageRooms() {
         capacity: parseInt(capacity),
         amenities
       };
+      try {
+        if (isEdit) {
+          console.log("Updating room:", roomData);
+          const response = await api.put(`rooms?room_id=${room.id}/`, roomData);
+          console.log("response:", response.data);
+        }
+        else {
+          console.log("Creating room:", roomData);
+          const response = await api.post("rooms/add/", roomData);
+          console.log("response:", response.data);
+        }
+        // Optionally, you can update the rooms state here to reflect the changes
+        // setRooms(prevRooms => [...prevRooms, response.data]);
+        // Or fetch the updated list of rooms from the server
+        const response = await api.get("rooms/");
+        setRooms(response.data); // Update the rooms state with the fetched data
+      } catch (err) {
+        console.error("Error:", err.response?.data || err.message);
+        setError(
+          err.response?.data?.non_field_errors?.[0] ||
+          err.response?.data?.email?.[0] ||
+          "Error occurred while saving the room"
+        );
+      }
       console.log(isEdit ? 'Updating room:' : 'Creating room:', roomData);
       onClose();
     };
