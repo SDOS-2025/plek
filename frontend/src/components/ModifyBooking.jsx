@@ -1,16 +1,31 @@
 import React, { useState, useEffect } from "react";
 import { X, Building2, CalendarDays, CalendarClock, Users, Projector, Wifi, Square, Loader2, Trash2 } from "lucide-react";
 import api from "../api";
+import { DateTime } from "luxon";
 
 const ModifyBookingModal = ({ booking, onClose, onCancel }) => {
   // Pre-populate fields from the booking
   const [purpose, setPurpose] = useState(booking.purpose || "Team Meeting");
   const [attendees, setAttendees] = useState(booking.attendees || "6");
   const [notes, setNotes] = useState(booking.notes || "Need whiteboard markers");
-  const [date, setDate] = useState(booking.date);
   const [timeSlot, setTimeSlot] = useState(booking.slot);
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [showTimePicker, setShowTimePicker] = useState(false);
+  
+  // Convert incoming date to proper ISO format or use today's date as fallback
+  const [date, setDate] = useState(() => {
+    try {
+      // Try to parse the incoming booking date
+      return DateTime.fromFormat(booking.date, 'LLLL d, yyyy')
+        .setZone("Asia/Kolkata")
+        .toISODate();
+    } catch (e) {
+      // Fallback to today's date if parsing fails
+      return DateTime.now()
+        .setZone("Asia/Kolkata")
+        .toISODate();
+    }
+  });
   
   // States for handling time slot availability
   const [availableTimeSlots, setAvailableTimeSlots] = useState([]);
@@ -20,21 +35,17 @@ const ModifyBookingModal = ({ booking, onClose, onCancel }) => {
   // Generate dates for the next 14 days
   const generateDates = () => {
     const dates = [];
-    const today = new Date();
+    const today = DateTime.now().setZone("Asia/Kolkata");
     
     for (let i = 0; i < 14; i++) {
-      const date = new Date();
-      date.setDate(today.getDate() + i);
-      
-      const formattedDate = date.toLocaleDateString('en-US', {
-        day: 'numeric',
-        month: 'long',
-        year: 'numeric'
-      });
-      
+      const date = today.plus({ days: i });
       dates.push({
-        value: date.toISOString().split('T')[0],
-        label: formattedDate
+        value: date.toISODate(),
+        label: date.toLocaleString({
+          day: 'numeric',
+          month: 'long',
+          year: 'numeric'
+        })
       });
     }
     
@@ -60,43 +71,42 @@ const ModifyBookingModal = ({ booking, onClose, onCancel }) => {
         "3:00 PM - 4:00 PM",
         "4:00 PM - 5:00 PM"
       ];
+
+      const formattedDate = DateTime.fromISO(selectedDate)
+              .setZone("Asia/Kolkata")
+              .toISODate();
       
-      // API call to get available time slots for this room on the selected date
-      // Exclude current booking from availability check
-      const response = await api.get(`/rooms/${booking.room_id}/availability?date=${selectedDate}&exclude=${booking.id}`);
+      // API call to get bookings for this room on the selected date
+      const response = await api.get(`/rooms/${booking.roomId}/?date=${formattedDate}`);
       
-      // Get the available slots from API response
-      const availableFromApi = response.data.availableSlots || [];
+      // Get the booked slots from API response
+      const bookings = response.data.bookings || [];
       
-      // Always include the current booking's time slot as available
-      if (!availableFromApi.includes(booking.slot)) {
-        availableFromApi.push(booking.slot);
-      }
-      
-      // Create array with both available and booked slots
+      // Convert bookings into time slots format
+      const bookedSlots = bookings
+        .filter(b => b.id !== booking.id) // Exclude current booking
+        .map(b => {
+          const start = DateTime.fromISO(b.start_time)
+            .setZone("Asia/Kolkata")
+            .toFormat("h:mm a");
+          const end = DateTime.fromISO(b.end_time)
+            .setZone("Asia/Kolkata")
+            .toFormat("h:mm a");
+          return `${start} - ${end}`;
+        });
+
+      // Create array marking only actually booked slots as unavailable
       const slotsWithStatus = allTimeSlots.map(time => ({
         time,
-        isBooked: !availableFromApi.includes(time) && time !== booking.slot
+        isBooked: bookedSlots.includes(time)
       }));
       
       setAvailableTimeSlots(slotsWithStatus);
+      
     } catch (error) {
       console.error("Error fetching time slots:", error);
-      // setTimeSlotError("Failed to load available time slots");
-      
-      // Fallback to ensure current slot is available
-      const defaultSlots = [
-        "9:00 AM - 10:00 AM",
-        "10:00 AM - 11:00 AM",
-        "11:00 AM - 12:00 PM",
-        "12:00 PM - 1:00 PM",
-        "1:00 PM - 2:00 PM",
-        "2:00 PM - 3:00 PM",
-        "3:00 PM - 4:00 PM",
-        "4:00 PM - 5:00 PM"
-      ].map(time => ({ time, isBooked: false }));
-      setAvailableTimeSlots(defaultSlots);
       setTimeSlotError("Failed to load available time slots");
+      setAvailableTimeSlots([]);
     } finally {
       setLoadingTimeSlots(false);
     }
@@ -126,12 +136,10 @@ const ModifyBookingModal = ({ booking, onClose, onCancel }) => {
 
   // Parse time slot to ISO format for API
   const parseTimeSlot = (timeSlot, dateStr) => {
-    const [startStr, endStr] = timeSlot.split(' - ');
+    const [startStr, endStr] = timeSlot.split(" - ");
     
-    // Create date objects for start and end times
-    const date = new Date(dateStr);
-    const startDate = new Date(date);
-    const endDate = new Date(date);
+    // Create a DateTime object in Asia/Kolkata timezone
+    const baseDate = DateTime.fromISO(dateStr, { zone: "Asia/Kolkata" });
     
     // Parse hours and minutes from the time strings
     const [startHours, startMinutes] = startStr.match(/(\d+):(\d+)/).slice(1, 3).map(Number);
@@ -149,13 +157,13 @@ const ModifyBookingModal = ({ booking, onClose, onCancel }) => {
     if (endPeriod && endHours !== 12) endHour += 12;
     if (!endPeriod && endHours === 12) endHour = 0;
     
-    // Set hours and minutes
-    startDate.setHours(startHour, startMinutes, 0, 0);
-    endDate.setHours(endHour, endMinutes, 0, 0);
+    // Set hours and minutes using DateTime
+    const startTime = baseDate.set({ hour: startHour, minute: startMinutes });
+    const endTime = baseDate.set({ hour: endHour, minute: endMinutes });
     
     return {
-      start_time: startDate.toISOString(),
-      end_time: endDate.toISOString()
+      start_time: startTime.toISO(),
+      end_time: endTime.toISO()
     };
   };
 
@@ -218,7 +226,7 @@ const ModifyBookingModal = ({ booking, onClose, onCancel }) => {
               <div>
                 <p className="text-sm text-gray-400">Room</p>
                 <p>
-                  {booking.room} - {booking.building}
+                  {booking.roomName || 'Room'} - {booking.building || 'Building'}
                 </p>
               </div>
             </div>

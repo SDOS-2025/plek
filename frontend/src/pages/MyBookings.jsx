@@ -15,6 +15,7 @@ import api from "../api";
 // Import the ModifyBookingModal component
 import ModifyBookingModal from "../components/ModifyBooking";
 import NavBar from "../components/NavBar";
+import { DateTime } from "luxon";
 
 function MyBookings() {
   const [activeTab, setActiveTab] = useState("upcoming");
@@ -38,7 +39,7 @@ function MyBookings() {
         
         // Process the response data
         const bookings = response.data;
-        const now = new Date();
+        const now = DateTime.now().setZone("Asia/Kolkata").toJSDate();
         
         // Split bookings into upcoming and previous
         const upcoming = [];
@@ -76,7 +77,8 @@ function MyBookings() {
           // Create a formatted booking object
           const formattedBooking = {
             id: booking.id,
-            room: booking.room.name,
+            roomId: booking.room.id,
+            roomName: booking.room.name, // Add room name
             building: booking.room.building,
             slot: timeSlot || "Time not specified",
             date: formattedDate,
@@ -85,7 +87,7 @@ function MyBookings() {
             purpose: booking.purpose,
             attendees: booking.attendees,
             notes: booking.notes,
-            // Store raw datetime for sorting
+            amenities: booking.room.amenities, // Also add amenities for the modal
             rawDateTime: bookingDateTime
           };
           
@@ -199,7 +201,7 @@ function MyBookings() {
                       <div className="flex justify-between items-start">
                         <div>
                           <h3 className="text-lg font-medium mb-2">
-                            Room: {booking.room}
+                            Room: {booking.roomName}
                           </h3>
                           <p className="text-gray-400">
                             Building: {booking.building}
@@ -265,7 +267,7 @@ function MyBookings() {
                       <div className="flex justify-between items-start">
                         <div>
                           <h3 className="text-lg font-medium mb-2">
-                            Room: {booking.room}
+                            Room: {booking.name}
                           </h3>
                           <p className="text-gray-400">
                             Building: {booking.building}

@@ -1,12 +1,12 @@
 import React, { useState, useEffect } from "react";
 import { X, Building2, Calendar, Clock, Users, Projector, Wifi, Square, CalendarDays, CalendarClock, Loader2 } from "lucide-react";
 import api from "../api";
+import { DateTime } from "luxon";
 
 const BookingModal = ({ room, onClose }) => {
   const [purpose, setPurpose] = useState("");
   const [attendees, setAttendees] = useState("");
   const [notes, setNotes] = useState("");
-  const [date, setDate] = useState(new Date().toISOString().split('T')[0]); // Today's date
   const [timeSlot, setTimeSlot] = useState("");
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [showTimePicker, setShowTimePicker] = useState(false);
@@ -16,24 +16,25 @@ const BookingModal = ({ room, onClose }) => {
   const [loadingTimeSlots, setLoadingTimeSlots] = useState(false);
   const [timeSlotError, setTimeSlotError] = useState(null);
 
+  // Initialize date using Luxon in IST timezone
+  const [date, setDate] = useState(
+    DateTime.now().setZone("Asia/Kolkata").toISODate()
+  );
+
   // Generate dates for the next 14 days
   const generateDates = () => {
     const dates = [];
-    const today = new Date();
+    const today = DateTime.now().setZone("Asia/Kolkata");
     
     for (let i = 0; i < 14; i++) {
-      const date = new Date();
-      date.setDate(today.getDate() + i);
-      
-      const formattedDate = date.toLocaleDateString('en-US', {
-        day: 'numeric',
-        month: 'long',
-        year: 'numeric'
-      });
-      
+      const date = today.plus({ days: i });
       dates.push({
-        value: date.toISOString().split('T')[0],
-        label: formattedDate
+        value: date.toISODate(),
+        label: date.toLocaleString({
+          day: 'numeric',
+          month: 'long',
+          year: 'numeric'
+        })
       });
     }
     
@@ -61,8 +62,13 @@ const BookingModal = ({ room, onClose }) => {
         "4:00 PM - 5:00 PM"
       ];
       
+      // Ensure date is in YYYY-MM-DD format for API
+      const formattedDate = DateTime.fromISO(selectedDate)
+        .setZone("Asia/Kolkata")
+        .toISODate();
+
       // API call to get bookings for this room on the selected date
-      const response = await api.get(`/rooms/${room.id}/?date=${selectedDate}`);
+      const response = await api.get(`/rooms/${room.id}/?date=${formattedDate}`);
       
       // Get the bookings from API response
       const bookings = response.data.bookings || [];
@@ -136,12 +142,11 @@ const BookingModal = ({ room, onClose }) => {
     
     // Parse the time slot to get start and end times
     const parseTimeSlot = (timeSlot, dateStr) => {
-      const [startStr, endStr] = timeSlot.split(' - ');
+      const [startStr, endStr] = timeSlot.split(" - ");
       
-      // Create date objects for start and end times
-      const date = new Date(dateStr);
-      const startDate = new Date(date);
-      const endDate = new Date(date);
+      // Ensure we're working with the correct date in IST
+      const baseDate = DateTime.fromISO(dateStr)
+        .setZone("Asia/Kolkata");
       
       // Parse hours and minutes from the time strings
       const [startHours, startMinutes] = startStr.match(/(\d+):(\d+)/).slice(1, 3).map(Number);
@@ -159,13 +164,24 @@ const BookingModal = ({ room, onClose }) => {
       if (endPeriod && endHours !== 12) endHour += 12;
       if (!endPeriod && endHours === 12) endHour = 0;
       
-      // Set hours and minutes
-      startDate.setHours(startHour, startMinutes, 0, 0);
-      endDate.setHours(endHour, endMinutes, 0, 0);
+      // Set hours and minutes using DateTime, maintaining IST timezone
+      const startTime = baseDate.set({ 
+        hour: startHour, 
+        minute: startMinutes,
+        second: 0,
+        millisecond: 0 
+      });
+      
+      const endTime = baseDate.set({ 
+        hour: endHour, 
+        minute: endMinutes,
+        second: 0,
+        millisecond: 0
+      });
       
       return {
-        start_time: startDate.toISOString(),
-        end_time: endDate.toISOString()
+        start_time: startTime.toISO({ includeOffset: true }),
+        end_time: endTime.toISO({ includeOffset: true })
       };
     };
     

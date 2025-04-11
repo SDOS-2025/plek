@@ -1,6 +1,7 @@
 from django.conf import settings
 from django.db import models
 from rooms.models import Room
+from django.utils.timezone import localtime
 
 # Create your models here.
 
@@ -45,4 +46,4 @@ class Booking(models.Model):
         ]
 
     def __str__(self):
-        return f"{self.user.email} - {self.room.name} - {self.start_time}"
+        return f"{self.user.email} - {self.room.name} - {localtime(self.start_time)}"

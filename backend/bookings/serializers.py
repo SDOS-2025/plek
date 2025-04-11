@@ -1,7 +1,8 @@
-from django.utils import timezone
+from django.utils.timezone import localtime, now
 from rest_framework import serializers
 from .models import Booking
 from rooms.models import Room
+import pytz
 '''
 STATUS_CHOICES = [
         ("pending", "Pending"),
@@ -62,16 +63,21 @@ class BookingSerializer(serializers.ModelSerializer):
         """
         Validate the booking data.
         """
+        kolkata_tz = pytz.timezone("Asia/Kolkata")
+        current_time = now().astimezone(kolkata_tz)
+        print(f"start_time: {data['start_time']}")
+        print(f"end_time: {data['end_time']}")
+        print(f"now: {current_time}")
         if data["start_time"] >= data["end_time"]:
             raise serializers.ValidationError(
                 {"end_time": "End time must be after start time."}
             )
-        print(data["start_time"], data["end_time"])
-        print(timezone.now())
-        if data["start_time"] < timezone.now() or data["end_time"] < timezone.now():
+        if data["start_time"] < current_time or data["end_time"] < current_time:
             raise serializers.ValidationError(
-                {"start_time": "Booking times must be in the future.",
-                "end_time": "Booking times must be in the future."}
+                {
+                    "start_time": "Booking times must be in the future.",
+                    "end_time": "Booking times must be in the future.",
+                }
             )
         if "room" in data and data["room"].available == False:
             raise serializers.ValidationError(

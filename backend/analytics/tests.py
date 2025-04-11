@@ -9,7 +9,8 @@ from django.test import TestCase
 from django.urls import reverse
 from rooms.models import Room
 from bookings.models import Booking
-from django.utils.timezone import now, timedelta
+from django.utils.timezone import now, timedelta, localtime
+import pytz
 from django.contrib.auth import get_user_model
 from rest_framework import status
 from rest_framework.test import APIClient
@@ -58,12 +59,13 @@ class AnalyticsTests(TestCase):
         )
 
         # Create bookings
-        now_time = now()
+        kolkata_tz = pytz.timezone("Asia/Kolkata")
+        now_time = now().astimezone(kolkata_tz)
         self.booking1 = Booking.objects.create(
             room=self.room1,
             user=self.user,
-            start_time=now_time + timedelta(days=1),
-            end_time=now_time + timedelta(days=1, hours=2),
+            start_time=localtime(now_time + timedelta(days=1)),
+            end_time=localtime(now_time + timedelta(days=1, hours=2)),
             status="approved",
             purpose="Meeting",
             participants="User 1, User 2",
