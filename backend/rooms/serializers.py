@@ -1,4 +1,7 @@
+from bookings.models import Booking
+from bookings.serializers import BookingSerializer
 from rest_framework import serializers
+
 from .models import Room
 
 """
@@ -42,3 +45,14 @@ class RoomSerializer(serializers.ModelSerializer):
         Create a new room instance with the provided validated data.
         """
         return Room.objects.create(**validated_data)
+
+    def get_bookings(self, obj):
+        """
+        Get the bookings associated with the room instance.
+        """
+        date = self.context["request"].query_params.get("date")
+        if date:
+            booking = Booking.objects.filter(room=obj, date__gte=date)
+        else:
+            booking = Booking.objects.filter(room=obj)
+        return BookingSerializer(booking, many=True).data

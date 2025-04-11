@@ -1,6 +1,6 @@
-from backend.mongo_service import get_amenities
-from django.shortcuts import render
-from rest_framework.permissions import AllowAny, IsAuthenticated
+from bookings.models import Booking
+from django.shortcuts import get_object_or_404
+from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
@@ -32,11 +32,7 @@ class RoomView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request, id):
-        try:
-            room = Room.objects.get(id=id)
-        except Room.DoesNotExist:
-            return Response({"error": "Room not found"}, status=404)
-
+        room = get_object_or_404(Room.objects.prefetch_related("booking_set"), id=id)
         serializer = RoomSerializer(room)
         return Response(serializer.data)
 
