@@ -1,0 +1,30 @@
+meta {
+  name: User Registration
+  type: http
+  seq: 3
+}
+
+post {
+  url: http://127.0.0.1:8000/api/auth/registration/
+  body: json
+  auth: none
+}
+
+params:query {
+  ~: 
+}
+
+headers {
+  Content-Type: application/json
+  User-Agent: insomnia/10.3.1
+}
+
+body:json {
+  {
+      "first_name": "John",
+      "last_name": "Doe",
+      "email": "john@example.com",
+      "password1": "securepass123",
+  	"password2": "securepass123"
+  }
+}
