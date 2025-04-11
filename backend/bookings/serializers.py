@@ -1,7 +1,6 @@
 from django.utils import timezone
 from rest_framework import serializers
 from .models import Booking
-from rooms.serializers import RoomSerializer
 from rooms.models import Room
 '''
 STATUS_CHOICES = [
@@ -33,8 +32,8 @@ STATUS_CHOICES = [
 '''
 
 class BookingSerializer(serializers.ModelSerializer):
-
-    room = RoomSerializer(read_only=True)
+    # Use nested serializer representation to avoid circular imports
+    room = serializers.SerializerMethodField(read_only=True)
 
     room_id = serializers.PrimaryKeyRelatedField(
         queryset=Room.objects.all(),
@@ -98,3 +97,13 @@ class BookingSerializer(serializers.ModelSerializer):
             representation.pop('room')
             
         return representation
+        
+    def get_room(self, obj):
+        """
+        Get room details without creating a circular import
+        """
+        from rooms.serializers import RoomSerializer
+        
+        if obj.room:
+            return RoomSerializer(obj.room, context=self.context).data
+        return None

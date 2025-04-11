@@ -50,7 +50,7 @@ class RoomView(APIView):
             return Response({"error": "Room not found"}, status=404)
 
         serializer = RoomSerializer(room, data=request.data)
-        if serializer.ids_valid():
+        if serializer.is_valid():
             serializer.save()
             return Response(serializer.data)
         return Response(serializer.errors, status=400)

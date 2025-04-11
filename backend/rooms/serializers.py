@@ -1,5 +1,3 @@
-from bookings.models import Booking
-from bookings.serializers import BookingSerializer
 from rest_framework import serializers
 
 from .models import Room
@@ -16,6 +14,9 @@ from .models import Room
 
 
 class RoomSerializer(serializers.ModelSerializer):
+    # Use a nested serializer defined with just the model name to avoid circular imports
+    bookings = serializers.SerializerMethodField(required=False, read_only=True)
+    
     class Meta:
         model = Room
         fields = [
@@ -26,6 +27,7 @@ class RoomSerializer(serializers.ModelSerializer):
             "available",
             "building",
             "amenities",
+            "bookings",
         ]
 
     def validate(self, data):
@@ -50,9 +52,15 @@ class RoomSerializer(serializers.ModelSerializer):
         """
         Get the bookings associated with the room instance.
         """
-        date = self.context["request"].query_params.get("date")
-        if date:
-            booking = Booking.objects.filter(room=obj, date__gte=date)
-        else:
-            booking = Booking.objects.filter(room=obj)
-        return BookingSerializer(booking, many=True).data
+        # Only import BookingSerializer here to avoid circular import
+        from bookings.serializers import BookingSerializer
+        
+        request = self.context.get('request')
+        if request:
+            date = request.query_params.get("date")
+            if date:
+                booking = obj.booking_set.filter(date__gte=date)
+            else:
+                booking = obj.booking_set.all()
+            return BookingSerializer(booking, many=True).data
+        return []
