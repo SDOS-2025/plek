@@ -59,7 +59,8 @@ class RoomSerializer(serializers.ModelSerializer):
         if request:
             date = request.query_params.get("date")
             if date:
-                booking = obj.booking_set.filter(date__gte=date)
+                # Use start_time__date instead of date__gte
+                booking = obj.booking_set.filter(start_time__date=date)
             else:
                 booking = obj.booking_set.all()
             return BookingSerializer(booking, many=True).data

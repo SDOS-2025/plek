@@ -33,7 +33,7 @@ class RoomView(APIView):
 
     def get(self, request, id):
         room = get_object_or_404(Room.objects.prefetch_related("booking_set"), id=id)
-        serializer = RoomSerializer(room)
+        serializer = RoomSerializer(room, context={'request': request})
         return Response(serializer.data)
 
     def post(self, request):

@@ -66,6 +66,8 @@ class BookingSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError(
                 {"end_time": "End time must be after start time."}
             )
+        print(data["start_time"], data["end_time"])
+        print(timezone.now())
         if data["start_time"] < timezone.now() or data["end_time"] < timezone.now():
             raise serializers.ValidationError(
                 {"start_time": "Booking times must be in the future.",
