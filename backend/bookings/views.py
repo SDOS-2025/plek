@@ -78,6 +78,12 @@ class BookingListView(APIView):
 
     def get(self, request):
         '''Returns the list of all bookings'''
-        bookings = Booking.objects.all()
+        all_bookings = request.query_params.get('all', False)
+        
+        if all_bookings == 'true':
+            bookings = Booking.objects.all()
+        else:
+            bookings = Booking.objects.filter(user=request.user)
+        
         serializer = BookingSerializer(bookings, many=True)
         return Response(serializer.data)
