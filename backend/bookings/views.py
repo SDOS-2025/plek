@@ -25,22 +25,14 @@ class BookingView(APIView):
             return Response({"message": "Booking not found"}, status=status.HTTP_404_NOT_FOUND)
 
     def post(self, request, id=None):
-        '''Creates a new booking'''
-        serializer = BookingSerializer(data=request.data)
+        '''Creates a new booking and associates it with the logged-in user'''
+        data = request.data.copy()  # Make a copy of the request data
+        data['user'] = request.user.id  # Set the user field to the logged-in user's ID
+        serializer = BookingSerializer(data=data)
         if serializer.is_valid():
             serializer.save()
-            # add_log(
-            #     event="Booking Created",
-            #     user_id=request.user.id,
-            #     room_id=serializer.validated_data['room'].id,
-            #     details=f"Booking created for room {serializer.validated_data['room'].name}",
-            # )
-            # add_notification(
-            #     user_id=request.user.id,
-            #     message=f"Booking created for room {serializer.validated_data['room'].name}",
-            # )
             return Response(serializer.data, status=201)
-        return Response(serializer.errors, status=status.HTTP_404_NOT_FOUND)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
     
     def delete(self, request, id):
         '''Deletes a booking'''
