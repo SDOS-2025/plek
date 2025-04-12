@@ -40,6 +40,79 @@ body {
   .input-field {
     @apply w-full bg-plek-background rounded-lg p-3 focus:outline-none focus:ring-2 focus:ring-plek-purple border border-gray-700 transition-all duration-300;
   }
+  
+  /* Page Layout */
+  .page-container {
+    @apply flex flex-col min-h-screen bg-plek-background text-gray-100;
+  }
+
+  .main-content {
+    @apply max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 flex-grow w-full;
+  }
+
+  .card-container {
+    @apply bg-plek-dark rounded-xl shadow-card overflow-hidden;
+  }
+
+  .section-card {
+    @apply bg-plek-dark rounded-lg p-6 space-y-4 shadow-card;
+  }
+
+  .form-card {
+    @apply bg-plek-dark p-8 rounded-lg shadow-xl;
+  }
+
+  .card-header {
+    @apply text-xl font-semibold mb-4 flex items-center;
+  }
+
+  .card-content {
+    @apply p-6;
+  }
+
+  .tab-container {
+    @apply p-4 border-b border-gray-800;
+  }
+
+  .tab-content {
+    @apply p-6;
+  }
+
+  .scrollable-area {
+    @apply max-h-[75vh] overflow-y-auto custom-scrollbar rounded-lg p-2 max-w-full w-full mx-auto;
+  }
+
+  .info-card {
+    @apply bg-plek-lightgray/30 p-5 rounded-lg flex items-start gap-4;
+  }
+
+  .modal-container {
+    @apply fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50;
+  }
+
+  .modal-content {
+    @apply bg-plek-dark rounded-xl w-full max-w-3xl p-6 relative max-h-[90vh] overflow-y-auto;
+  }
+
+  .modal-header {
+    @apply mb-6;
+  }
+
+  .modal-title {
+    @apply text-2xl font-bold mb-2;
+  }
+
+  .modal-subtitle {
+    @apply text-gray-400;
+  }
+
+  .grid-layout-3 {
+    @apply grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6;
+  }
+
+  .grid-layout-2 {
+    @apply grid grid-cols-1 md:grid-cols-2 gap-6;
+  }
 }
 
 @layer utilities {

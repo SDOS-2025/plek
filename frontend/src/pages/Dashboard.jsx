@@ -19,6 +19,7 @@ import ModifyBookingModal from "../components/ModifyBooking";
 import api from "../api";
 import { AuthContext } from "../context/AuthProvider";
 import NavBar from "../components/NavBar";
+import Footer from "../components/Footer";
 
 function Dashboard() {
   const { user, logout } = useContext(AuthContext);
@@ -74,16 +75,16 @@ function Dashboard() {
   };
 
   return (
-    <div className="flex flex-col min-h-screen bg-plek-background text-gray-100">
+    <div className="page-container">
       {/* Navigation Bar */}
       <NavBar activePage="dashboard" />
 
       {/* Main Content */}
-      <div className="container mx-auto px-6 py-8 flex-grow mb-32">
+      <div className="main-content">
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
           {/* Recent Activity */}
-          <div className="bg-plek-dark rounded-lg p-6">
-            <h2 className="text-xl font-semibold mb-4 flex items-center">
+          <div className="section-card">
+            <h2 className="card-header">
               <Activity className="h-5 w-5 mr-2 text-purple-500" />
               Recent Activity
             </h2>
@@ -108,8 +109,8 @@ function Dashboard() {
 
           {/* Upcoming Bookings */}
           <div className="lg:col-span-2">
-            <div className="bg-plek-dark rounded-lg p-6 mb-8">
-              <h2 className="text-xl font-semibold mb-4 flex items-center">
+            <div className="section-card mb-8">
+              <h2 className="card-header">
                 <Calendar className="h-5 w-5 mr-2 text-purple-500" />
                 Upcoming Bookings
               </h2>
@@ -156,8 +157,8 @@ function Dashboard() {
             </div>
 
             {/* Favourite Rooms */}
-            <div className="bg-plek-dark rounded-lg p-6">
-              <h2 className="text-xl font-semibold mb-4 flex items-center">
+            <div className="section-card">
+              <h2 className="card-header">
                 <BookMarked className="h-5 w-5 mr-2 text-purple-500" />
                 Favourite Rooms
               </h2>
@@ -193,21 +194,7 @@ function Dashboard() {
       </div>
 
       {/* Footer */}
-      <footer className="border-t border-gray-800 bg-plek-dark">
-        <div className="container mx-auto px-4 py-4">
-          <div className="flex justify-center space-x-6 text-sm text-gray-400">
-            <Link to="/about" className="hover:text-white transition-colors">
-              About us
-            </Link>
-            <Link to="/help" className="hover:text-white transition-colors">
-              Help Center
-            </Link>
-            <Link to="/contact" className="hover:text-white transition-colors">
-              Contact us
-            </Link>
-          </div>
-        </div>
-      </footer>
+      <Footer />
 
       {/* Booking Modal */}
       {showBookingModal && selectedRoom && (

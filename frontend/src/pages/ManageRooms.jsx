@@ -2,7 +2,7 @@ import React, { useState, useMemo, useEffect, useContext, useCallback } from "re
 import PropTypes from "prop-types";
 import {
   Search,
-  SlidersHorizontal,
+  Filter,
   Projector,
   Wifi,
   Building2,
@@ -11,12 +11,14 @@ import {
   Pencil,
   Trash2,
   Square,
+  Users,
 } from "lucide-react";
 import { Link } from "react-router-dom";
 import api from "../api"; // Adjust the import path as needed
 import { AuthContext } from "../context/AuthProvider";
 import Toast, { DeleteConfirmation } from "../components/AlertToast";
 import NavBar from "../components/NavBar";
+import Footer from "../components/Footer";
 
 function ManageRooms() {
   const { user } = useContext(AuthContext);
@@ -228,8 +230,8 @@ function ManageRooms() {
     };
 
     return (
-      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-        <div className="bg-gray-800 rounded-xl w-full max-w-2xl p-6 relative">
+      <div className="modal-container">
+        <div className="modal-content">
           <button
             onClick={onClose}
             className="absolute right-4 top-4 text-gray-400 hover:text-white"
@@ -237,11 +239,11 @@ function ManageRooms() {
             <X size={24} />
           </button>
 
-          <div className="mb-6">
-            <h2 className="text-2xl font-bold mb-2">
+          <div className="modal-header">
+            <h2 className="modal-title">
               {isEdit ? "Edit Room" : "Add New Room"}
             </h2>
-            <p className="text-gray-400">
+            <p className="modal-subtitle">
               {isEdit
                 ? "Update the room details"
                 : "Enter the details for the new room"}
@@ -249,18 +251,45 @@ function ManageRooms() {
           </div>
 
           <form onSubmit={handleSubmit} className="space-y-6">
-            <div>
-              <label className="block text-sm font-medium text-gray-300 mb-2">
-                Room Name
-              </label>
-              <input
-                type="text"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                className="w-full bg-gray-700 rounded-lg p-3 focus:outline-none focus:ring-2 focus:ring-blue-400"
-                placeholder="e.g., B512"
-                required
-              />
+            <div className="grid-layout-2 mb-6">
+              <div className="space-y-4">
+                <div className="flex items-center space-x-3 text-gray-300">
+                  <Building2 size={20} />
+                  <div>
+                    <label className="block text-sm text-gray-400 mb-1">
+                      Room Name
+                    </label>
+                    <input
+                      type="text"
+                      value={name}
+                      onChange={(e) => setName(e.target.value)}
+                      className="w-full bg-plek-background rounded-lg p-3 focus:outline-none focus:ring-2 focus:ring-plek-purple"
+                      placeholder="e.g., B512"
+                      required
+                    />
+                  </div>
+                </div>
+              </div>
+              
+              <div className="space-y-4">
+                <div className="flex items-center space-x-3 text-gray-300">
+                  <Users size={20} />
+                  <div>
+                    <label className="block text-sm text-gray-400 mb-1">
+                      Capacity
+                    </label>
+                    <input
+                      type="number"
+                      value={capacity}
+                      onChange={(e) => setCapacity(e.target.value)}
+                      className="w-full bg-plek-background rounded-lg p-3 focus:outline-none focus:ring-2 focus:ring-plek-purple"
+                      placeholder="Enter room capacity"
+                      min="1"
+                      required
+                    />
+                  </div>
+                </div>
+              </div>
             </div>
 
             <div>
@@ -271,39 +300,23 @@ function ManageRooms() {
                 type="text"
                 value={building}
                 onChange={(e) => setBuilding(e.target.value)}
-                className="w-full bg-gray-700 rounded-lg p-3 focus:outline-none focus:ring-2 focus:ring-blue-400"
+                className="w-full bg-plek-background rounded-lg p-3 focus:outline-none focus:ring-2 focus:ring-plek-purple"
                 placeholder="e.g., R&D Building"
                 required
               />
             </div>
 
-            <div>
-              <label className="block text-sm font-medium text-gray-300 mb-2">
-                Capacity
-              </label>
-              <input
-                type="number"
-                value={capacity}
-                onChange={(e) => setCapacity(e.target.value)}
-                className="w-full bg-gray-700 rounded-lg p-3 focus:outline-none focus:ring-2 focus:ring-blue-400"
-                placeholder="Enter room capacity"
-                min="1"
-                required
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-300 mb-2">
-                Amenities
-              </label>
+            {/* Amenities section with consistent styling */}
+            <div className="bg-plek-background rounded-lg p-4 mb-6">
+              <h3 className="font-semibold mb-2">Amenities</h3>
               <div className="flex space-x-4">
                 <button
                   type="button"
                   className={`px-4 py-2 ${
                     amenities.includes("projector")
-                      ? "bg-purple-600"
-                      : "bg-gray-600"
-                  } rounded-lg flex items-center space-x-2`}
+                      ? "bg-plek-purple"
+                      : "bg-plek-lightgray"
+                  } rounded-lg flex items-center space-x-2 transition-colors`}
                   onClick={() => toggleAmenity("projector")}
                 >
                   <Projector size={18} />
@@ -312,8 +325,10 @@ function ManageRooms() {
                 <button
                   type="button"
                   className={`px-4 py-2 ${
-                    amenities.includes("wifi") ? "bg-purple-600" : "bg-gray-600"
-                  } rounded-lg flex items-center space-x-2`}
+                    amenities.includes("wifi") 
+                      ? "bg-plek-purple" 
+                      : "bg-plek-lightgray"
+                  } rounded-lg flex items-center space-x-2 transition-colors`}
                   onClick={() => toggleAmenity("wifi")}
                 >
                   <Wifi size={18} />
@@ -323,9 +338,9 @@ function ManageRooms() {
                   type="button"
                   className={`px-4 py-2 ${
                     amenities.includes("whiteboard")
-                      ? "bg-purple-600"
-                      : "bg-gray-600"
-                  } rounded-lg flex items-center space-x-2`}
+                      ? "bg-plek-purple"
+                      : "bg-plek-lightgray"
+                  } rounded-lg flex items-center space-x-2 transition-colors`}
                   onClick={() => toggleAmenity("whiteboard")}
                 >
                   <Square size={18} />
@@ -338,13 +353,13 @@ function ManageRooms() {
               <button
                 type="button"
                 onClick={onClose}
-                className="flex-1 py-3 bg-gray-700 hover:bg-gray-600 rounded-lg transition-colors"
+                className="flex-1 py-3 bg-plek-background hover:bg-plek-lightgray rounded-lg transition-colors"
               >
                 Cancel
               </button>
               <button
                 type="submit"
-                className="flex-1 py-3 bg-purple-600 hover:bg-purple-700 rounded-lg transition-colors"
+                className="flex-1 py-3 bg-plek-purple hover:bg-purple-700 rounded-lg transition-colors"
               >
                 {isEdit ? "Save Changes" : "Add Room"}
               </button>
@@ -371,117 +386,135 @@ function ManageRooms() {
   RoomModal.displayName = "RoomModal";
 
   return (
-    <div className="flex flex-col min-h-screen">
-      <main className="flex-grow">
-        <div className="min-h-screen bg-plek-background text-white">
-          {/* Navigation */}
-          <NavBar activePage="manage-rooms" />
+    <div className="page-container">
+      <NavBar activePage="manage-rooms" />
 
-          {/* Main Content */}
-          <main className="max-w-7xl mx-auto px-4 py-8">
-            {/* Header with Add Room button */}
-            <div className="flex justify-between items-center mb-8">
-              <h1 className="text-2xl font-bold">Manage Rooms</h1>
-              <button
-                onClick={() => setShowAddModal(true)}
-                className="bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-lg transition-colors flex items-center space-x-2"
-              >
-                <Plus size={20} />
-                <span>Add Room</span>
-              </button>
-            </div>
+      <div className="main-content">
+        {/* Header with Add Room button */}
+        <div className="flex justify-between items-center mb-8">
+          <h1 className="text-2xl font-bold">Manage Rooms</h1>
+          <button
+            onClick={() => setShowAddModal(true)}
+            className="bg-plek-purple hover:bg-purple-700 text-white px-4 py-2 rounded-lg transition-colors flex items-center space-x-2"
+          >
+            <Plus size={20} />
+            <span>Add Room</span>
+          </button>
+        </div>
 
-            {/* Search and Filters */}
-            <div className="space-y-4 mb-8">
-              {/* Search Bar */}
-              <div className="relative">
-                <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-300" />
-                <input
-                  type="text"
-                  placeholder="Search rooms..."
-                  className="w-full pl-12 pr-12 py-3 bg-gray-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-400 placeholder-gray-300"
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                />
-                <button
-                  className="absolute right-4 top-1/2 transform -translate-y-1/2"
-                  onClick={() => setShowFilters(!showFilters)}
+        {/* Search and Filters */}
+        <div className="space-y-4 mb-8">
+          {/* Search Bar */}
+          <div className="relative">
+            <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-300" />
+            <input
+              type="text"
+              placeholder="Search rooms..."
+              className="w-full pl-12 pr-12 py-3 bg-gray-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-400 placeholder-gray-300"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+            />
+            <button
+              className="absolute right-4 top-1/2 transform -translate-y-1/2"
+              onClick={() => setShowFilters(!showFilters)}
+            >
+              <Filter
+                className={`text-gray-300 transition-transform ${
+                  showFilters ? "rotate-180" : ""
+                }`}
+              />
+            </button>
+          </div>
+
+          {/* Filters */}
+          {showFilters && (
+            <div className="grid-layout-2 gap-4 p-4 bg-gray-700 rounded-lg">
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-2">
+                  Building
+                </label>
+                <select
+                  value={selectedBuilding}
+                  onChange={(e) => setSelectedBuilding(e.target.value)}
+                  className="w-full bg-gray-600 rounded-lg p-3 focus:outline-none focus:ring-2 focus:ring-blue-400"
                 >
-                  <SlidersHorizontal
-                    className={`text-gray-300 transition-transform ${
-                      showFilters ? "rotate-180" : ""
-                    }`}
-                  />
-                </button>
+                  {buildings.map((building) => (
+                    <option key={building} value={building}>
+                      {building === "all" ? "All Buildings" : building}
+                    </option>
+                  ))}
+                </select>
               </div>
 
-              {/* Filters */}
-              {showFilters && (
-                <div className="grid grid-cols-2 gap-4 p-4 bg-gray-700 rounded-lg">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-300 mb-2">
-                      Building
-                    </label>
-                    <select
-                      value={selectedBuilding}
-                      onChange={(e) => setSelectedBuilding(e.target.value)}
-                      className="w-full bg-gray-600 rounded-lg p-3 focus:outline-none focus:ring-2 focus:ring-blue-400"
-                    >
-                      {buildings.map((building) => (
-                        <option key={building} value={building}>
-                          {building === "all" ? "All Buildings" : building}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-2">
+                  Capacity
+                </label>
+                <select
+                  value={selectedCapacity}
+                  onChange={(e) => setSelectedCapacity(e.target.value)}
+                  className="w-full bg-gray-600 rounded-lg p-3 focus:outline-none focus:ring-2 focus:ring-blue-400"
+                >
+                  {capacityRanges.map((range) => (
+                    <option key={range.value} value={range.value}>
+                      {range.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+          )}
+        </div>
 
-                  <div>
-                    <label className="block text-sm font-medium text-gray-300 mb-2">
-                      Capacity
-                    </label>
-                    <select
-                      value={selectedCapacity}
-                      onChange={(e) => setSelectedCapacity(e.target.value)}
-                      className="w-full bg-gray-600 rounded-lg p-3 focus:outline-none focus:ring-2 focus:ring-blue-400"
+        {/* Room Cards */}
+        <div className="grid-layout-3">
+          {loading ? (
+            <div className="col-span-3 text-center py-10">
+              <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-purple-500 mx-auto"></div>
+              <p className="mt-4 text-gray-300">Loading rooms...</p>
+            </div>
+          ) : error ? (
+            <div className="col-span-3 text-center py-10">
+              <div className="text-red-400 text-xl mb-2">⚠️</div>
+              <p className="text-gray-300">{error}</p>
+            </div>
+          ) : filteredRooms.length === 0 ? (
+            <div className="col-span-3 text-center py-10">
+              <p className="text-gray-300">No rooms match your search criteria.</p>
+            </div>
+          ) : (
+            filteredRooms.map((room) => (
+              <div
+                key={room.id}
+                className="section-card"
+              >
+                <div className="flex justify-between items-start">
+                  <h3 className="text-xl font-semibold">{room.name}</h3>
+                  <div className="flex space-x-2">
+                    <button
+                      onClick={() => handleEditClick(room)}
+                      className="p-2 hover:bg-gray-700 rounded-lg transition-colors"
                     >
-                      {capacityRanges.map((range) => (
-                        <option key={range.value} value={range.value}>
-                          {range.label}
-                        </option>
-                      ))}
-                    </select>
+                      <Pencil size={18} className="text-gray-400" />
+                    </button>
+                    <button
+                      onClick={() => handleDeleteClick(room.id)}
+                      className="p-2 hover:bg-gray-700 rounded-lg transition-colors"
+                    >
+                      <Trash2 size={18} className="text-red-400" />
+                    </button>
                   </div>
                 </div>
-              )}
-            </div>
-
-            {/* Room Cards */}
-            <div className="grid grid-cols-3 gap-6">
-              {filteredRooms.map((room) => (
-                <div
-                  key={room.id}
-                  className="bg-plek-dark rounded-lg p-6 space-y-4"
-                >
-                  <div className="flex justify-between items-start">
-                    <h3 className="text-xl font-semibold">Room: {room.name}</h3>
-                    <div className="flex space-x-2">
-                      <button
-                        onClick={() => handleEditClick(room)}
-                        className="p-2 hover:bg-gray-700 rounded-lg transition-colors"
-                      >
-                        <Pencil size={18} className="text-gray-400" />
-                      </button>
-                      <button
-                        onClick={() => handleDeleteClick(room.id)}
-                        className="p-2 hover:bg-gray-700 rounded-lg transition-colors"
-                      >
-                        <Trash2 size={18} className="text-red-400" />
-                      </button>
-                    </div>
+                <div className="mt-3 space-y-2">
+                  <div className="flex items-center">
+                    <Building2 className="h-4 w-4 text-gray-400 mr-2" />
+                    <span className="text-sm text-gray-300">{room.building}</span>
                   </div>
-                  <p>Building: {room.building}</p>
-                  <p>Capacity: {room.capacity}</p>
-                  <div className="flex space-x-2">
+                  <div className="flex items-center">
+                    <Users className="h-4 w-4 text-gray-400 mr-2" />
+                    <span className="text-sm text-gray-300">Capacity: {room.capacity}</span>
+                  </div>
+                  <div className="flex space-x-2 mt-2">
                     {room.amenities.includes("projector") && (
                       <Projector size={18} className="text-gray-400" />
                     )}
@@ -493,27 +526,14 @@ function ManageRooms() {
                     )}
                   </div>
                 </div>
-              ))}
-            </div>
-          </main>
+              </div>
+            ))
+          )}
         </div>
-      </main>
+      </div>
 
-      <footer className="border-t border-gray-800 bg-plek-dark">
-        <div className="container mx-auto px-4 py-4">
-          <div className="flex justify-center space-x-6 text-sm text-gray-400">
-            <Link to="/about" className="hover:text-white transition-colors">
-              About us
-            </Link>
-            <Link to="/help" className="hover:text-white transition-colors">
-              Help Center
-            </Link>
-            <Link to="/contact" className="hover:text-white transition-colors">
-              Contact us
-            </Link>
-          </div>
-        </div>
-      </footer>
+      {/* Footer */}
+      <Footer />
 
       {/* Add Room Modal */}
       {showAddModal && (

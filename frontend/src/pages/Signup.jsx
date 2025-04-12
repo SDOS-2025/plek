@@ -2,6 +2,7 @@ import React, { useState, useContext, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import api from "../api";
 import { AuthContext } from "../context/AuthProvider";
+import Footer from "../components/Footer";
 
 export default function Signup() {
   const [firstName, setFirstName] = useState("");
@@ -66,71 +67,112 @@ export default function Signup() {
   };
 
   return (
-    <div className="min-h-screen bg-plek-background flex flex-col">
-      <div className="flex-grow flex flex-col items-center p-32">
+    <div className="page-container auth-page">
+      <div className="flex flex-col items-center justify-center min-h-screen py-12 px-4 sm:px-6 lg:px-8">
         <div className="w-full max-w-md">
-          <div className="mb-32 flex justify-center">
-            <h1 className="text-6xl font-bold text-white">Plek</h1>
+          <div className="mb-12 flex justify-center">
+            <Link to="/">
+              <h1 className="text-5xl font-bold text-plek-purple">Plek</h1>
+            </Link>
           </div>
-          <div className="bg-plek-dark p-8 rounded-lg shadow-xl">
-            {error && <div className="mb-4 text-red-500 text-center">{error}</div>}
+
+          <div className="section-card">
+            <h2 className="card-header text-center">Create Your Account</h2>
+            
+            {error && (
+              <div className="mb-6 p-3 bg-red-900/50 border border-red-500 rounded-lg text-red-200">
+                {error}
+              </div>
+            )}
+            
             <form onSubmit={handleSubmit} className="space-y-6">
-              <div>
-                <input
-                  type="text"
-                  value={firstName}
-                  onChange={(e) => setFirstName(e.target.value)}
-                  placeholder="First Name"
-                  className="w-full p-3 rounded bg-plek-lightgray border border-gray-700 text-white placeholder-gray-400 focus:outline-none focus:border-plek-purple"
-                  required
-                />
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-300 mb-1">
+                    First Name
+                  </label>
+                  <input
+                    type="text"
+                    value={firstName}
+                    onChange={(e) => setFirstName(e.target.value)}
+                    placeholder="John"
+                    className="w-full p-3 rounded bg-plek-lightgray border border-gray-700 text-white placeholder-gray-400 focus:outline-none focus:border-plek-purple"
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-300 mb-1">
+                    Last Name
+                  </label>
+                  <input
+                    type="text"
+                    value={lastName}
+                    onChange={(e) => setLastName(e.target.value)}
+                    placeholder="Smith"
+                    className="w-full p-3 rounded bg-plek-lightgray border border-gray-700 text-white placeholder-gray-400 focus:outline-none focus:border-plek-purple"
+                    required
+                  />
+                </div>
               </div>
+              
               <div>
-                <input
-                  type="text"
-                  value={lastName}
-                  onChange={(e) => setLastName(e.target.value)}
-                  placeholder="Last Name"
-                  className="w-full p-3 rounded bg-plek-lightgray border border-gray-700 text-white placeholder-gray-400 focus:outline-none focus:border-plek-purple"
-                  required
-                />
-              </div>
-              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-1">
+                  Email Address
+                </label>
                 <input
                   type="email"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  placeholder="Email"
+                  placeholder="name@example.com"
                   className="w-full p-3 rounded bg-plek-lightgray border border-gray-700 text-white placeholder-gray-400 focus:outline-none focus:border-plek-purple"
                   required
                 />
               </div>
+              
               <div>
+                <label className="block text-sm font-medium text-gray-300 mb-1">
+                  Password
+                </label>
                 <input
                   type="password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  placeholder="Password"
+                  placeholder="••••••••"
                   className="w-full p-3 rounded bg-plek-lightgray border border-gray-700 text-white placeholder-gray-400 focus:outline-none focus:border-plek-purple"
                   required
                 />
               </div>
+              
               <div>
+                <label className="block text-sm font-medium text-gray-300 mb-1">
+                  Confirm Password
+                </label>
                 <input
                   type="password"
                   value={confirmPassword}
                   onChange={(e) => setConfirmPassword(e.target.value)}
-                  placeholder="Confirm Password"
+                  placeholder="••••••••"
                   className="w-full p-3 rounded bg-plek-lightgray border border-gray-700 text-white placeholder-gray-400 focus:outline-none focus:border-plek-purple"
                   required
                 />
               </div>
+              
               <button
                 type="submit"
                 className="w-full bg-plek-purple hover:bg-purple-700 text-white font-bold py-3 px-4 rounded transition-colors"
               >
-                Create an account
+                Create account
               </button>
+              
+              <div className="relative my-6">
+                <div className="absolute inset-0 flex items-center">
+                  <div className="w-full border-t border-gray-700"></div>
+                </div>
+                <div className="relative flex justify-center text-sm">
+                  <span className="px-2 bg-plek-dark text-gray-400">Or continue with</span>
+                </div>
+              </div>
+              
               <button
                 type="button"
                 onClick={handleGoogleSignup}
@@ -144,24 +186,17 @@ export default function Signup() {
                 Sign up with Google
               </button>
             </form>
+
+            <div className="mt-6 text-center text-sm text-gray-400">
+              Already have an account?{" "}
+              <Link to="/login" className="text-plek-purple hover:text-purple-400 font-medium">
+                Sign in
+              </Link>
+            </div>
           </div>
         </div>
       </div>
-      <footer className="border-t border-gray-800 bg-plek-dark">
-        <div className="container mx-auto px-4 py-4">
-          <div className="flex justify-center space-x-6 text-sm text-gray-400">
-            <Link to="/about" className="hover:text-white transition-colors">
-              About us
-            </Link>
-            <Link to="/help" className="hover:text-white transition-colors">
-              Help Center
-            </Link>
-            <Link to="/contact" className="hover:text-white transition-colors">
-              Contact us
-            </Link>
-          </div>
-        </div>
-      </footer>
+      <Footer />
     </div>
   );
 }

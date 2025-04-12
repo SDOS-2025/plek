@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { BarChart3, PieChart, Clock, Users, Building, Calendar, BarChart, ActivitySquare } from "lucide-react";
 import NavBar from "../components/NavBar";
+import Footer from "../components/Footer";
 
 function Analytics() {
   const [activeTab, setActiveTab] = useState("totalBookings");
@@ -34,6 +35,7 @@ function Analytics() {
             // Simulated data - replace with API call
             response = {
               data: [
+                { hour: "8:00 AM", count: 28 },
                 { hour: "9:00 AM", count: 32 },
                 { hour: "10:00 AM", count: 47 },
                 { hour: "11:00 AM", count: 51 },
@@ -140,8 +142,8 @@ function Analytics() {
       case "totalBookings":
         return (
           <div className="space-y-6">
-            <div className="bg-plek-dark rounded-lg p-6 shadow-card">
-              <h3 className="text-xl font-semibold mb-4">Monthly Booking Trends</h3>
+            <div className="section-card">
+              <h3 className="card-header">Monthly Booking Trends</h3>
               <div className="h-64 p-4">
                 {/* Chart would go here - Simplified representation */}
                 <div className="h-full flex items-end justify-between">
@@ -171,8 +173,8 @@ function Analytics() {
       case "peakHours":
         return (
           <div className="space-y-6">
-            <div className="bg-plek-dark rounded-lg p-6 shadow-card">
-              <h3 className="text-xl font-semibold mb-4">Peak Booking Hours</h3>
+            <div className="section-card">
+              <h3 className="card-header">Peak Booking Hours</h3>
               <div className="h-64 p-4">
                 {/* Chart would go here - Simplified representation */}
                 <div className="h-full flex items-end justify-between">
@@ -207,8 +209,8 @@ function Analytics() {
         
       case "topUsers":
         return (
-          <div className="bg-plek-dark rounded-lg p-6 shadow-card">
-            <h3 className="text-xl font-semibold mb-4">Top Users by Booking Count</h3>
+          <div className="section-card">
+            <h3 className="card-header">Top Users by Booking Count</h3>
             <div className="overflow-hidden rounded-lg">
               <table className="min-w-full divide-y divide-gray-700">
                 <thead className="bg-plek-lightgray/50">
@@ -258,8 +260,8 @@ function Analytics() {
         const isLeast = activeTab === "leastBookedRooms";
         return (
           <div className="space-y-6">
-            <div className="bg-plek-dark rounded-lg p-6 shadow-card">
-              <h3 className="text-xl font-semibold mb-4">{isLeast ? "Least" : "Most"} Booked Rooms</h3>
+            <div className="section-card">
+              <h3 className="card-header">{isLeast ? "Least" : "Most"} Booked Rooms</h3>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {data.map((room, index) => (
                   <div key={index} className="bg-plek-lightgray/30 p-5 rounded-lg flex items-start gap-4">
@@ -289,8 +291,8 @@ function Analytics() {
       case "utilization":
         return (
           <div className="space-y-6">
-            <div className="bg-plek-dark rounded-lg p-6 shadow-card">
-              <h3 className="text-xl font-semibold mb-4">Room Utilization Rates</h3>
+            <div className="section-card">
+              <h3 className="card-header">Room Utilization Rates</h3>
               <div className="mb-4 grid grid-cols-1 lg:grid-cols-2 gap-4">
                 <div className="bg-plek-lightgray/30 p-4 rounded-lg">
                   <h4 className="text-sm font-medium text-gray-300 mb-3">Average Utilization Across All Rooms</h4>
@@ -354,15 +356,15 @@ function Analytics() {
   };
 
   return (
-    <div className="flex flex-col min-h-screen bg-plek-background text-gray-100">
+    <div className="page-container">
       {/* Navigation */}
       <NavBar activePage="analytics" />
 
       {/* Main Content */}
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 flex-grow">
-        <div className="bg-plek-dark rounded-xl shadow-card overflow-hidden">
+      <div className="main-content">
+        <div className="section-card">
           {/* Analytics Navigation */}
-          <div className="p-4 border-b border-gray-800">
+          <div className="mb-6 border-b border-gray-800 pb-4">
             <div className="flex flex-wrap gap-2">
               <button
                 className={`px-4 py-2 rounded-lg transition-colors flex items-center space-x-2 ${
@@ -434,25 +436,14 @@ function Analytics() {
           </div>
 
           {/* Analytics Content */}
-          <div className="p-6">
+          <div>
             {renderTabContent()}
           </div>
         </div>
       </div>
 
       {/* Footer */}
-      <footer className="border-t border-gray-800 bg-plek-dark mt-8">
-        <div className="max-w-7xl mx-auto px-4 py-4">
-          <div className="flex flex-col md:flex-row justify-between items-center">
-            <p className="text-gray-400 text-sm">© 2025 Plek. All rights reserved.</p>
-            <div className="flex space-x-6 text-sm text-gray-400 mt-4 md:mt-0">
-              <a href="/about" className="hover:text-white transition-colors">About us</a>
-              <a href="/help" className="hover:text-white transition-colors">Help Center</a>
-              <a href="/contact" className="hover:text-white transition-colors">Contact us</a>
-            </div>
-          </div>
-        </div>
-      </footer>
+      <Footer />
     </div>
   );
 }

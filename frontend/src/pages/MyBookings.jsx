@@ -16,6 +16,7 @@ import api from "../api";
 import ModifyBookingModal from "../components/ModifyBooking";
 import NavBar from "../components/NavBar";
 import { DateTime } from "luxon";
+import Footer from "../components/Footer";
 
 function MyBookings() {
   const [activeTab, setActiveTab] = useState("upcoming");
@@ -46,66 +47,53 @@ function MyBookings() {
         const previous = [];
         
         bookings.forEach(booking => {
-          // Use start_time instead of just date for more accurate comparison
-          const bookingDateTime = new Date(booking.start_time || booking.date);
+          const bookingDate = DateTime.fromFormat(
+            `${booking.date} ${booking.slot.split(" - ")[0]}`, 
+            "d MMMM yyyy h a", 
+            { zone: "Asia/Kolkata" }
+          ).toJSDate();
           
-          // Format the date for display - extract from start_time if available
-          const bookingDate = new Date(booking.start_time || booking.date);
-          const formattedDate = bookingDate.toLocaleDateString('en-US', {
-            day: 'numeric',
-            month: 'long',
-            year: 'numeric'
-          });
-          
-          // Format the time from start_time and end_time
-          let timeSlot = booking.time_slot;
-          if (!timeSlot && booking.start_time && booking.end_time) {
-            const startTime = new Date(booking.start_time);
-            const endTime = new Date(booking.end_time);
-            
-            const formatTime = (date) => {
-              return date.toLocaleTimeString('en-US', {
-                hour: 'numeric',
-                minute: '2-digit',
-                hour12: true
-              });
-            };
-            
-            timeSlot = `${formatTime(startTime)} - ${formatTime(endTime)}`;
-          }
-          
-          // Create a formatted booking object
-          const formattedBooking = {
-            id: booking.id,
-            roomId: booking.room.id,
-            roomName: booking.room.name, // Add room name
-            building: booking.room.building,
-            slot: timeSlot || "Time not specified",
-            date: formattedDate,
-            capacity: booking.room.capacity,
-            status: booking.status || "Pending",
-            purpose: booking.purpose,
-            attendees: booking.attendees,
-            notes: booking.notes,
-            amenities: booking.room.amenities, // Also add amenities for the modal
-            rawDateTime: bookingDateTime
-          };
-          
-          // Add to appropriate array based on date/time and not status
-          if (bookingDateTime > now) {
-            upcoming.push(formattedBooking);
+          if (bookingDate > now) {
+            upcoming.push(booking);
           } else {
-            previous.push(formattedBooking);
+            previous.push(booking);
           }
         });
         
-        // Sort upcoming bookings by date (nearest first)
-        upcoming.sort((a, b) => a.rawDateTime - b.rawDateTime);
+        // Sort upcoming bookings by date (closest first)
+        upcoming.sort((a, b) => {
+          const dateA = DateTime.fromFormat(
+            `${a.date} ${a.slot.split(" - ")[0]}`, 
+            "d MMMM yyyy h a", 
+            { zone: "Asia/Kolkata" }
+          );
+          
+          const dateB = DateTime.fromFormat(
+            `${b.date} ${b.slot.split(" - ")[0]}`, 
+            "d MMMM yyyy h a", 
+            { zone: "Asia/Kolkata" }
+          );
+          
+          return dateA - dateB;
+        });
         
         // Sort previous bookings by date (most recent first)
-        previous.sort((a, b) => b.rawDateTime - a.rawDateTime);
+        previous.sort((a, b) => {
+          const dateA = DateTime.fromFormat(
+            `${a.date} ${a.slot.split(" - ")[0]}`, 
+            "d MMMM yyyy h a", 
+            { zone: "Asia/Kolkata" }
+          );
+          
+          const dateB = DateTime.fromFormat(
+            `${b.date} ${b.slot.split(" - ")[0]}`, 
+            "d MMMM yyyy h a", 
+            { zone: "Asia/Kolkata" }
+          );
+          
+          return dateB - dateA;
+        });
         
-        // Update state with the fetched bookings
         setUpcomingBookings(upcoming);
         setPreviousBookings(previous);
         setError(null);
@@ -127,10 +115,9 @@ function MyBookings() {
 
   const handleCancel = async (bookingId) => {
     try {
-      // Call the API to cancel/delete the booking
-      await api.delete(`book/delete/${bookingId}/`);
+      await api.delete(`bookings/delete/${bookingId}/`);
       
-      // Remove the canceled booking from the state
+      // Update the state to remove the canceled booking
       setUpcomingBookings(upcomingBookings.filter(booking => booking.id !== bookingId));
       
       alert("Booking canceled successfully");
@@ -141,39 +128,41 @@ function MyBookings() {
   };
 
   return (
-    <div className="flex flex-col h-screen overflow-y-auto bg-plek-background text-gray-100">
+    <div className="page-container">
       {/* Navigation */}
       <NavBar activePage="my-bookings" />
 
       {/* Main Content */}
-      <div className="min-w-[99vw] mx-auto px-4 py-10 flex-grow">
+      <div className="main-content">
         {/* Tab Navigation and Content */}
-        <div className="bg-black p-6 rounded-lg mb-14">
-          <div className="flex space-x-4 mb-6">
-            <button
-              className={`px-6 py-2 rounded-lg transition-colors ${
-                activeTab === "upcoming"
-                  ? "bg-purple-600 text-white"
-                  : "bg-gray-700 text-gray-300 hover:bg-gray-600"
-              }`}
-              onClick={() => setActiveTab("upcoming")}
-            >
-              Upcoming Bookings
-            </button>
-            <button
-              className={`px-6 py-2 rounded-lg transition-colors ${
-                activeTab === "previous"
-                  ? "bg-purple-600 text-white"
-                  : "bg-gray-700 text-gray-300 hover:bg-gray-600"
-              }`}
-              onClick={() => setActiveTab("previous")}
-            >
-              Previous Bookings
-            </button>
+        <div className="card-container">
+          <div className="tab-container">
+            <div className="flex space-x-4">
+              <button
+                className={`px-6 py-2 rounded-lg transition-colors ${
+                  activeTab === "upcoming"
+                    ? "bg-plek-purple text-white"
+                    : "bg-gray-700 text-gray-300 hover:bg-gray-600"
+                }`}
+                onClick={() => setActiveTab("upcoming")}
+              >
+                Upcoming Bookings
+              </button>
+              <button
+                className={`px-6 py-2 rounded-lg transition-colors ${
+                  activeTab === "previous"
+                    ? "bg-plek-purple text-white"
+                    : "bg-gray-700 text-gray-300 hover:bg-gray-600"
+                }`}
+                onClick={() => setActiveTab("previous")}
+              >
+                Previous Bookings
+              </button>
+            </div>
           </div>
 
           {/* Scrollable Content */}
-          <div className="max-h-[75vh] overflow-y-auto custom-scrollbar rounded-lg p-2 max-w-full w-full mx-auto">
+          <div className="scrollable-area">
             {loading ? (
               <div className="flex flex-col items-center justify-center py-10">
                 <Loader2 size={40} className="animate-spin text-purple-500 mb-4" />
@@ -196,7 +185,7 @@ function MyBookings() {
                   {upcomingBookings.map((booking) => (
                     <div
                       key={booking.id}
-                      className="bg-plek-dark rounded-lg p-6 space-y-4"
+                      className="section-card"
                     >
                       <div className="flex justify-between items-start">
                         <div>
@@ -262,7 +251,7 @@ function MyBookings() {
                   {previousBookings.map((booking) => (
                     <div
                       key={booking.id}
-                      className="bg-plek-dark rounded-lg p-6 space-y-4"
+                      className="section-card"
                     >
                       <div className="flex justify-between items-start">
                         <div>
@@ -308,21 +297,7 @@ function MyBookings() {
       </div>
 
       {/* Footer */}
-      <footer className="border-t border-gray-800 bg-plek-dark">
-        <div className="container mx-auto px-4 py-4">
-          <div className="flex justify-center space-x-6 text-sm text-gray-400">
-            <Link to="/about" className="hover:text-white transition-colors">
-              About us
-            </Link>
-            <Link to="/help" className="hover:text-white transition-colors">
-              Help Center
-            </Link>
-            <Link to="/contact" className="hover:text-white transition-colors">
-              Contact us
-            </Link>
-          </div>
-        </div>
-      </footer>
+      <Footer />
 
       {/* Modify Booking Modal - replaced with imported component */}
       {showModifyModal && selectedBooking && (

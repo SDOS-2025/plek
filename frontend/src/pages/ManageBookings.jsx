@@ -1,242 +1,463 @@
-import React, { useState } from "react";
-import { Link } from "react-router-dom";
+import React, { useState, useEffect } from "react";
+import {
+  Search,
+  Calendar,
+  Clock,
+  Users,
+  Filter,
+  Check,
+  X,
+  AlertCircle,
+  Building2,
+  Plus,
+  Pencil,
+  Trash2
+} from "lucide-react";
+import api from "../api";
+import { DateTime } from "luxon";
 import ModifyBookingModal from "../components/ModifyBooking";
 import NavBar from "../components/NavBar";
+import Footer from "../components/Footer";
+import Toast, { DeleteConfirmation } from "../components/AlertToast";
 
 function ManageBookings() {
   const [activeTab, setActiveTab] = useState("requests");
+  const [searchQuery, setSearchQuery] = useState("");
   const [showModifyModal, setShowModifyModal] = useState(false);
   const [selectedBooking, setSelectedBooking] = useState(null);
+  const [showFilters, setShowFilters] = useState(false);
+  const [bookingRequests, setBookingRequests] = useState([]);
+  const [approvedBookings, setApprovedBookings] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [alert, setAlert] = useState({
+    show: false,
+    type: "success", // 'success', 'danger', or 'warning'
+    message: "",
+  });
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [bookingToDelete, setBookingToDelete] = useState(null);
+  
+  // Filter states
+  const [selectedBuilding, setSelectedBuilding] = useState("all");
+  const [selectedDateRange, setSelectedDateRange] = useState("all");
+  const [selectedStatus, setSelectedStatus] = useState("all");
+  
   const firstName = localStorage.getItem("FirstName");
+
+  const showAlert = (type, message) => {
+    setAlert({ show: true, type, message });
+  };
+
+  const hideAlert = () => {
+    setAlert((prev) => ({ ...prev, show: false }));
+  };
+
+  // Fetch bookings data
+  useEffect(() => {
+    const fetchBookings = async () => {
+      try {
+        setLoading(true);
+        
+        // For pending requests
+        const requestsResponse = await api.get("/book/pending/");
+        
+        // For approved bookings
+        const bookingsResponse = await api.get("/book/approved/");
+        
+        setBookingRequests(requestsResponse.data || []);
+        setApprovedBookings(bookingsResponse.data || []);
+        setError(null);
+      } catch (err) {
+        console.error("Error fetching bookings:", err);
+        setError("Failed to load bookings");
+      } finally {
+        setLoading(false);
+      }
+    };
+    
+    fetchBookings();
+    
+    // Refresh data every 2 minutes
+    const intervalId = setInterval(() => {
+      fetchBookings();
+    }, 120000);
+    
+    return () => clearInterval(intervalId);
+  }, []);
 
   const handleModifyClick = (booking) => {
     setSelectedBooking(booking);
     setShowModifyModal(true);
   };
 
-  const bookingRequests = [
-    {
-      id: 1,
-      room: "B512",
-      building: "Research and Development Building",
-      slot: "4 - 5 pm",
-      date: "6th February 2025",
-      capacity: 8,
-      user: "RameshS",
-    },
-    {
-      id: 2,
-      room: "B512",
-      building: "Research and Development Building",
-      slot: "4 - 5 pm",
-      date: "6th February 2025",
-      capacity: 8,
-      user: "RameshS",
-    },
-    {
-      id: 3,
-      room: "B512",
-      building: "Research and Development Building",
-      slot: "4 - 5 pm",
-      date: "6th February 2025",
-      capacity: 8,
-      user: "RameshS",
-    },
-  ];
-
-  const approvedBookings = [
-    {
-      id: 101,
-      room: "A204",
-      building: "Administration Building",
-      slot: "2 - 3 pm",
-      date: "5th February 2025",
-      capacity: 12,
-      user: "PriyaM",
-      status: "Approved",
-    },
-    {
-      id: 102,
-      room: "C110",
-      building: "Conference Center",
-      slot: "10 - 11 am",
-      date: "7th February 2025",
-      capacity: 20,
-      user: "AjayK",
-      status: "Approved",
-    },
-    {
-      id: 103,
-      room: "B512",
-      building: "Research and Development Building",
-      slot: "1 - 2 pm",
-      date: "8th February 2025",
-      capacity: 8,
-      user: "NeelaP",
-      status: "Approved",
-    },
-  ];
-
-  const handleApprove = (bookingId) => {
-    // Handle approve logic
-    console.log("Approved booking:", bookingId);
+  const handleApprove = async (bookingId) => {
+    try {
+      const response = await api.put(`/book/approve/${bookingId}/`);
+      
+      if (response.status === 200) {
+        // Update local state
+        const updatedRequests = bookingRequests.filter(req => req.id !== bookingId);
+        const approvedBooking = bookingRequests.find(req => req.id === bookingId);
+        
+        if (approvedBooking) {
+          approvedBooking.status = "approved";
+          setApprovedBookings([...approvedBookings, approvedBooking]);
+        }
+        
+        setBookingRequests(updatedRequests);
+        
+        // Show success alert
+        showAlert("success", "Booking request approved successfully!");
+      }
+    } catch (error) {
+      console.error("Error approving booking:", error);
+      showAlert("danger", "Failed to approve booking. Please try again.");
+    }
   };
 
-  const handleCancel = (bookingId) => {
-    // Handle cancel logic
-    console.log("Cancelled booking:", bookingId);
+  const handleDeleteClick = (bookingId) => {
+    setBookingToDelete(bookingId);
+    setShowDeleteConfirm(true);
   };
+
+  const confirmDelete = async () => {
+    if (!bookingToDelete) return;
+    
+    try {
+      const response = await api.delete(`/book/delete/${bookingToDelete}/`);
+      
+      if (response.status === 200 || response.status === 204) {
+        // Update local state
+        const updatedRequests = bookingRequests.filter(req => req.id !== bookingToDelete);
+        const updatedApproved = approvedBookings.filter(booking => booking.id !== bookingToDelete);
+        
+        setBookingRequests(updatedRequests);
+        setApprovedBookings(updatedApproved);
+        
+        // Show success alert
+        showAlert("success", "Booking cancelled successfully!");
+      }
+    } catch (error) {
+      console.error("Error cancelling booking:", error);
+      showAlert("danger", "Failed to cancel booking. Please try again.");
+    } finally {
+      setShowDeleteConfirm(false);
+      setBookingToDelete(null);
+    }
+  };
+
+  // Extract unique buildings for filter dropdown
+  const buildings = ["all", ...new Set([
+    ...bookingRequests.map(booking => booking.building),
+    ...approvedBookings.map(booking => booking.building)
+  ])];
+
+  // Date range options for filter
+  const dateRanges = [
+    { label: "All Dates", value: "all" },
+    { label: "Today", value: "today" },
+    { label: "This Week", value: "week" },
+    { label: "This Month", value: "month" },
+  ];
+
+  // Status options for filter (when in bookings tab)
+  const statuses = [
+    { label: "All Statuses", value: "all" },
+    { label: "Approved", value: "approved" },
+    { label: "Cancelled", value: "cancelled" },
+  ];
+
+  // Filter bookings based on search query and filters
+  const filterBookings = (bookings) => {
+    return bookings.filter(booking => {
+      const matchesSearch = 
+        booking.room?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        booking.building?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        booking.user?.toLowerCase().includes(searchQuery.toLowerCase());
+      
+      const matchesBuilding = selectedBuilding === "all" || booking.building === selectedBuilding;
+      
+      // Date filtering
+      let matchesDate = true;
+      if (selectedDateRange !== "all") {
+        const bookingDate = DateTime.fromFormat(booking.date, "LLLL d, yyyy");
+        const today = DateTime.now().startOf('day');
+        
+        if (selectedDateRange === "today") {
+          matchesDate = bookingDate.hasSame(today, 'day');
+        } else if (selectedDateRange === "week") {
+          const startOfWeek = today.startOf('week');
+          const endOfWeek = today.endOf('week');
+          matchesDate = bookingDate >= startOfWeek && bookingDate <= endOfWeek;
+        } else if (selectedDateRange === "month") {
+          matchesDate = bookingDate.hasSame(today, 'month');
+        }
+      }
+      
+      // Status filtering (only applies to bookings tab)
+      const matchesStatus = 
+        selectedStatus === "all" || 
+        booking.status?.toLowerCase() === selectedStatus;
+      
+      return matchesSearch && matchesBuilding && matchesDate && matchesStatus;
+    });
+  };
+
+  const filteredRequests = filterBookings(bookingRequests);
+  const filteredBookings = filterBookings(approvedBookings);
+
+  // Get current data based on active tab
+  const currentData = activeTab === "requests" ? filteredRequests : filteredBookings;
 
   return (
-    <div className="flex flex-col h-screen overflow-y-auto bg-plek-background text-gray-100">
-      {/* Navigation */}
+    <div className="page-container">
       <NavBar activePage="manage-bookings" />
 
-      {/* Main Content */}
-      <div className="min-w-[99vw] mx-auto px-4 py-10 flex-grow">
-        {/* Tab Navigation and Content */}
-        <div className="bg-black p-6 rounded-lg mb-14">
-          <div className="flex space-x-4 mb-6">
+      <div className="main-content">
+        {/* Header with tab buttons */}
+        <div className="flex justify-between items-center mb-8">
+          <h1 className="text-2xl font-bold">Manage Bookings</h1>
+          <div className="flex space-x-3">
             <button
-              className={`px-6 py-2 rounded-lg transition-colors ${
+              className={`px-4 py-2 rounded-lg transition-colors ${
                 activeTab === "requests"
-                  ? "bg-purple-600 text-white"
+                  ? "bg-plek-purple text-white"
                   : "bg-gray-700 text-gray-300 hover:bg-gray-600"
               }`}
               onClick={() => setActiveTab("requests")}
             >
-              Requests
+              Pending Requests
             </button>
             <button
-              className={`px-6 py-2 rounded-lg transition-colors ${
+              className={`px-4 py-2 rounded-lg transition-colors ${
                 activeTab === "bookings"
-                  ? "bg-purple-600 text-white"
+                  ? "bg-plek-purple text-white"
                   : "bg-gray-700 text-gray-300 hover:bg-gray-600"
               }`}
               onClick={() => setActiveTab("bookings")}
             >
-              Bookings
+              Approved Bookings
+            </button>
+          </div>
+        </div>
+
+        {/* Search and Filters */}
+        <div className="space-y-4 mb-8">
+          <div className="relative">
+            <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-300" />
+            <input
+              type="text"
+              placeholder="Search bookings by room, building, or user..."
+              className="w-full pl-12 pr-12 py-3 bg-gray-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-400 placeholder-gray-300"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+            />
+            <button
+              className="absolute right-4 top-1/2 transform -translate-y-1/2"
+              onClick={() => setShowFilters(!showFilters)}
+            >
+              <Filter
+                className={`text-gray-300 transition-transform ${
+                  showFilters ? "rotate-180" : ""
+                }`}
+              />
             </button>
           </div>
 
-          {/* Scrollable Content - Conditional rendering based on active tab */}
-          <div className="max-h-[75vh] overflow-y-auto custom-scrollbar rounded-lg p-2 max-w-full w-full mx-auto">
-            {activeTab === "requests" ? (
-              <div className="space-y-4">
-                {bookingRequests.map((booking) => (
-                  <div
-                    key={booking.id}
-                    className="bg-plek-dark rounded-lg p-6 space-y-4"
+          {/* Filters */}
+          {showFilters && (
+            <div className="grid-layout-2 gap-4 p-4 bg-gray-700 rounded-lg">
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-2">
+                  Building
+                </label>
+                <select
+                  value={selectedBuilding}
+                  onChange={(e) => setSelectedBuilding(e.target.value)}
+                  className="w-full bg-gray-600 rounded-lg p-3 focus:outline-none focus:ring-2 focus:ring-blue-400"
+                >
+                  {buildings.map((building, index) => (
+                    <option key={index} value={building}>
+                      {building === "all" ? "All Buildings" : building}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-2">
+                  Date Range
+                </label>
+                <select
+                  value={selectedDateRange}
+                  onChange={(e) => setSelectedDateRange(e.target.value)}
+                  className="w-full bg-gray-600 rounded-lg p-3 focus:outline-none focus:ring-2 focus:ring-blue-400"
+                >
+                  {dateRanges.map((range) => (
+                    <option key={range.value} value={range.value}>
+                      {range.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              {activeTab === "bookings" && (
+                <div className="col-span-2">
+                  <label className="block text-sm font-medium text-gray-300 mb-2">
+                    Status
+                  </label>
+                  <select
+                    value={selectedStatus}
+                    onChange={(e) => setSelectedStatus(e.target.value)}
+                    className="w-full bg-gray-600 rounded-lg p-3 focus:outline-none focus:ring-2 focus:ring-blue-400"
                   >
-                    <div className="flex justify-between items-start">
-                      <div>
-                        <h3 className="text-lg font-medium mb-2">
-                          Room: {booking.room}
-                        </h3>
-                        <p className="text-gray-400">
-                          Building: {booking.building}
-                        </p>
-                        <div className="mt-4 space-y-2">
-                          <p className="text-gray-300">SLOT: {booking.slot}</p>
-                          <p className="text-gray-300">Date: {booking.date}</p>
-                          <p className="text-gray-300">
-                            Capacity: {booking.capacity}
-                          </p>
-                          <p className="text-gray-300">User: {booking.user}</p>
-                        </div>
-                      </div>
-                      <div className="flex space-x-3">
-                        <button
-                          onClick={() => handleCancel(booking.id)}
-                          className="px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded-lg transition-colors"
-                        >
-                          Cancel
-                        </button>
+                    {statuses.map((status) => (
+                      <option key={status.value} value={status.value}>
+                        {status.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* Booking Cards Grid Layout */}
+        <div className="grid-layout-3 gap-6">
+          {loading ? (
+            <div className="col-span-3 text-center py-10">
+              <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-purple-500 mx-auto"></div>
+              <p className="mt-4 text-gray-300">Loading bookings...</p>
+            </div>
+          ) : error ? (
+            <div className="col-span-3 text-center py-10">
+              <div className="text-red-400 text-xl mb-2">⚠️</div>
+              <p className="text-gray-300">{error}</p>
+            </div>
+          ) : currentData.length === 0 ? (
+            <div className="col-span-3 text-center py-10">
+              <p className="text-gray-300">
+                {activeTab === "requests" 
+                  ? "No pending booking requests found." 
+                  : "No approved bookings found."}
+              </p>
+            </div>
+          ) : (
+            currentData.map((booking) => (
+              <div key={booking.id} className="section-card">
+                <div className="flex justify-between items-start">
+                  <h3 className="text-xl font-semibold">Room: {booking.room}</h3>
+                  <div className="flex space-x-2">
+                    {activeTab === "requests" ? (
+                      <>
                         <button
                           onClick={() => handleApprove(booking.id)}
-                          className="px-4 py-2 bg-purple-600 hover:bg-purple-700 rounded-lg transition-colors"
+                          className="p-2 hover:bg-plek-purple/20 rounded-lg transition-colors"
+                          title="Approve"
                         >
-                          Approve
+                          <Check size={18} className="text-green-400" />
                         </button>
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <div className="space-y-4">
-                {approvedBookings.map((booking) => (
-                  <div
-                    key={booking.id}
-                    className="bg-plek-dark rounded-lg p-6 space-y-4"
-                  >
-                    <div className="flex justify-between items-start">
-                      <div>
-                        <h3 className="text-lg font-medium mb-2">
-                          Room: {booking.room}
-                        </h3>
-                        <p className="text-gray-400">
-                          Building: {booking.building}
-                        </p>
-                        <div className="mt-4 space-y-2">
-                          <p className="text-gray-300">SLOT: {booking.slot}</p>
-                          <p className="text-gray-300">Date: {booking.date}</p>
-                          <p className="text-gray-300">
-                            Capacity: {booking.capacity}
-                          </p>
-                          <p className="text-gray-300">User: {booking.user}</p>
-                          <p className="text-green-400">
-                            Status: {booking.status}
-                          </p>
-                        </div>
-                      </div>
-                      <div className="flex space-x-3">
                         <button
-                          onClick={() => handleCancel(booking.id)}
-                          className="px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded-lg transition-colors"
+                          onClick={() => handleDeleteClick(booking.id)}
+                          className="p-2 hover:bg-red-500/20 rounded-lg transition-colors"
+                          title="Deny"
                         >
-                          Cancel
+                          <X size={18} className="text-red-400" />
                         </button>
+                      </>
+                    ) : (
+                      <>
                         <button
                           onClick={() => handleModifyClick(booking)}
-                          className="px-4 py-2 bg-purple-600 hover:bg-purple-700 rounded-lg transition-colors"
+                          className="p-2 hover:bg-gray-700 rounded-lg transition-colors"
+                          title="Modify"
                         >
-                          Modify
+                          <Pencil size={18} className="text-gray-400" />
                         </button>
-                      </div>
-                    </div>
+                        <button
+                          onClick={() => handleDeleteClick(booking.id)}
+                          className="p-2 hover:bg-gray-700 rounded-lg transition-colors"
+                          title="Cancel"
+                        >
+                          <Trash2 size={18} className="text-red-400" />
+                        </button>
+                      </>
+                    )}
                   </div>
-                ))}
+                </div>
+                
+                <p className="text-gray-400 mt-1">{booking.building}</p>
+                
+                <div className="mt-3 space-y-2">
+                  <div className="flex items-center">
+                    <Clock className="h-4 w-4 text-gray-400 mr-2" />
+                    <span className="text-sm text-gray-300">{booking.slot}</span>
+                  </div>
+                  <div className="flex items-center">
+                    <Calendar className="h-4 w-4 text-gray-400 mr-2" />
+                    <span className="text-sm text-gray-300">{booking.date}</span>
+                  </div>
+                  <div className="flex items-center">
+                    <Users className="h-4 w-4 text-gray-400 mr-2" />
+                    <span className="text-sm text-gray-300">Capacity: {booking.capacity}</span>
+                  </div>
+                  <div className="flex items-center">
+                    <Building2 className="h-4 w-4 text-gray-400 mr-2" />
+                    <span className="text-sm text-gray-300">
+                      {activeTab === "requests" ? "Requested by: " : "Booked by: "}
+                      {booking.user}
+                    </span>
+                  </div>
+                </div>
+                
+                {booking.purpose && (
+                  <div className="mt-3 border-t border-gray-700 pt-2">
+                    <p className="text-sm text-gray-300">
+                      <span className="text-gray-400">Purpose:</span> {booking.purpose}
+                    </p>
+                  </div>
+                )}
+                
+                {booking.status && (
+                  <div className="mt-3">
+                    <span className="inline-block px-2 py-1 bg-green-900/30 text-green-400 text-xs rounded-full">
+                      {booking.status}
+                    </span>
+                  </div>
+                )}
               </div>
-            )}
-          </div>
+            ))
+          )}
         </div>
       </div>
 
-      {/* Footer */}
-      <footer className="border-t border-gray-800 bg-plek-dark">
-        <div className="container mx-auto px-4 py-4">
-          <div className="flex justify-center space-x-6 text-sm text-gray-400">
-            <Link to="/about" className="hover:text-white transition-colors">
-              About us
-            </Link>
-            <Link to="/help" className="hover:text-white transition-colors">
-              Help Center
-            </Link>
-            <Link to="/contact" className="hover:text-white transition-colors">
-              Contact us
-            </Link>
-          </div>
-        </div>
-      </footer>
+      <Footer />
 
       {/* Modify Booking Modal */}
       {showModifyModal && selectedBooking && (
         <ModifyBookingModal
           booking={selectedBooking}
           onClose={() => setShowModifyModal(false)}
+          onCancel={handleDeleteClick}
         />
       )}
+
+      {/* Toast Alert */}
+      {alert.show && (
+        <Toast
+          type={alert.type}
+          message={alert.message}
+          show={alert.show}
+          onClose={hideAlert}
+        />
+      )}
+
+      {/* Delete Confirmation Dialog */}
+      <DeleteConfirmation
+        show={showDeleteConfirm}
+        onConfirm={confirmDelete}
+        onCancel={() => setShowDeleteConfirm(false)}
+      />
     </div>
   );
 }
