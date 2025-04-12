@@ -2,13 +2,13 @@ import React from 'react';
 import { Routes, Route } from 'react-router-dom';
 import ProtectedRoute from './components/ProtectedRoute';
 import Dashboard from './pages/Dashboard';
-import Login from './pages/login';
-import Signup from './pages/signup';
-import Booking from './pages/booking';
+import Login from './pages/Login';
+import Signup from './pages/Signup';
+import Booking from './pages/Booking';
 import MyBookings from './pages/MyBookings';
 import ManageBookings from './pages/ManageBookings';
 import ManageRooms from './pages/ManageRooms';
-import LandingPage from './pages/landingPage';
+import LandingPage from './pages/LandingPage';
 import Analytics from './pages/Analytics';
 
 function App() {

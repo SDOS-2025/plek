@@ -203,7 +203,7 @@ const ModifyBookingModal = ({ booking, onClose, onCancel }) => {
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-      <div className="bg-gray-800 rounded-xl w-full max-w-3xl p-6 relative max-h-[90vh] overflow-y-auto">
+      <div className="bg-plek-dark rounded-xl w-full max-w-3xl p-6 relative max-h-[90vh] overflow-y-auto">
         <button
           onClick={onClose}
           className="absolute right-4 top-4 text-gray-400 hover:text-white"
@@ -232,10 +232,10 @@ const ModifyBookingModal = ({ booking, onClose, onCancel }) => {
             </div>
             
             {/* Date picker */}
-            <div className="bg-gray-750 rounded-lg relative">
+            <div className="bg-plek-lightgray rounded-lg relative">
               {/* Date picker trigger */}
               <div
-                className="flex items-center justify-between text-gray-300 cursor-pointer p-2 hover:bg-gray-700 rounded-lg border border-gray-600 transition-colors"
+                className="flex items-center justify-between text-gray-300 cursor-pointer p-2 hover:bg-plek-background rounded-lg border border-gray-600 transition-colors"
                 onClick={toggleDatePicker}
               >
                 <div className="flex items-center space-x-3">
@@ -261,15 +261,15 @@ const ModifyBookingModal = ({ booking, onClose, onCancel }) => {
                 </svg>
               </div>
               {showDatePicker && (
-                <div className="absolute top-full left-0 mt-2 bg-gray-700 rounded-lg shadow-lg p-3 z-10 w-full border border-gray-600">
+                <div className="absolute top-full left-0 mt-2 bg-plek-background rounded-lg shadow-lg p-3 z-10 w-full border border-gray-600">
                   <div className="space-y-1 max-h-48 overflow-y-auto">
                     {availableDates.map((d, index) => (
                       <div
                         key={index}
                         className={`p-2 rounded-lg cursor-pointer flex justify-between items-center transition-all ${
                           d.value === date 
-                            ? "bg-purple-600 text-white" 
-                            : "hover:bg-gray-600 active:bg-gray-500"
+                            ? "bg-plek-purple text-white" 
+                            : "hover:bg-plek-lightgray active:bg-plek-background"
                         }`}
                         onClick={() => handleDateSelect(d.value)}
                       >
@@ -293,10 +293,10 @@ const ModifyBookingModal = ({ booking, onClose, onCancel }) => {
           
           <div className="space-y-4">
             {/* Time slot picker */}
-            <div className="bg-gray-750 rounded-lg relative">
+            <div className="bg-plek-lightgray rounded-lg relative">
               {/* Time slot picker trigger */}
               <div
-                className={`flex items-center justify-between text-gray-300 cursor-pointer p-2 hover:bg-gray-700 rounded-lg border border-gray-600 transition-colors ${loadingTimeSlots ? 'opacity-75' : ''}`}
+                className={`flex items-center justify-between text-gray-300 cursor-pointer p-2 hover:bg-plek-background rounded-lg border border-gray-600 transition-colors ${loadingTimeSlots ? 'opacity-75' : ''}`}
                 onClick={toggleTimePicker}
               >
                 <div className="flex items-center space-x-3">
@@ -326,7 +326,7 @@ const ModifyBookingModal = ({ booking, onClose, onCancel }) => {
                 )}
               </div>
               {showTimePicker && !loadingTimeSlots && (
-                <div className="absolute top-full left-0 mt-2 bg-gray-700 rounded-lg shadow-lg p-3 z-10 w-full border border-gray-600">
+                <div className="absolute top-full left-0 mt-2 bg-plek-background rounded-lg shadow-lg p-3 z-10 w-full border border-gray-600">
                   <div className="space-y-1 max-h-48 overflow-y-auto">
                     {timeSlotError ? (
                       <div className="p-2 text-red-400 text-center">
@@ -342,10 +342,10 @@ const ModifyBookingModal = ({ booking, onClose, onCancel }) => {
                           key={index}
                           className={`p-2 rounded-lg flex justify-between items-center transition-all ${
                             slot.isBooked 
-                              ? "bg-gray-800 text-gray-500 cursor-not-allowed" 
+                              ? "bg-plek-dark text-gray-500 cursor-not-allowed" 
                               : slot.time === timeSlot
-                                ? "bg-purple-600 text-white cursor-pointer" 
-                                : "hover:bg-gray-600 active:bg-gray-500 cursor-pointer"
+                                ? "bg-plek-purple text-white cursor-pointer" 
+                                : "hover:bg-plek-lightgray active:bg-plek-background cursor-pointer"
                           }`}
                           onClick={() => {
                             if (!slot.isBooked) {
@@ -391,7 +391,7 @@ const ModifyBookingModal = ({ booking, onClose, onCancel }) => {
 
         {/* Amenities section */}
         {booking.amenities && (
-          <div className="bg-gray-700 rounded-lg p-4 mb-6">
+          <div className="bg-plek-background rounded-lg p-4 mb-6">
             <h3 className="font-semibold mb-2">Available Amenities</h3>
             <div className="flex space-x-4">
               {booking.amenities.includes("projector") && (
@@ -425,7 +425,7 @@ const ModifyBookingModal = ({ booking, onClose, onCancel }) => {
               type="text"
               value={purpose}
               onChange={(e) => setPurpose(e.target.value)}
-              className="w-full bg-gray-700 rounded-lg p-3 focus:outline-none focus:ring-2 focus:ring-blue-400"
+              className="w-full bg-plek-background rounded-lg p-3 focus:outline-none focus:ring-2 focus:ring-plek-purple"
               placeholder="e.g., Team Meeting, Workshop, Training"
               required
             />
@@ -440,7 +440,7 @@ const ModifyBookingModal = ({ booking, onClose, onCancel }) => {
               value={attendees}
               onChange={(e) => setAttendees(e.target.value)}
               max={booking.capacity}
-              className="w-full bg-gray-700 rounded-lg p-3 focus:outline-none focus:ring-2 focus:ring-blue-400"
+              className="w-full bg-plek-background rounded-lg p-3 focus:outline-none focus:ring-2 focus:ring-plek-purple"
               placeholder="Enter number of attendees"
               required
             />
@@ -453,7 +453,7 @@ const ModifyBookingModal = ({ booking, onClose, onCancel }) => {
             <textarea
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
-              className="w-full bg-gray-700 rounded-lg p-3 focus:outline-none focus:ring-2 focus:ring-blue-400 h-32"
+              className="w-full bg-plek-background rounded-lg p-3 focus:outline-none focus:ring-2 focus:ring-plek-purple h-32"
               placeholder="Any special requirements or notes"
             />
           </div>
@@ -474,13 +474,13 @@ const ModifyBookingModal = ({ booking, onClose, onCancel }) => {
             <button
               type="button"
               onClick={onClose}
-              className="flex-1 py-3 bg-gray-700 hover:bg-gray-600 rounded-lg transition-colors"
+              className="flex-1 py-3 bg-plek-background hover:bg-plek-lightgray rounded-lg transition-colors"
             >
               Discard Changes
             </button>
             <button
               type="submit"
-              className="flex-1 py-3 bg-purple-600 hover:bg-purple-700 rounded-lg transition-colors"
+              className="flex-1 py-3 bg-plek-purple hover:bg-purple-700 rounded-lg transition-colors"
               disabled={!timeSlot || loadingTimeSlots}
             >
               Save Changes

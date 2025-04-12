@@ -88,7 +88,7 @@ const DeleteConfirmation = ({ show, onConfirm, onCancel }) => {
         <div className="flex space-x-4">
           <button
             onClick={onCancel}
-            className="flex-1 py-3 bg-gray-700 hover:bg-gray-600 rounded-lg transition-colors"
+            className="flex-1 py-3 bg-plek-background hover:bg-plek-lightgray rounded-lg transition-colors"
           >
             Cancel
           </button>
