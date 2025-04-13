@@ -1,7 +1,7 @@
 from django.conf import settings
 from django.db import models
-from rooms.models import Room
 from django.utils.timezone import localtime
+from rooms.models import Room
 
 # Create your models here.
 

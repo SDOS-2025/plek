@@ -37,12 +37,12 @@ function ManageBookings() {
   });
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [bookingToDelete, setBookingToDelete] = useState(null);
-  
+
   // Filter states
   const [selectedBuilding, setSelectedBuilding] = useState("all");
   const [selectedDateRange, setSelectedDateRange] = useState("all");
   const [selectedStatus, setSelectedStatus] = useState("all");
-  
+
   const firstName = localStorage.getItem("FirstName");
 
   const showAlert = (type, message) => {
@@ -53,20 +53,51 @@ function ManageBookings() {
     setAlert((prev) => ({ ...prev, show: false }));
   };
 
+  // Process bookings to match expected format
+  const processBookings = (bookings) => {
+    return bookings.map(booking => {
+      // Parse start and end times
+      const startTime = DateTime.fromISO(booking.start_time, { zone: "Asia/Kolkata" });
+      const endTime = DateTime.fromISO(booking.end_time, { zone: "Asia/Kolkata" });
+      
+      // Format date and time slot
+      const formattedDate = startTime.toFormat("LLLL d, yyyy");
+      const formattedTimeSlot = `${startTime.toFormat("h a")} - ${endTime.toFormat("h a")}`;
+      
+      // Create processed booking with correct structure
+      return {
+        id: booking.id,
+        room: booking.room.name,
+        building: booking.room.building,
+        capacity: booking.room.capacity,
+        date: formattedDate,
+        slot: formattedTimeSlot,
+        status: booking.status,
+        purpose: booking.purpose,
+        participants: booking.participants,
+        user: typeof booking.user === 'number' ? `User ${booking.user}` : booking.user,
+        original: booking // Keep original data in case we need it
+      };
+    });
+  };
+
   // Fetch bookings data
   useEffect(() => {
     const fetchBookings = async () => {
       try {
         setLoading(true);
+
+        // Get all bookings from a single endpoint
+        const response = await api.get("/bookings/?all=true");
         
-        // For pending requests
-        const requestsResponse = await api.get("/book/pending/");
+        const allBookings = processBookings(response.data || []);
         
-        // For approved bookings
-        const bookingsResponse = await api.get("/book/approved/");
+        // Split bookings into pending requests and approved bookings
+        const requests = allBookings.filter(booking => booking.status.toLowerCase() === "pending");
+        const approved = allBookings.filter(booking => booking.status.toLowerCase() === "approved");
         
-        setBookingRequests(requestsResponse.data || []);
-        setApprovedBookings(bookingsResponse.data || []);
+        setBookingRequests(requests);
+        setApprovedBookings(approved);
         setError(null);
       } catch (err) {
         console.error("Error fetching bookings:", err);
@@ -75,14 +106,14 @@ function ManageBookings() {
         setLoading(false);
       }
     };
-    
+
     fetchBookings();
-    
+
     // Refresh data every 2 minutes
     const intervalId = setInterval(() => {
       fetchBookings();
     }, 120000);
-    
+
     return () => clearInterval(intervalId);
   }, []);
 
@@ -94,19 +125,19 @@ function ManageBookings() {
   const handleApprove = async (bookingId) => {
     try {
       const response = await api.put(`/book/approve/${bookingId}/`);
-      
+
       if (response.status === 200) {
         // Update local state
         const updatedRequests = bookingRequests.filter(req => req.id !== bookingId);
         const approvedBooking = bookingRequests.find(req => req.id === bookingId);
-        
+
         if (approvedBooking) {
           approvedBooking.status = "approved";
           setApprovedBookings([...approvedBookings, approvedBooking]);
         }
-        
+
         setBookingRequests(updatedRequests);
-        
+
         // Show success alert
         showAlert("success", "Booking request approved successfully!");
       }
@@ -123,18 +154,18 @@ function ManageBookings() {
 
   const confirmDelete = async () => {
     if (!bookingToDelete) return;
-    
+
     try {
       const response = await api.delete(`/book/delete/${bookingToDelete}/`);
-      
+
       if (response.status === 200 || response.status === 204) {
         // Update local state
         const updatedRequests = bookingRequests.filter(req => req.id !== bookingToDelete);
         const updatedApproved = approvedBookings.filter(booking => booking.id !== bookingToDelete);
-        
+
         setBookingRequests(updatedRequests);
         setApprovedBookings(updatedApproved);
-        
+
         // Show success alert
         showAlert("success", "Booking cancelled successfully!");
       }
@@ -171,19 +202,19 @@ function ManageBookings() {
   // Filter bookings based on search query and filters
   const filterBookings = (bookings) => {
     return bookings.filter(booking => {
-      const matchesSearch = 
+      const matchesSearch =
         booking.room?.toLowerCase().includes(searchQuery.toLowerCase()) ||
         booking.building?.toLowerCase().includes(searchQuery.toLowerCase()) ||
         booking.user?.toLowerCase().includes(searchQuery.toLowerCase());
-      
+
       const matchesBuilding = selectedBuilding === "all" || booking.building === selectedBuilding;
-      
+
       // Date filtering
       let matchesDate = true;
       if (selectedDateRange !== "all") {
         const bookingDate = DateTime.fromFormat(booking.date, "LLLL d, yyyy");
         const today = DateTime.now().startOf('day');
-        
+
         if (selectedDateRange === "today") {
           matchesDate = bookingDate.hasSame(today, 'day');
         } else if (selectedDateRange === "week") {
@@ -194,12 +225,12 @@ function ManageBookings() {
           matchesDate = bookingDate.hasSame(today, 'month');
         }
       }
-      
+
       // Status filtering (only applies to bookings tab)
-      const matchesStatus = 
-        selectedStatus === "all" || 
+      const matchesStatus =
+        selectedStatus === "all" ||
         booking.status?.toLowerCase() === selectedStatus;
-      
+
       return matchesSearch && matchesBuilding && matchesDate && matchesStatus;
     });
   };
@@ -337,8 +368,8 @@ function ManageBookings() {
           ) : currentData.length === 0 ? (
             <div className="col-span-3 text-center py-10">
               <p className="text-gray-300">
-                {activeTab === "requests" 
-                  ? "No pending booking requests found." 
+                {activeTab === "requests"
+                  ? "No pending booking requests found."
                   : "No approved bookings found."}
               </p>
             </div>
@@ -385,9 +416,9 @@ function ManageBookings() {
                     )}
                   </div>
                 </div>
-                
+
                 <p className="text-gray-400 mt-1">{booking.building}</p>
-                
+
                 <div className="mt-3 space-y-2">
                   <div className="flex items-center">
                     <Clock className="h-4 w-4 text-gray-400 mr-2" />
@@ -409,7 +440,7 @@ function ManageBookings() {
                     </span>
                   </div>
                 </div>
-                
+
                 {booking.purpose && (
                   <div className="mt-3 border-t border-gray-700 pt-2">
                     <p className="text-sm text-gray-300">
@@ -417,7 +448,7 @@ function ManageBookings() {
                     </p>
                   </div>
                 )}
-                
+
                 {booking.status && (
                   <div className="mt-3">
                     <span className="inline-block px-2 py-1 bg-green-900/30 text-green-400 text-xs rounded-full">

@@ -74,7 +74,7 @@ function ManageRooms() {
 
     const startPolling = () => {
       fetchRooms(); // Initial fetch
-      intervalId = setInterval(fetchRooms, 6000); // Every minute
+      intervalId = setInterval(fetchRooms, 60000); // Every minute
     };
 
     const stopPolling = () => {
@@ -270,7 +270,7 @@ function ManageRooms() {
                   </div>
                 </div>
               </div>
-              
+
               <div className="space-y-4">
                 <div className="flex items-center space-x-3 text-gray-300">
                   <Users size={20} />
@@ -325,8 +325,8 @@ function ManageRooms() {
                 <button
                   type="button"
                   className={`px-4 py-2 ${
-                    amenities.includes("wifi") 
-                      ? "bg-plek-purple" 
+                    amenities.includes("wifi")
+                      ? "bg-plek-purple"
                       : "bg-plek-lightgray"
                   } rounded-lg flex items-center space-x-2 transition-colors`}
                   onClick={() => toggleAmenity("wifi")}

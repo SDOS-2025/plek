@@ -16,7 +16,7 @@ from .models import Room
 class RoomSerializer(serializers.ModelSerializer):
     # Use a nested serializer defined with just the model name to avoid circular imports
     bookings = serializers.SerializerMethodField(required=False, read_only=True)
-    
+
     class Meta:
         model = Room
         fields = [
@@ -54,8 +54,8 @@ class RoomSerializer(serializers.ModelSerializer):
         """
         # Only import BookingSerializer here to avoid circular import
         from bookings.serializers import BookingSerializer
-        
-        request = self.context.get('request')
+
+        request = self.context.get("request")
         if request:
             date = request.query_params.get("date")
             if date:

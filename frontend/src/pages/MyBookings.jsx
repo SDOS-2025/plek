@@ -12,7 +12,6 @@ import {
   Loader2
 } from "lucide-react";
 import api from "../api";
-// Import the ModifyBookingModal component
 import ModifyBookingModal from "../components/ModifyBooking";
 import NavBar from "../components/NavBar";
 import { DateTime } from "luxon";
@@ -26,74 +25,66 @@ function MyBookings() {
   const [previousBookings, setPreviousBookings] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  
-  const firstName = localStorage.getItem("FirstName");
 
   // Fetch bookings when component mounts
   useEffect(() => {
     const fetchBookings = async () => {
       try {
         setLoading(true);
-        
+
         // Make API call to get user's bookings
-        const response = await api.get("bookings/?all=false");
-        
+        const response = await api.get("/bookings/?all=false");
+
         // Process the response data
         const bookings = response.data;
         const now = DateTime.now().setZone("Asia/Kolkata").toJSDate();
-        
+
         // Split bookings into upcoming and previous
         const upcoming = [];
         const previous = [];
-        
+
         bookings.forEach(booking => {
-          const bookingDate = DateTime.fromFormat(
-            `${booking.date} ${booking.slot.split(" - ")[0]}`, 
-            "d MMMM yyyy h a", 
-            { zone: "Asia/Kolkata" }
-          ).toJSDate();
-          
-          if (bookingDate > now) {
-            upcoming.push(booking);
+          console.log("Booking:", booking);
+
+          // Parse the start_time from the API response
+          const startTime = DateTime.fromISO(booking.start_time, { zone: "Asia/Kolkata" });
+          const endTime = DateTime.fromISO(booking.end_time, { zone: "Asia/Kolkata" });
+
+          // Format date and time for display
+          const formattedDate = startTime.toFormat("LLLL d, yyyy");
+          const formattedTimeSlot = `${startTime.toFormat("h a")} - ${endTime.toFormat("h a")}`;
+
+          // Create a processed booking object with the required fields
+          const processedBooking = {
+            id: booking.id,
+            roomName: booking.room.name,
+            building: booking.room.building,
+            capacity: booking.room.capacity,
+            status: booking.status,
+            purpose: booking.purpose,
+            participants: booking.participants,
+            date: formattedDate,
+            slot: formattedTimeSlot,
+            startTime: startTime,
+            endTime: endTime,
+            amenities: booking.room.amenities,
+            // Add any other fields you need from the original booking
+            originalBooking: booking // Keep the original data for reference if needed
+          };
+
+          if (startTime.toJSDate() > now) {
+            upcoming.push(processedBooking);
           } else {
-            previous.push(booking);
+            previous.push(processedBooking);
           }
         });
-        
+
         // Sort upcoming bookings by date (closest first)
-        upcoming.sort((a, b) => {
-          const dateA = DateTime.fromFormat(
-            `${a.date} ${a.slot.split(" - ")[0]}`, 
-            "d MMMM yyyy h a", 
-            { zone: "Asia/Kolkata" }
-          );
-          
-          const dateB = DateTime.fromFormat(
-            `${b.date} ${b.slot.split(" - ")[0]}`, 
-            "d MMMM yyyy h a", 
-            { zone: "Asia/Kolkata" }
-          );
-          
-          return dateA - dateB;
-        });
-        
+        upcoming.sort((a, b) => a.startTime - b.startTime);
+
         // Sort previous bookings by date (most recent first)
-        previous.sort((a, b) => {
-          const dateA = DateTime.fromFormat(
-            `${a.date} ${a.slot.split(" - ")[0]}`, 
-            "d MMMM yyyy h a", 
-            { zone: "Asia/Kolkata" }
-          );
-          
-          const dateB = DateTime.fromFormat(
-            `${b.date} ${b.slot.split(" - ")[0]}`, 
-            "d MMMM yyyy h a", 
-            { zone: "Asia/Kolkata" }
-          );
-          
-          return dateB - dateA;
-        });
-        
+        previous.sort((a, b) => b.startTime - a.startTime);
+
         setUpcomingBookings(upcoming);
         setPreviousBookings(previous);
         setError(null);
@@ -104,7 +95,7 @@ function MyBookings() {
         setLoading(false);
       }
     };
-    
+
     fetchBookings();
   }, []);
 
@@ -115,11 +106,11 @@ function MyBookings() {
 
   const handleCancel = async (bookingId) => {
     try {
-      await api.delete(`bookings/delete/${bookingId}/`);
-      
+      await api.delete(`book/delete/${bookingId}/`);
+
       // Update the state to remove the canceled booking
       setUpcomingBookings(upcomingBookings.filter(booking => booking.id !== bookingId));
-      
+
       alert("Booking canceled successfully");
     } catch (err) {
       console.error("Error canceling booking:", err);
@@ -256,7 +247,7 @@ function MyBookings() {
                       <div className="flex justify-between items-start">
                         <div>
                           <h3 className="text-lg font-medium mb-2">
-                            Room: {booking.name}
+                            Room: {booking.roomName}
                           </h3>
                           <p className="text-gray-400">
                             Building: {booking.building}
