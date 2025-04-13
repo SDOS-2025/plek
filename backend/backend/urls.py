@@ -25,4 +25,6 @@ urlpatterns = [
     path("", include("rooms.urls")),
     path("", include("bookings.urls")),
     path("api/analytics/", include("analytics.urls")),
+    path("settings/", include("settings.urls")),
+
 ]
