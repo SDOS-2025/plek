@@ -11,6 +11,7 @@ import ManageBookings from "./pages/ManageBookings";
 import ManageRooms from "./pages/ManageRooms";
 import LandingPage from "./pages/LandingPage";
 import Analytics from "./pages/Analytics";
+import AdminLogin from "./pages/AdminLogin";
 
 function App() {
   return (
@@ -19,6 +20,7 @@ function App() {
       <Route path="/" element={<LandingPage />} />
       <Route path="/login" element={<Login />} />
       <Route path="/signup" element={<Signup />} />
+      <Route path="/admin-login" element={<AdminLogin />} />
 
       {/* Protected Routes */}
       <Route element={<ProtectedRoute />}>
