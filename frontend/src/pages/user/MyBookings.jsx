@@ -9,14 +9,13 @@ import {
   Wifi,
   X,
   Trash2,
-  Loader2
+  Loader2,
 } from "lucide-react";
-import api from "../api";
-// Import the ModifyBookingModal component
-import ModifyBookingModal from "../components/ModifyBooking";
-import NavBar from "../components/NavBar";
+import api from "../../api";
+import ModifyBookingModal from "../../components/ModifyBooking";
+import NavBar from "../../components/NavBar";
 import { DateTime } from "luxon";
-import Footer from "../components/Footer";
+import Footer from "../../components/Footer";
 
 function MyBookings() {
   const [activeTab, setActiveTab] = useState("upcoming");
@@ -26,7 +25,7 @@ function MyBookings() {
   const [previousBookings, setPreviousBookings] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  
+
   const firstName = localStorage.getItem("FirstName");
 
   // Fetch bookings when component mounts
@@ -34,66 +33,66 @@ function MyBookings() {
     const fetchBookings = async () => {
       try {
         setLoading(true);
-        
+
         // Make API call to get user's bookings
         const response = await api.get("bookings/?all=false");
-        
+
         // Process the response data
         const bookings = response.data;
         const now = DateTime.now().setZone("Asia/Kolkata").toJSDate();
-        
+
         // Split bookings into upcoming and previous
         const upcoming = [];
         const previous = [];
-        
-        bookings.forEach(booking => {
+
+        bookings.forEach((booking) => {
           const bookingDate = DateTime.fromFormat(
-            `${booking.date} ${booking.slot.split(" - ")[0]}`, 
-            "d MMMM yyyy h a", 
+            `${booking.date} ${booking.slot.split(" - ")[0]}`,
+            "d MMMM yyyy h a",
             { zone: "Asia/Kolkata" }
           ).toJSDate();
-          
+
           if (bookingDate > now) {
             upcoming.push(booking);
           } else {
             previous.push(booking);
           }
         });
-        
+
         // Sort upcoming bookings by date (closest first)
         upcoming.sort((a, b) => {
           const dateA = DateTime.fromFormat(
-            `${a.date} ${a.slot.split(" - ")[0]}`, 
-            "d MMMM yyyy h a", 
+            `${a.date} ${a.slot.split(" - ")[0]}`,
+            "d MMMM yyyy h a",
             { zone: "Asia/Kolkata" }
           );
-          
+
           const dateB = DateTime.fromFormat(
-            `${b.date} ${b.slot.split(" - ")[0]}`, 
-            "d MMMM yyyy h a", 
+            `${b.date} ${b.slot.split(" - ")[0]}`,
+            "d MMMM yyyy h a",
             { zone: "Asia/Kolkata" }
           );
-          
+
           return dateA - dateB;
         });
-        
+
         // Sort previous bookings by date (most recent first)
         previous.sort((a, b) => {
           const dateA = DateTime.fromFormat(
-            `${a.date} ${a.slot.split(" - ")[0]}`, 
-            "d MMMM yyyy h a", 
+            `${a.date} ${a.slot.split(" - ")[0]}`,
+            "d MMMM yyyy h a",
             { zone: "Asia/Kolkata" }
           );
-          
+
           const dateB = DateTime.fromFormat(
-            `${b.date} ${b.slot.split(" - ")[0]}`, 
-            "d MMMM yyyy h a", 
+            `${b.date} ${b.slot.split(" - ")[0]}`,
+            "d MMMM yyyy h a",
             { zone: "Asia/Kolkata" }
           );
-          
+
           return dateB - dateA;
         });
-        
+
         setUpcomingBookings(upcoming);
         setPreviousBookings(previous);
         setError(null);
@@ -104,7 +103,7 @@ function MyBookings() {
         setLoading(false);
       }
     };
-    
+
     fetchBookings();
   }, []);
 
@@ -116,10 +115,12 @@ function MyBookings() {
   const handleCancel = async (bookingId) => {
     try {
       await api.delete(`bookings/delete/${bookingId}/`);
-      
+
       // Update the state to remove the canceled booking
-      setUpcomingBookings(upcomingBookings.filter(booking => booking.id !== bookingId));
-      
+      setUpcomingBookings(
+        upcomingBookings.filter((booking) => booking.id !== bookingId)
+      );
+
       alert("Booking canceled successfully");
     } catch (err) {
       console.error("Error canceling booking:", err);
@@ -165,7 +166,10 @@ function MyBookings() {
           <div className="scrollable-area">
             {loading ? (
               <div className="flex flex-col items-center justify-center py-10">
-                <Loader2 size={40} className="animate-spin text-purple-500 mb-4" />
+                <Loader2
+                  size={40}
+                  className="animate-spin text-purple-500 mb-4"
+                />
                 <p className="text-gray-400">Loading your bookings...</p>
               </div>
             ) : error ? (
@@ -176,17 +180,17 @@ function MyBookings() {
               upcomingBookings.length === 0 ? (
                 <div className="text-center py-10 text-gray-400">
                   <p>You don't have any upcoming bookings.</p>
-                  <Link to="/booking" className="text-purple-400 hover:text-purple-300 mt-2 inline-block">
+                  <Link
+                    to="/booking"
+                    className="text-purple-400 hover:text-purple-300 mt-2 inline-block"
+                  >
                     Book a room now
                   </Link>
                 </div>
               ) : (
                 <div className="space-y-4">
                   {upcomingBookings.map((booking) => (
-                    <div
-                      key={booking.id}
-                      className="section-card"
-                    >
+                    <div key={booking.id} className="section-card">
                       <div className="flex justify-between items-start">
                         <div>
                           <h3 className="text-lg font-medium mb-2">
@@ -241,56 +245,51 @@ function MyBookings() {
                   ))}
                 </div>
               )
+            ) : previousBookings.length === 0 ? (
+              <div className="text-center py-10 text-gray-400">
+                <p>No previous bookings found.</p>
+              </div>
             ) : (
-              previousBookings.length === 0 ? (
-                <div className="text-center py-10 text-gray-400">
-                  <p>No previous bookings found.</p>
-                </div>
-              ) : (
-                <div className="space-y-4">
-                  {previousBookings.map((booking) => (
-                    <div
-                      key={booking.id}
-                      className="section-card"
-                    >
-                      <div className="flex justify-between items-start">
-                        <div>
-                          <h3 className="text-lg font-medium mb-2">
-                            Room: {booking.name}
-                          </h3>
-                          <p className="text-gray-400">
-                            Building: {booking.building}
-                          </p>
-                          <div className="mt-4 space-y-2">
-                            {/* Updated date and time display */}
-                            <div className="flex items-center space-x-2 text-gray-300">
-                              <CalendarDays size={16} />
-                              <span>{booking.date}</span>
-                            </div>
-                            <div className="flex items-center space-x-2 text-gray-300">
-                              <CalendarClock size={16} />
-                              <span>{booking.slot}</span>
-                            </div>
-                            <div className="flex items-center space-x-2 text-gray-300">
-                              <Users size={16} />
-                              <span>Capacity: {booking.capacity}</span>
-                            </div>
-                            <p
-                              className={`flex items-center space-x-2 ${
-                                booking.status.toLowerCase() === "completed"
-                                  ? "text-green-400"
-                                  : "text-red-400"
-                              }`}
-                            >
-                              <span>Status: {booking.status}</span>
-                            </p>
+              <div className="space-y-4">
+                {previousBookings.map((booking) => (
+                  <div key={booking.id} className="section-card">
+                    <div className="flex justify-between items-start">
+                      <div>
+                        <h3 className="text-lg font-medium mb-2">
+                          Room: {booking.name}
+                        </h3>
+                        <p className="text-gray-400">
+                          Building: {booking.building}
+                        </p>
+                        <div className="mt-4 space-y-2">
+                          {/* Updated date and time display */}
+                          <div className="flex items-center space-x-2 text-gray-300">
+                            <CalendarDays size={16} />
+                            <span>{booking.date}</span>
                           </div>
+                          <div className="flex items-center space-x-2 text-gray-300">
+                            <CalendarClock size={16} />
+                            <span>{booking.slot}</span>
+                          </div>
+                          <div className="flex items-center space-x-2 text-gray-300">
+                            <Users size={16} />
+                            <span>Capacity: {booking.capacity}</span>
+                          </div>
+                          <p
+                            className={`flex items-center space-x-2 ${
+                              booking.status.toLowerCase() === "completed"
+                                ? "text-green-400"
+                                : "text-red-400"
+                            }`}
+                          >
+                            <span>Status: {booking.status}</span>
+                          </p>
                         </div>
                       </div>
                     </div>
-                  ))}
-                </div>
-              )
+                  </div>
+                ))}
+              </div>
             )}
           </div>
         </div>

@@ -14,9 +14,32 @@ const NavBar = ({ activePage }) => {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
   const location = useLocation();
+  const path = location.pathname;
+  
+  // Extract the current page from URL, handling both admin and user routes
+  const currentPageFromPath = path.split("/").filter(Boolean).pop(); // get last segment
 
-  // Set active page based on location if not provided as prop
-  const currentPage = activePage || location.pathname.substring(1);
+  // Set active page from prop or derive from path
+  const currentPage = activePage || currentPageFromPath || "";
+
+  // Check if the user is an admin - improved detection with multiple approaches
+  console.log("User object in NavBar:", user);
+  
+  // Method 1: Check user object properties that might indicate admin status
+  const isAdminByProps = user?.is_staff || 
+                         user?.isAdmin || 
+                         user?.is_admin || 
+                         user?.admin ||
+                         user?.role === 'admin' || 
+                         user?.user_type === 'admin';
+                         
+  // Method 2: Check if the current URL is in the admin section
+  const isAdminByPath = path.includes('/admin/');
+  
+  // Use either method to determine admin status
+  const isAdmin = isAdminByProps || isAdminByPath || false;
+  
+  console.log("Admin detection - By props:", isAdminByProps, "By path:", isAdminByPath, "Final decision:", isAdmin);
 
   // Handle scroll event for navbar transparency effect
   useEffect(() => {
@@ -36,23 +59,30 @@ const NavBar = ({ activePage }) => {
     setMobileMenuOpen(!mobileMenuOpen);
   };
 
-  const navLinks = [
+  // User navigation links
+  const userNavLinks = [
     { name: "Dashboard", path: "/dashboard", id: "dashboard" },
-    {
-      name: "Admin Dashboard",
-      path: "/admin-dashboard",
-      id: "admin-dashboard",
-    },
     { name: "Book a Room", path: "/booking", id: "booking" },
     { name: "My Bookings", path: "/my-bookings", id: "my-bookings" },
+  ];
+
+  // Admin navigation links
+  const adminNavLinks = [
+    { name: "Dashboard", path: "/admin/dashboard", id: "dashboard" },
     {
       name: "Manage Bookings",
-      path: "/manage-bookings",
+      path: "/admin/manage-bookings",
       id: "manage-bookings",
     },
-    { name: "Manage Rooms", path: "/manage-rooms", id: "manage-rooms" },
-    { name: "Analytics", path: "/analytics", id: "analytics" },
+    { name: "Manage Rooms", path: "/admin/manage-rooms", id: "manage-rooms" },
+    { name: "Analytics", path: "/admin/analytics", id: "analytics" },
   ];
+
+  // Select the appropriate navigation links based on user role
+  const navLinks = isAdmin ? adminNavLinks : userNavLinks;
+
+  // Determine the dashboard link based on user role
+  const dashboardLink = isAdmin ? "/admin/dashboard" : "/dashboard";
 
   return (
     <nav
@@ -64,26 +94,44 @@ const NavBar = ({ activePage }) => {
         <div className="flex items-center justify-between h-16">
           {/* Logo and desktop navigation */}
           <div className="flex items-center">
-            <Link to="/dashboard" className="flex items-center">
-              <span className="text-xl font-bold text-plek-purple">Plek</span>
+            <Link to={dashboardLink} className="flex items-center">
+              <span className="text-xl font-bold text-plek-purple">
+                {isAdmin ? "Plek Admin" : "Plek"}
+              </span>
             </Link>
 
             {/* Desktop menu */}
             <div className="hidden md:block ml-10">
               <div className="flex items-center space-x-6">
-                {navLinks.map((link) => (
-                  <Link
-                    key={link.id}
-                    to={link.path}
-                    className={`${
-                      currentPage === link.id
-                        ? "text-plek-purple border-b-2 border-plek-purple font-medium"
-                        : "text-gray-400 hover:text-gray-200"
-                    } px-1 py-2 transition-all duration-200 text-sm font-medium`}
-                  >
-                    {link.name}
-                  </Link>
-                ))}
+                {navLinks.map((link) => {
+                  // Extract the ID from path for comparison with current page
+                  const linkId = link.path.split("/").filter(Boolean).pop();
+                  
+                  // Special case for dashboard paths
+                  const isDashboard = 
+                    (link.id === "dashboard" && path === "/dashboard") || 
+                    (link.id === "dashboard" && path === "/admin/dashboard");
+                  
+                  // Check for active page
+                  const isActive = 
+                    isDashboard || 
+                    currentPage === linkId || 
+                    currentPage === link.id;
+
+                  return (
+                    <Link
+                      key={link.id}
+                      to={link.path}
+                      className={`${
+                        isActive
+                          ? "text-plek-purple border-b-2 border-plek-purple font-medium"
+                          : "text-gray-400 hover:text-gray-200"
+                      } px-1 py-2 transition-all duration-200 text-sm font-medium`}
+                    >
+                      {link.name}
+                    </Link>
+                  );
+                })}
               </div>
             </div>
           </div>
@@ -114,20 +162,36 @@ const NavBar = ({ activePage }) => {
       {/* Mobile menu */}
       <div className={`${mobileMenuOpen ? "block" : "hidden"} md:hidden`}>
         <div className="px-2 pt-2 pb-3 space-y-1 sm:px-3 bg-plek-dark border-t border-gray-800">
-          {navLinks.map((link) => (
-            <Link
-              key={link.id}
-              to={link.path}
-              className={`${
-                currentPage === link.id
-                  ? "bg-plek-lightgray text-white"
-                  : "text-gray-400 hover:bg-plek-hover hover:text-white"
-              } block px-3 py-2 rounded-md text-base font-medium transition-colors duration-200`}
-              onClick={() => setMobileMenuOpen(false)}
-            >
-              {link.name}
-            </Link>
-          ))}
+          {navLinks.map((link) => {
+            // Extract the ID from path for comparison with current page
+            const linkId = link.path.split("/").filter(Boolean).pop();
+            
+            // Special case for dashboard paths
+            const isDashboard = 
+              (link.id === "dashboard" && path === "/dashboard") || 
+              (link.id === "dashboard" && path === "/admin/dashboard");
+            
+            // Check for active page
+            const isActive = 
+              isDashboard || 
+              currentPage === linkId || 
+              currentPage === link.id;
+
+            return (
+              <Link
+                key={link.id}
+                to={link.path}
+                className={`${
+                  isActive
+                    ? "bg-plek-lightgray text-white"
+                    : "text-gray-400 hover:bg-plek-hover hover:text-white"
+                } block px-3 py-2 rounded-md text-base font-medium transition-colors duration-200`}
+                onClick={() => setMobileMenuOpen(false)}
+              >
+                {link.name}
+              </Link>
+            );
+          })}
         </div>
       </div>
     </nav>

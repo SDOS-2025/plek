@@ -10,10 +10,10 @@ import {
   Users,
 } from "lucide-react";
 import { Link } from "react-router-dom";
-import BookingModal from "../components/ConfirmBooking";
-import api from "../api";
-import NavBar from "../components/NavBar";
-import Footer from "../components/Footer";
+import BookingModal from "../../components/ConfirmBooking";
+import api from "../../api";
+import NavBar from "../../components/NavBar";
+import Footer from "../../components/Footer";
 
 function Booking() {
   const [searchQuery, setSearchQuery] = useState("");
@@ -124,10 +124,7 @@ function Booking() {
       selectedAmenities.every((amenity) => room.amenities.includes(amenity));
 
     return (
-      matchesSearch &&
-      matchesBuilding &&
-      matchesCapacity &&
-      matchesAmenities
+      matchesSearch && matchesBuilding && matchesCapacity && matchesAmenities
     );
   });
 
@@ -246,7 +243,9 @@ function Booking() {
             </div>
           ) : filteredRooms.length === 0 ? (
             <div className="col-span-3 text-center py-10">
-              <p className="text-gray-300">No rooms match your search criteria.</p>
+              <p className="text-gray-300">
+                No rooms match your search criteria.
+              </p>
             </div>
           ) : (
             filteredRooms.map((room) => (
@@ -255,11 +254,15 @@ function Booking() {
                 <div className="mt-3 space-y-2">
                   <div className="flex items-center">
                     <Building2 className="h-4 w-4 text-gray-400 mr-2" />
-                    <span className="text-sm text-gray-300">{room.building}</span>
+                    <span className="text-sm text-gray-300">
+                      {room.building}
+                    </span>
                   </div>
                   <div className="flex items-center">
                     <Users className="h-4 w-4 text-gray-400 mr-2" />
-                    <span className="text-sm text-gray-300">Capacity: {room.capacity}</span>
+                    <span className="text-sm text-gray-300">
+                      Capacity: {room.capacity}
+                    </span>
                   </div>
                   <div className="flex space-x-2 mt-2">
                     {room.amenities?.includes("projector") && (

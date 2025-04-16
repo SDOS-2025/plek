@@ -11,14 +11,14 @@ import {
   Building2,
   Plus,
   Pencil,
-  Trash2
+  Trash2,
 } from "lucide-react";
-import api from "../api";
+import api from "../../api";
 import { DateTime } from "luxon";
-import ModifyBookingModal from "../components/ModifyBooking";
-import NavBar from "../components/NavBar";
-import Footer from "../components/Footer";
-import Toast, { DeleteConfirmation } from "../components/AlertToast";
+import ModifyBookingModal from "../../components/ModifyBooking";
+import NavBar from "../../components/NavBar";
+import Footer from "../../components/Footer";
+import Toast, { DeleteConfirmation } from "../../components/AlertToast";
 
 function ManageBookings() {
   const [activeTab, setActiveTab] = useState("requests");
@@ -37,12 +37,12 @@ function ManageBookings() {
   });
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [bookingToDelete, setBookingToDelete] = useState(null);
-  
+
   // Filter states
   const [selectedBuilding, setSelectedBuilding] = useState("all");
   const [selectedDateRange, setSelectedDateRange] = useState("all");
   const [selectedStatus, setSelectedStatus] = useState("all");
-  
+
   const firstName = localStorage.getItem("FirstName");
 
   const showAlert = (type, message) => {
@@ -58,13 +58,13 @@ function ManageBookings() {
     const fetchBookings = async () => {
       try {
         setLoading(true);
-        
+
         // For pending requests
         const requestsResponse = await api.get("/book/pending/");
-        
+
         // For approved bookings
         const bookingsResponse = await api.get("/book/approved/");
-        
+
         setBookingRequests(requestsResponse.data || []);
         setApprovedBookings(bookingsResponse.data || []);
         setError(null);
@@ -75,14 +75,14 @@ function ManageBookings() {
         setLoading(false);
       }
     };
-    
+
     fetchBookings();
-    
+
     // Refresh data every 2 minutes
     const intervalId = setInterval(() => {
       fetchBookings();
     }, 120000);
-    
+
     return () => clearInterval(intervalId);
   }, []);
 
@@ -94,19 +94,23 @@ function ManageBookings() {
   const handleApprove = async (bookingId) => {
     try {
       const response = await api.put(`/book/approve/${bookingId}/`);
-      
+
       if (response.status === 200) {
         // Update local state
-        const updatedRequests = bookingRequests.filter(req => req.id !== bookingId);
-        const approvedBooking = bookingRequests.find(req => req.id === bookingId);
-        
+        const updatedRequests = bookingRequests.filter(
+          (req) => req.id !== bookingId
+        );
+        const approvedBooking = bookingRequests.find(
+          (req) => req.id === bookingId
+        );
+
         if (approvedBooking) {
           approvedBooking.status = "approved";
           setApprovedBookings([...approvedBookings, approvedBooking]);
         }
-        
+
         setBookingRequests(updatedRequests);
-        
+
         // Show success alert
         showAlert("success", "Booking request approved successfully!");
       }
@@ -123,18 +127,22 @@ function ManageBookings() {
 
   const confirmDelete = async () => {
     if (!bookingToDelete) return;
-    
+
     try {
       const response = await api.delete(`/book/delete/${bookingToDelete}/`);
-      
+
       if (response.status === 200 || response.status === 204) {
         // Update local state
-        const updatedRequests = bookingRequests.filter(req => req.id !== bookingToDelete);
-        const updatedApproved = approvedBookings.filter(booking => booking.id !== bookingToDelete);
-        
+        const updatedRequests = bookingRequests.filter(
+          (req) => req.id !== bookingToDelete
+        );
+        const updatedApproved = approvedBookings.filter(
+          (booking) => booking.id !== bookingToDelete
+        );
+
         setBookingRequests(updatedRequests);
         setApprovedBookings(updatedApproved);
-        
+
         // Show success alert
         showAlert("success", "Booking cancelled successfully!");
       }
@@ -148,10 +156,13 @@ function ManageBookings() {
   };
 
   // Extract unique buildings for filter dropdown
-  const buildings = ["all", ...new Set([
-    ...bookingRequests.map(booking => booking.building),
-    ...approvedBookings.map(booking => booking.building)
-  ])];
+  const buildings = [
+    "all",
+    ...new Set([
+      ...bookingRequests.map((booking) => booking.building),
+      ...approvedBookings.map((booking) => booking.building),
+    ]),
+  ];
 
   // Date range options for filter
   const dateRanges = [
@@ -170,36 +181,37 @@ function ManageBookings() {
 
   // Filter bookings based on search query and filters
   const filterBookings = (bookings) => {
-    return bookings.filter(booking => {
-      const matchesSearch = 
+    return bookings.filter((booking) => {
+      const matchesSearch =
         booking.room?.toLowerCase().includes(searchQuery.toLowerCase()) ||
         booking.building?.toLowerCase().includes(searchQuery.toLowerCase()) ||
         booking.user?.toLowerCase().includes(searchQuery.toLowerCase());
-      
-      const matchesBuilding = selectedBuilding === "all" || booking.building === selectedBuilding;
-      
+
+      const matchesBuilding =
+        selectedBuilding === "all" || booking.building === selectedBuilding;
+
       // Date filtering
       let matchesDate = true;
       if (selectedDateRange !== "all") {
         const bookingDate = DateTime.fromFormat(booking.date, "LLLL d, yyyy");
-        const today = DateTime.now().startOf('day');
-        
+        const today = DateTime.now().startOf("day");
+
         if (selectedDateRange === "today") {
-          matchesDate = bookingDate.hasSame(today, 'day');
+          matchesDate = bookingDate.hasSame(today, "day");
         } else if (selectedDateRange === "week") {
-          const startOfWeek = today.startOf('week');
-          const endOfWeek = today.endOf('week');
+          const startOfWeek = today.startOf("week");
+          const endOfWeek = today.endOf("week");
           matchesDate = bookingDate >= startOfWeek && bookingDate <= endOfWeek;
         } else if (selectedDateRange === "month") {
-          matchesDate = bookingDate.hasSame(today, 'month');
+          matchesDate = bookingDate.hasSame(today, "month");
         }
       }
-      
+
       // Status filtering (only applies to bookings tab)
-      const matchesStatus = 
-        selectedStatus === "all" || 
+      const matchesStatus =
+        selectedStatus === "all" ||
         booking.status?.toLowerCase() === selectedStatus;
-      
+
       return matchesSearch && matchesBuilding && matchesDate && matchesStatus;
     });
   };
@@ -208,7 +220,8 @@ function ManageBookings() {
   const filteredBookings = filterBookings(approvedBookings);
 
   // Get current data based on active tab
-  const currentData = activeTab === "requests" ? filteredRequests : filteredBookings;
+  const currentData =
+    activeTab === "requests" ? filteredRequests : filteredBookings;
 
   return (
     <div className="page-container">
@@ -337,8 +350,8 @@ function ManageBookings() {
           ) : currentData.length === 0 ? (
             <div className="col-span-3 text-center py-10">
               <p className="text-gray-300">
-                {activeTab === "requests" 
-                  ? "No pending booking requests found." 
+                {activeTab === "requests"
+                  ? "No pending booking requests found."
                   : "No approved bookings found."}
               </p>
             </div>
@@ -346,7 +359,9 @@ function ManageBookings() {
             currentData.map((booking) => (
               <div key={booking.id} className="section-card">
                 <div className="flex justify-between items-start">
-                  <h3 className="text-xl font-semibold">Room: {booking.room}</h3>
+                  <h3 className="text-xl font-semibold">
+                    Room: {booking.room}
+                  </h3>
                   <div className="flex space-x-2">
                     {activeTab === "requests" ? (
                       <>
@@ -385,39 +400,48 @@ function ManageBookings() {
                     )}
                   </div>
                 </div>
-                
+
                 <p className="text-gray-400 mt-1">{booking.building}</p>
-                
+
                 <div className="mt-3 space-y-2">
                   <div className="flex items-center">
                     <Clock className="h-4 w-4 text-gray-400 mr-2" />
-                    <span className="text-sm text-gray-300">{booking.slot}</span>
+                    <span className="text-sm text-gray-300">
+                      {booking.slot}
+                    </span>
                   </div>
                   <div className="flex items-center">
                     <Calendar className="h-4 w-4 text-gray-400 mr-2" />
-                    <span className="text-sm text-gray-300">{booking.date}</span>
+                    <span className="text-sm text-gray-300">
+                      {booking.date}
+                    </span>
                   </div>
                   <div className="flex items-center">
                     <Users className="h-4 w-4 text-gray-400 mr-2" />
-                    <span className="text-sm text-gray-300">Capacity: {booking.capacity}</span>
+                    <span className="text-sm text-gray-300">
+                      Capacity: {booking.capacity}
+                    </span>
                   </div>
                   <div className="flex items-center">
                     <Building2 className="h-4 w-4 text-gray-400 mr-2" />
                     <span className="text-sm text-gray-300">
-                      {activeTab === "requests" ? "Requested by: " : "Booked by: "}
+                      {activeTab === "requests"
+                        ? "Requested by: "
+                        : "Booked by: "}
                       {booking.user}
                     </span>
                   </div>
                 </div>
-                
+
                 {booking.purpose && (
                   <div className="mt-3 border-t border-gray-700 pt-2">
                     <p className="text-sm text-gray-300">
-                      <span className="text-gray-400">Purpose:</span> {booking.purpose}
+                      <span className="text-gray-400">Purpose:</span>{" "}
+                      {booking.purpose}
                     </p>
                   </div>
                 )}
-                
+
                 {booking.status && (
                   <div className="mt-3">
                     <span className="inline-block px-2 py-1 bg-green-900/30 text-green-400 text-xs rounded-full">

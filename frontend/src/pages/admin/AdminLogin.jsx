@@ -1,20 +1,19 @@
 import React, { useState, useContext, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import api from "../api";
-import { AuthContext } from "../context/AuthProvider";
-import Footer from "../components/Footer";
+import api from "../../api";
+import { AuthContext } from "../../context/AuthProvider";
+import Footer from "../../components/Footer";
 
-export default function Login() {
+export default function AdminLogin() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const navigate = useNavigate();
   const { user, login, loading } = useContext(AuthContext);
 
-  // Navigate to dashboard when user is authenticated
   useEffect(() => {
     if (user && !loading) {
-      navigate("/dashboard");
+      navigate("/admin/dashboard");
     }
   }, [user, loading, navigate]);
 
@@ -28,16 +27,12 @@ export default function Login() {
     }
 
     try {
-      console.log("Sending login request with email:", email);
-      const response = await login({ email, password });
-      console.log("Login response:", response);
-
+      const response = await login({ email, password, isAdmin: true });
     } catch (err) {
-      console.error("Login error:", err.response?.data || err.message);
       setError(
         err.response?.data?.non_field_errors?.[0] ||
-        err.response?.data?.email?.[0] ||
-        "Invalid email or password"
+          err.response?.data?.email?.[0] ||
+          "Invalid email or password"
       );
     }
   };
@@ -52,12 +47,14 @@ export default function Login() {
         <div className="w-full max-w-md">
           <div className="mb-12 flex justify-center">
             <Link to="/">
-              <h1 className="text-5xl font-bold text-plek-purple">Plek</h1>
+              <h1 className="text-5xl font-bold text-plek-purple">
+                Plek Admin
+              </h1>
             </Link>
           </div>
 
           <div className="section-card">
-            <h2 className="card-header text-center">Welcome Back</h2>
+            <h2 className="card-header text-center">Admin Login</h2>
             {error && (
               <div className="mb-6 p-3 bg-red-900/50 border border-red-500 rounded-lg text-red-200">
                 {error}
@@ -72,7 +69,7 @@ export default function Login() {
                   type="email"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  placeholder="name@example.com"
+                  placeholder="admin@example.com"
                   className="w-full p-3 rounded bg-plek-lightgray border border-gray-700 text-white placeholder-gray-400 focus:outline-none focus:border-plek-purple"
                   required
                 />
@@ -83,12 +80,6 @@ export default function Login() {
                   <label className="block text-sm font-medium text-gray-300">
                     Password
                   </label>
-                  <Link
-                    to="/forgot-password"
-                    className="text-xs text-plek-purple hover:text-purple-400"
-                  >
-                    Forgot password?
-                  </Link>
                 </div>
                 <input
                   type="password"
@@ -104,7 +95,7 @@ export default function Login() {
                 type="submit"
                 className="w-full bg-plek-purple hover:bg-purple-700 text-white font-bold py-3 px-4 rounded transition-colors"
               >
-                Sign in
+                Sign in as Admin
               </button>
 
               <div className="relative my-6">
@@ -112,7 +103,9 @@ export default function Login() {
                   <div className="w-full border-t border-gray-700"></div>
                 </div>
                 <div className="relative flex justify-center text-sm">
-                  <span className="px-2 bg-plek-dark text-gray-400">Or continue with</span>
+                  <span className="px-2 bg-plek-dark text-gray-400">
+                    Or continue with
+                  </span>
                 </div>
               </div>
 
@@ -129,13 +122,6 @@ export default function Login() {
                 Sign in with Google
               </button>
             </form>
-
-            <div className="mt-6 text-center text-sm text-gray-400">
-              Don't have an account?{" "}
-              <Link to="/signup" className="text-plek-purple hover:text-purple-400 font-medium">
-                Sign up
-              </Link>
-            </div>
           </div>
         </div>
       </div>

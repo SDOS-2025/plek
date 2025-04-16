@@ -23,12 +23,12 @@ import {
   ClipboardCheck,
 } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
-import BookingModal from "../components/ConfirmBooking";
-import ModifyBookingModal from "../components/ModifyBooking";
-import api from "../api";
-import { AuthContext } from "../context/AuthProvider";
-import NavBar from "../components/NavBar";
-import Footer from "../components/Footer";
+import BookingModal from "../../components/ConfirmBooking";
+import ModifyBookingModal from "../../components/ModifyBooking";
+import api from "../../api";
+import { AuthContext } from "../../context/AuthProvider";
+import NavBar from "../../components/NavBar";
+import Footer from "../../components/Footer";
 import { DateTime } from "luxon";
 
 function Dashboard() {
@@ -129,11 +129,11 @@ function Dashboard() {
   };
 
   const handleViewAllBookings = () => {
-    navigate("/manage-bookings");
+    navigate("/admin/manage-bookings");
   };
 
   const handleViewAllRooms = () => {
-    navigate("/manage-rooms");
+    navigate("/admin/manage-rooms");
   };
 
   return (
@@ -324,7 +324,7 @@ function Dashboard() {
                 </div>
               ))}
             </div>
-            
+
             {/* Removed "View All Notifications" button */}
           </div>
         </div>
@@ -342,7 +342,7 @@ function Dashboard() {
 
               <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                 <Link
-                  to="/settings"
+                  to="/admin/settings"
                   className="p-6 bg-plek-lightgray rounded-lg hover:bg-gray-700 transition-colors"
                 >
                   <div className="flex items-center mb-2">
@@ -355,7 +355,7 @@ function Dashboard() {
                 </Link>
 
                 <Link
-                  to="/policies"
+                  to="/admin/policies"
                   className="p-6 bg-plek-lightgray rounded-lg hover:bg-gray-700 transition-colors"
                 >
                   <div className="flex items-center mb-2">
@@ -368,7 +368,7 @@ function Dashboard() {
                 </Link>
 
                 <Link
-                  to="/conflicts"
+                  to="/admin/conflicts"
                   className="p-6 bg-plek-lightgray rounded-lg hover:bg-gray-700 transition-colors"
                 >
                   <div className="flex items-center mb-2">

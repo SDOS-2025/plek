@@ -14,12 +14,12 @@ import {
   Trash2,
 } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
-import BookingModal from "../components/ConfirmBooking";
-import ModifyBookingModal from "../components/ModifyBooking";
-import api from "../api";
-import { AuthContext } from "../context/AuthProvider";
-import NavBar from "../components/NavBar";
-import Footer from "../components/Footer";
+import BookingModal from "../../components/ConfirmBooking";
+import ModifyBookingModal from "../../components/ModifyBooking";
+import api from "../../api";
+import { AuthContext } from "../../context/AuthProvider";
+import NavBar from "../../components/NavBar";
+import Footer from "../../components/Footer";
 
 function Dashboard() {
   const { user, logout } = useContext(AuthContext);
@@ -68,7 +68,7 @@ function Dashboard() {
     setSelectedRoom(room);
     setShowBookingModal(true);
   };
-  
+
   const handleModifyClick = (booking) => {
     setSelectedBooking(booking);
     setShowModifyModal(true);

@@ -1,8 +1,8 @@
 import React, { useState, useContext, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import api from "../api";
-import { AuthContext } from "../context/AuthProvider";
-import Footer from "../components/Footer";
+import api from "../../api";
+import { AuthContext } from "../../context/AuthProvider";
+import Footer from "../../components/Footer";
 
 export default function Signup() {
   const [firstName, setFirstName] = useState("");
@@ -36,7 +36,12 @@ export default function Signup() {
     }
 
     try {
-      console.log("Sending signup request:", { firstName, lastName, email, password });
+      console.log("Sending signup request:", {
+        firstName,
+        lastName,
+        email,
+        password,
+      });
       const response = await api.post(
         "/api/auth/register/",
         {
@@ -50,8 +55,7 @@ export default function Signup() {
         { withCredentials: true }
       );
       console.log("Signup response:", response.data);
-      await login({email, password}); // Login after signup
-
+      await login({ email, password }); // Login after signup
     } catch (err) {
       console.error("Signup error:", err.response?.data || err.message);
       const errorMsg =
@@ -78,13 +82,13 @@ export default function Signup() {
 
           <div className="section-card">
             <h2 className="card-header text-center">Create Your Account</h2>
-            
+
             {error && (
               <div className="mb-6 p-3 bg-red-900/50 border border-red-500 rounded-lg text-red-200">
                 {error}
               </div>
             )}
-            
+
             <form onSubmit={handleSubmit} className="space-y-6">
               <div className="grid grid-cols-2 gap-4">
                 <div>
@@ -114,7 +118,7 @@ export default function Signup() {
                   />
                 </div>
               </div>
-              
+
               <div>
                 <label className="block text-sm font-medium text-gray-300 mb-1">
                   Email Address
@@ -128,7 +132,7 @@ export default function Signup() {
                   required
                 />
               </div>
-              
+
               <div>
                 <label className="block text-sm font-medium text-gray-300 mb-1">
                   Password
@@ -142,7 +146,7 @@ export default function Signup() {
                   required
                 />
               </div>
-              
+
               <div>
                 <label className="block text-sm font-medium text-gray-300 mb-1">
                   Confirm Password
@@ -156,23 +160,25 @@ export default function Signup() {
                   required
                 />
               </div>
-              
+
               <button
                 type="submit"
                 className="w-full bg-plek-purple hover:bg-purple-700 text-white font-bold py-3 px-4 rounded transition-colors"
               >
                 Create account
               </button>
-              
+
               <div className="relative my-6">
                 <div className="absolute inset-0 flex items-center">
                   <div className="w-full border-t border-gray-700"></div>
                 </div>
                 <div className="relative flex justify-center text-sm">
-                  <span className="px-2 bg-plek-dark text-gray-400">Or continue with</span>
+                  <span className="px-2 bg-plek-dark text-gray-400">
+                    Or continue with
+                  </span>
                 </div>
               </div>
-              
+
               <button
                 type="button"
                 onClick={handleGoogleSignup}
@@ -189,7 +195,10 @@ export default function Signup() {
 
             <div className="mt-6 text-center text-sm text-gray-400">
               Already have an account?{" "}
-              <Link to="/login" className="text-plek-purple hover:text-purple-400 font-medium">
+              <Link
+                to="/login"
+                className="text-plek-purple hover:text-purple-400 font-medium"
+              >
                 Sign in
               </Link>
             </div>

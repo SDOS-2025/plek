@@ -1,4 +1,10 @@
-import React, { useState, useMemo, useEffect, useContext, useCallback } from "react";
+import React, {
+  useState,
+  useMemo,
+  useEffect,
+  useContext,
+  useCallback,
+} from "react";
 import PropTypes from "prop-types";
 import {
   Search,
@@ -14,11 +20,11 @@ import {
   Users,
 } from "lucide-react";
 import { Link } from "react-router-dom";
-import api from "../api"; // Adjust the import path as needed
-import { AuthContext } from "../context/AuthProvider";
-import Toast, { DeleteConfirmation } from "../components/AlertToast";
-import NavBar from "../components/NavBar";
-import Footer from "../components/Footer";
+import api from "../../api"; // Adjust the import path as needed
+import { AuthContext } from "../../context/AuthProvider";
+import Toast, { DeleteConfirmation } from "../../components/AlertToast";
+import NavBar from "../../components/NavBar";
+import Footer from "../../components/Footer";
 
 function ManageRooms() {
   const { user } = useContext(AuthContext);
@@ -270,7 +276,7 @@ function ManageRooms() {
                   </div>
                 </div>
               </div>
-              
+
               <div className="space-y-4">
                 <div className="flex items-center space-x-3 text-gray-300">
                   <Users size={20} />
@@ -325,8 +331,8 @@ function ManageRooms() {
                 <button
                   type="button"
                   className={`px-4 py-2 ${
-                    amenities.includes("wifi") 
-                      ? "bg-plek-purple" 
+                    amenities.includes("wifi")
+                      ? "bg-plek-purple"
                       : "bg-plek-lightgray"
                   } rounded-lg flex items-center space-x-2 transition-colors`}
                   onClick={() => toggleAmenity("wifi")}
@@ -480,14 +486,13 @@ function ManageRooms() {
             </div>
           ) : filteredRooms.length === 0 ? (
             <div className="col-span-3 text-center py-10">
-              <p className="text-gray-300">No rooms match your search criteria.</p>
+              <p className="text-gray-300">
+                No rooms match your search criteria.
+              </p>
             </div>
           ) : (
             filteredRooms.map((room) => (
-              <div
-                key={room.id}
-                className="section-card"
-              >
+              <div key={room.id} className="section-card">
                 <div className="flex justify-between items-start">
                   <h3 className="text-xl font-semibold">{room.name}</h3>
                   <div className="flex space-x-2">
@@ -508,11 +513,15 @@ function ManageRooms() {
                 <div className="mt-3 space-y-2">
                   <div className="flex items-center">
                     <Building2 className="h-4 w-4 text-gray-400 mr-2" />
-                    <span className="text-sm text-gray-300">{room.building}</span>
+                    <span className="text-sm text-gray-300">
+                      {room.building}
+                    </span>
                   </div>
                   <div className="flex items-center">
                     <Users className="h-4 w-4 text-gray-400 mr-2" />
-                    <span className="text-sm text-gray-300">Capacity: {room.capacity}</span>
+                    <span className="text-sm text-gray-300">
+                      Capacity: {room.capacity}
+                    </span>
                   </div>
                   <div className="flex space-x-2 mt-2">
                     {room.amenities.includes("projector") && (
