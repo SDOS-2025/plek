@@ -12,6 +12,8 @@ local_settings.py
 db.sqlite3
 db.sqlite3-journal
 media
+plek.log
+requirements.txt.bak
 
 # If your build process includes running collectstatic, then you probably don't need or want to include staticfiles/
 # in your Git repository. Update and uncomment the following line accordingly.
@@ -122,6 +124,10 @@ ipython_config.py
 #   in version control.
 #   https://pdm.fming.dev/#use-with-ide
 .pdm.toml
+pyproject.toml
+.ruff.toml
+populate_db.py
+uv.lock
 
 # PEP 582; used by e.g. github.com/David-OConnor/pyflow and github.com/pdm-project/pdm
 __pypackages__/

@@ -1,77 +1,372 @@
-from bookings.models import Booking
-from django.shortcuts import get_object_or_404
-from rest_framework.permissions import IsAuthenticated
+# backend/rooms/views.py
+import logging
+from datetime import datetime
+
+from rest_framework import status
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from .models import Room
-from .serializers import RoomSerializer
+from accounts.permissions import (
+    CanManageAmenities,
+    CanManageBuildings,
+    CanManageRooms,
+    CanViewRooms,
+)
+from bookings.models import Booking
 
-"""
-fields = [
-            "name",
-            "description",
-            "capacity",
-            "available",
-            "building",
-            "amenities",
-        ]
-"""
+from .models import Amenity, Building, Department, Floor, Room
+from .serializers import (
+    AmenitySerializer,
+    BuildingSerializer,
+    DepartmentSerializer,
+    FloorSerializer,
+    RoomSerializer,
+)
+
+logger = logging.getLogger(__name__)
 
 
-class ListRoomsView(APIView):
-    permission_classes = [IsAuthenticated]
+class RoomListView(APIView):
+    permission_classes = [CanViewRooms]
 
     def get(self, request):
-        rooms = Room.objects.all().filter(available=True)
+        date = request.query_params.get("date")
+        start_time = request.query_params.get("start_time")
+        end_time = request.query_params.get("end_time")
+        capacity = request.query_params.get("capacity")
+        building_id = request.query_params.get("building_id")
+        floor_number = request.query_params.get("floor_number")
+        floor_name = request.query_params.get("floor_name")
+        department_id = request.query_params.get("department_id")
+
+        try:
+            start_datetime = datetime.fromisoformat(start_time) if start_time else None
+            end_datetime = datetime.fromisoformat(end_time) if end_time else None
+            capacity = int(capacity) if capacity else None
+            floor_number = int(floor_number) if floor_number else None
+            department_id = int(department_id) if department_id else None
+        except (ValueError, TypeError):
+            return Response(
+                {"detail": "Invalid date, capacity, floor number, or department ID format"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        rooms = Room.objects.filter(available=True)
+
+        # Apply filters
+        if capacity:
+            rooms = rooms.filter(capacity__gte=capacity)
+
+        if building_id:
+            rooms = rooms.filter(building_id=building_id)
+
+        if floor_number is not None:
+            rooms = rooms.filter(floor__number=floor_number)
+
+        if floor_name:
+            rooms = rooms.filter(floor__name__icontains=floor_name)
+
+        if department_id:
+            rooms = rooms.filter(departments__id=department_id)
+
+        if start_datetime and end_datetime:
+            conflicting_bookings = Booking.objects.filter(
+                status=Booking.APPROVED,
+                start_time__lt=end_datetime,
+                end_time__gt=start_datetime,
+            ).values_list("room_id", flat=True)
+            rooms = rooms.exclude(id__in=conflicting_bookings)
+
         serializer = RoomSerializer(rooms, many=True)
-        return Response(serializer.data)
+        return Response(serializer.data, status=status.HTTP_200_OK)
 
 
-class RoomView(APIView):
-    permission_classes = [IsAuthenticated]
+class RoomManageView(APIView):
+    permission_classes = [CanManageRooms]
 
-    def get(self, request, id):
-        room = get_object_or_404(Room.objects.prefetch_related("booking_set"), id=id)
-        serializer = RoomSerializer(room, context={'request': request})
-        return Response(serializer.data)
+    def get(self, request, room_id=None):
+        # Handle GET request for a specific room
+        if room_id:
+            try:
+                room = Room.objects.get(id=room_id)
+                serializer = RoomSerializer(room)
+                room_data = serializer.data
+
+                # If date is provided, get bookings for that date
+                date_param = request.query_params.get("date")
+                if date_param:
+                    try:
+                        date_obj = datetime.fromisoformat(date_param)
+                        # Start and end of the day
+                        start_of_day = datetime.combine(date_obj.date(), datetime.min.time())
+                        end_of_day = datetime.combine(date_obj.date(), datetime.max.time())
+
+                        # Get all bookings for this room on the specified date
+                        bookings = Booking.objects.filter(
+                            room_id=room_id,
+                            start_time__date=date_obj.date(),
+                            status=Booking.APPROVED,
+                        ).values("start_time", "end_time")
+
+                        # Add bookings to response
+                        room_data["bookings"] = list(bookings)
+                    except ValueError:
+                        return Response(
+                            {"detail": "Invalid date format"},
+                            status=status.HTTP_400_BAD_REQUEST,
+                        )
+
+                return Response(room_data, status=status.HTTP_200_OK)
+            except Room.DoesNotExist:
+                return Response({"detail": "Room not found"}, status=status.HTTP_404_NOT_FOUND)
+        # Handle GET request for a list of rooms (fallback to RoomListView)
+        else:
+            rooms = Room.objects.filter(available=True)
+            serializer = RoomSerializer(rooms, many=True)
+            return Response(serializer.data, status=status.HTTP_200_OK)
 
     def post(self, request):
         serializer = RoomSerializer(data=request.data)
         if serializer.is_valid():
             serializer.save()
-            return Response(serializer.data, status=201)
-        return Response(serializer.errors, status=400)
+            logger.info(f"Room created by user {request.user.email}")
+            return Response(serializer.data, status=status.HTTP_201_CREATED)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
-    def put(self, request, id):
+    def patch(self, request, room_id):
         try:
-            room = Room.objects.get(id=id)
+            room = Room.objects.get(id=room_id)
         except Room.DoesNotExist:
-            return Response({"error": "Room not found"}, status=404)
+            return Response({"detail": "Room not found"}, status=status.HTTP_404_NOT_FOUND)
 
         serializer = RoomSerializer(room, data=request.data)
         if serializer.is_valid():
             serializer.save()
-            return Response(serializer.data)
-        return Response(serializer.errors, status=400)
+            logger.info(f"Room {room_id} updated by user {request.user.email}")
+            return Response(serializer.data, status=status.HTTP_200_OK)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
-    def delete(self, request, id):
+    def delete(self, request, room_id):
         try:
-            room = Room.objects.get(id=id)
+            room = Room.objects.get(id=room_id)
         except Room.DoesNotExist:
-            return Response({"error": "Room not found"}, status=404)
+            return Response({"detail": "Room not found"}, status=status.HTTP_404_NOT_FOUND)
 
         room.delete()
-        return Response(status=204)
+        logger.info(f"Room {room_id} deleted by user {request.user.email}")
+        return Response({"status": "room deleted"}, status=status.HTTP_204_NO_CONTENT)
 
-    def patch(self, request, id):
-        try:
-            room = Room.objects.get(id=id)
-        except Room.DoesNotExist:
-            return Response({"error": "Room not found"}, status=404)
 
-        serializer = RoomSerializer(room, data=request.data, partial=True)
+class BuildingManageView(APIView):
+    permission_classes = [CanManageBuildings]
+
+    def get(self, request, building_id=None):
+        if building_id:
+            try:
+                building = Building.objects.get(id=building_id)
+                serializer = BuildingSerializer(building)
+                return Response(serializer.data, status=status.HTTP_200_OK)
+            except Building.DoesNotExist:
+                return Response({"detail": "Building not found"}, status=status.HTTP_404_NOT_FOUND)
+        else:
+            buildings = Building.objects.all()
+            serializer = BuildingSerializer(buildings, many=True)
+            return Response(serializer.data, status=status.HTTP_200_OK)
+
+    def post(self, request):
+        serializer = BuildingSerializer(data=request.data)
         if serializer.is_valid():
             serializer.save()
-            return Response(serializer.data)
-        return Response(serializer.errors, status=400)
+            logger.info(f"Building created by user {request.user.email}")
+            return Response(serializer.data, status=status.HTTP_201_CREATED)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+    def patch(self, request, building_id):
+        try:
+            building = Building.objects.get(id=building_id)
+        except Building.DoesNotExist:
+            return Response({"detail": "Building not found"}, status=status.HTTP_404_NOT_FOUND)
+
+        serializer = BuildingSerializer(building, data=request.data, partial=True)
+        if serializer.is_valid():
+            serializer.save()
+            logger.info(f"Building {building_id} updated by user {request.user.email}")
+            return Response(serializer.data, status=status.HTTP_200_OK)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+    def delete(self, request, building_id):
+        try:
+            building = Building.objects.get(id=building_id)
+        except Building.DoesNotExist:
+            return Response({"detail": "Building not found"}, status=status.HTTP_404_NOT_FOUND)
+
+        building.delete()
+        logger.info(f"Building {building_id} deleted by user {request.user.email}")
+        return Response({"status": "building deleted"}, status=status.HTTP_204_NO_CONTENT)
+
+
+class AmenityManageView(APIView):
+    permission_classes = [CanManageAmenities]
+
+    def get(self, request, amenity_id=None):
+        if amenity_id:
+            try:
+                amenity = Amenity.objects.get(id=amenity_id)
+                serializer = AmenitySerializer(amenity)
+                return Response(serializer.data, status=status.HTTP_200_OK)
+            except Amenity.DoesNotExist:
+                return Response({"detail": "Amenity not found"}, status=status.HTTP_404_NOT_FOUND)
+        else:
+            amenities = Amenity.objects.all()
+            serializer = AmenitySerializer(amenities, many=True)
+            return Response(serializer.data, status=status.HTTP_200_OK)
+
+    def post(self, request):
+        serializer = AmenitySerializer(data=request.data)
+        if serializer.is_valid():
+            serializer.save()
+            logger.info(f"Amenity created by user {request.user.email}")
+            return Response(serializer.data, status=status.HTTP_201_CREATED)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+    def patch(self, request, amenity_id):
+        try:
+            amenity = Amenity.objects.get(id=amenity_id)
+        except Amenity.DoesNotExist:
+            return Response({"detail": "Amenity not found"}, status=status.HTTP_404_NOT_FOUND)
+
+        serializer = AmenitySerializer(amenity, data=request.data, partial=True)
+        if serializer.is_valid():
+            serializer.save()
+            logger.info(f"Amenity {amenity_id} updated by user {request.user.email}")
+            return Response(serializer.data, status=status.HTTP_200_OK)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+    def delete(self, request, amenity_id):
+        try:
+            amenity = Amenity.objects.get(id=amenity_id)
+        except Amenity.DoesNotExist:
+            return Response({"detail": "Amenity not found"}, status=status.HTTP_404_NOT_FOUND)
+
+        amenity.delete()
+        logger.info(f"Amenity {amenity_id} deleted by user {request.user.email}")
+        return Response({"status": "amenity deleted"}, status=status.HTTP_204_NO_CONTENT)
+
+
+class FloorManageView(APIView):
+    permission_classes = [CanManageBuildings]  # Reusing building management permission
+
+    def get(self, request, building_id=None, floor_id=None):
+        # If building_id is provided in URL path, use it to filter floors
+        if building_id:
+            try:
+                building = Building.objects.get(id=building_id)
+            except Building.DoesNotExist:
+                return Response({"detail": "Building not found"}, status=status.HTTP_404_NOT_FOUND)
+            floors = Floor.objects.filter(building_id=building_id)
+        else:
+            # Otherwise, check if it's in query parameters
+            query_building_id = request.query_params.get("building_id")
+            floors = Floor.objects.all()
+            if query_building_id:
+                floors = floors.filter(building_id=query_building_id)
+
+        # Floors are ordered by number by default due to the Meta ordering we added
+        serializer = FloorSerializer(floors, many=True)
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
+    def post(self, request):
+        serializer = FloorSerializer(data=request.data)
+        if serializer.is_valid():
+            floor = serializer.save()
+            logger.info(
+                f"Floor {floor.number} {floor.name if floor.name else ''} "
+                f"created in building {floor.building.name} by user {request.user.email}"
+            )
+            return Response(serializer.data, status=status.HTTP_201_CREATED)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+    def patch(self, request, floor_id):
+        try:
+            floor = Floor.objects.get(id=floor_id)
+        except Floor.DoesNotExist:
+            return Response({"detail": "Floor not found"}, status=status.HTTP_404_NOT_FOUND)
+
+        serializer = FloorSerializer(floor, data=request.data, partial=True)
+        if serializer.is_valid():
+            updated_floor = serializer.save()
+            logger.info(
+                f"Floor {updated_floor.number} {updated_floor.name if updated_floor.name else ''} "
+                f"in building {updated_floor.building.name} updated by user {request.user.email}"
+            )
+            return Response(serializer.data, status=status.HTTP_200_OK)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+    def delete(self, request, floor_id):
+        try:
+            floor = Floor.objects.get(id=floor_id)
+        except Floor.DoesNotExist:
+            return Response({"detail": "Floor not found"}, status=status.HTTP_404_NOT_FOUND)
+
+        # Capture info for logging before deleting
+        floor_number = floor.number
+        floor_name = floor.name
+        building_name = floor.building.name
+
+        floor.delete()
+        logger.info(
+            f"Floor {floor_number} {floor_name if floor_name else ''} "
+            f"in building {building_name} deleted by user {request.user.email}"
+        )
+        return Response({"status": "floor deleted"}, status=status.HTTP_204_NO_CONTENT)
+
+
+class DepartmentManageView(APIView):
+    permission_classes = [CanManageBuildings]  # Reusing building permissions for now
+
+    def get(self, request):
+        is_active = request.query_params.get("is_active")
+
+        departments = Department.objects.all()
+        if is_active is not None:
+            is_active_bool = is_active.lower() == "true"
+            departments = departments.filter(is_active=is_active_bool)
+
+        serializer = DepartmentSerializer(departments, many=True)
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
+    def post(self, request):
+        serializer = DepartmentSerializer(data=request.data)
+        if serializer.is_valid():
+            department = serializer.save()
+            logger.info(f"Department '{department.name}' created by user {request.user.email}")
+            return Response(serializer.data, status=status.HTTP_201_CREATED)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+    def patch(self, request, department_id):
+        try:
+            department = Department.objects.get(id=department_id)
+        except Department.DoesNotExist:
+            return Response({"detail": "Department not found"}, status=status.HTTP_404_NOT_FOUND)
+
+        serializer = DepartmentSerializer(department, data=request.data, partial=True)
+        if serializer.is_valid():
+            updated_department = serializer.save()
+            logger.info(
+                f"Department '{updated_department.name}' updated by user {request.user.email}"
+            )
+            return Response(serializer.data, status=status.HTTP_200_OK)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+    def delete(self, request, department_id):
+        try:
+            department = Department.objects.get(id=department_id)
+        except Department.DoesNotExist:
+            return Response({"detail": "Department not found"}, status=status.HTTP_404_NOT_FOUND)
+
+        # Capture info for logging before deleting
+        department_name = department.name
+
+        department.delete()
+        logger.info(f"Department '{department_name}' deleted by user {request.user.email}")
+        return Response({"status": "department deleted"}, status=status.HTTP_204_NO_CONTENT)

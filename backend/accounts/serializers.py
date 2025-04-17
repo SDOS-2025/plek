@@ -1,22 +1,58 @@
 # accounts/serializers.py
-from dj_rest_auth.registration.serializers import \
-    RegisterSerializer as DefaultRegisterSerializer
+from dj_rest_auth.registration.serializers import (
+    RegisterSerializer as DefaultRegisterSerializer,
+)
 from dj_rest_auth.serializers import LoginSerializer as DefaultLoginSerializer
 from django.contrib.auth import authenticate
+from django.contrib.auth.models import Group
 from rest_framework import serializers
 
+from rooms.models import Department, Floor
+
 from .models import CustomUser
-from .views import assign_role
+
+
+class GroupSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Group
+        fields = ["name"]
+
+
+class CustomUserSerializer(serializers.ModelSerializer):
+    groups = GroupSerializer(many=True, read_only=True)
+    managed_floors = serializers.PrimaryKeyRelatedField(
+        many=True,
+        queryset=Floor.objects.all(),
+        required=False,
+    )
+    managed_departments = serializers.PrimaryKeyRelatedField(
+        many=True,
+        queryset=Department.objects.all(),
+        required=False,
+    )
+
+    class Meta:
+        model = CustomUser
+        fields = [
+            "id",
+            "email",
+            "first_name",
+            "last_name",
+            "is_active",
+            "is_staff",
+            "managed_floors",
+            "managed_departments",
+            "groups",
+            "created_at",
+            "updated_at",
+        ]
+        read_only_fields = ["is_active", "groups", "created_at", "updated_at"]
 
 
 class RegisterSerializer(DefaultRegisterSerializer):
     username = None
     first_name = serializers.CharField(required=True)
     last_name = serializers.CharField(required=True)
-    user_category = serializers.ChoiceField(
-        choices=CustomUser.USER_CATEGORY_CHOICES,
-        default="student",
-    )
     email = serializers.EmailField(required=True)
     password1 = serializers.CharField(write_only=True, min_length=8, required=True)
     password2 = serializers.CharField(write_only=True, min_length=8, required=True)
@@ -29,7 +65,6 @@ class RegisterSerializer(DefaultRegisterSerializer):
             "email",
             "password1",
             "password2",
-            "user_category",
         )
 
     def validate_email(self, email):
@@ -59,13 +94,6 @@ class RegisterSerializer(DefaultRegisterSerializer):
             password=validated_data["password1"],
             user_category=validated_data["user_category"],
         )
-        role_map = {
-            "student": "Student",
-            "coordinator": "Coordinator",
-            "admin": "Admin",
-            "super_admin": "Admin",  # Map super_admin to Admin group for simplicity
-        }
-        assign_role(user, role_map.get(user.user_category, "Student"))
         return user
 
 

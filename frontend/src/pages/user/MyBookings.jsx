@@ -46,14 +46,50 @@ function MyBookings() {
         const previous = [];
 
         bookings.forEach((booking) => {
-          const bookingDate = DateTime.fromFormat(
-            `${booking.date} ${booking.slot.split(" - ")[0]}`,
-            "d MMMM yyyy h a",
-            { zone: "Asia/Kolkata" }
-          ).toJSDate();
+          console.log("Booking:", booking);
 
-          if (bookingDate > now) {
-            upcoming.push(booking);
+          // Parse the start_time from the API response
+          const startTime = DateTime.fromISO(booking.start_time, {
+            zone: "Asia/Kolkata",
+          });
+          const endTime = DateTime.fromISO(booking.end_time, {
+            zone: "Asia/Kolkata",
+          });
+
+          // Format date and time for display
+          const formattedDate = startTime.toFormat("LLLL d, yyyy");
+          const formattedTimeSlot = `${startTime.toFormat(
+            "h a"
+          )} - ${endTime.toFormat("h a")}`;
+
+          // Create a processed booking object with the required fields
+          const processedBooking = {
+            id: booking.id,
+            roomName: booking.room.name,
+            building: booking.room.building_name,
+            capacity: booking.room.capacity,
+            status: booking.status,
+            purpose: booking.purpose,
+            participants: booking.participants,
+            date: formattedDate,
+            slot: formattedTimeSlot,
+            startTime: startTime,
+            endTime: endTime,
+            amenities: booking.room.amenities,
+            // Add any other fields you need from the original booking
+            originalBooking: booking, // Keep the original data for reference if needed
+          };
+
+          // Put cancelled or rejected bookings in previous, regardless of date
+          if (
+            booking.status.toLowerCase() === "cancelled" ||
+            booking.status.toLowerCase() === "rejected"
+          ) {
+            previous.push(processedBooking);
+          }
+          // For non-cancelled/non-rejected bookings, use date to categorize
+          else if (startTime.toJSDate() > now) {
+            upcoming.push(processedBooking);
           } else {
             previous.push(booking);
           }
@@ -114,12 +150,42 @@ function MyBookings() {
 
   const handleCancel = async (bookingId) => {
     try {
-      await api.delete(`bookings/delete/${bookingId}/`);
-
-      // Update the state to remove the canceled booking
-      setUpcomingBookings(
-        upcomingBookings.filter((booking) => booking.id !== bookingId)
+      // Find the booking before attempting to cancel
+      const bookingToCancel = upcomingBookings.find(
+        (booking) => booking.id === bookingId
       );
+
+      // Don't allow cancellation of rejected bookings
+      if (
+        bookingToCancel &&
+        bookingToCancel.status.toLowerCase() === "rejected"
+      ) {
+        alert("Cannot cancel a rejected booking.");
+        return;
+      }
+
+      await api.delete(`/bookings/${bookingId}/`);
+
+      // Find the booking that was just cancelled
+      const cancelledBooking = upcomingBookings.find(
+        (booking) => booking.id === bookingId
+      );
+
+      if (cancelledBooking) {
+        // Update the status to "CANCELLED"
+        const updatedBooking = {
+          ...cancelledBooking,
+          status: "CANCELLED",
+        };
+
+        // Remove from upcoming bookings
+        setUpcomingBookings(
+          upcomingBookings.filter((booking) => booking.id !== bookingId)
+        );
+
+        // Add to previous bookings at the beginning (most recent)
+        setPreviousBookings([updatedBooking, ...previousBookings]);
+      }
 
       alert("Booking canceled successfully");
     } catch (err) {
@@ -227,18 +293,22 @@ function MyBookings() {
                           </div>
                         </div>
                         <div className="flex space-x-3">
-                          <button
-                            onClick={() => handleCancel(booking.id)}
-                            className="px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded-lg transition-colors"
-                          >
-                            Cancel
-                          </button>
-                          <button
-                            onClick={() => handleModify(booking)}
-                            className="px-4 py-2 bg-purple-600 hover:bg-purple-700 rounded-lg transition-colors"
-                          >
-                            Modify
-                          </button>
+                          {booking.status.toLowerCase() !== "rejected" && (
+                            <>
+                              <button
+                                onClick={() => handleCancel(booking.id)}
+                                className="px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded-lg transition-colors"
+                              >
+                                Cancel
+                              </button>
+                              <button
+                                onClick={() => handleModify(booking)}
+                                className="px-4 py-2 bg-purple-600 hover:bg-purple-700 rounded-lg transition-colors"
+                              >
+                                Modify
+                              </button>
+                            </>
+                          )}
                         </div>
                       </div>
                     </div>
@@ -256,7 +326,7 @@ function MyBookings() {
                     <div className="flex justify-between items-start">
                       <div>
                         <h3 className="text-lg font-medium mb-2">
-                          Room: {booking.name}
+                          Room: {booking.roomName}
                         </h3>
                         <p className="text-gray-400">
                           Building: {booking.building}
@@ -279,7 +349,11 @@ function MyBookings() {
                             className={`flex items-center space-x-2 ${
                               booking.status.toLowerCase() === "completed"
                                 ? "text-green-400"
-                                : "text-red-400"
+                                : booking.status.toLowerCase() === "rejected"
+                                ? "text-red-400"
+                                : booking.status.toLowerCase() === "cancelled"
+                                ? "text-red-400"
+                                : "text-gray-400"
                             }`}
                           >
                             <span>Status: {booking.status}</span>

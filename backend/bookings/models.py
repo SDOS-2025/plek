@@ -1,49 +1,57 @@
-from django.conf import settings
 from django.db import models
+
+from accounts.models import CustomUser
 from rooms.models import Room
-from django.utils.timezone import localtime
 
 # Create your models here.
 
 
 class Booking(models.Model):
+    room = models.ForeignKey(Room, on_delete=models.CASCADE, related_name="bookings")
+    user = models.ForeignKey(CustomUser, on_delete=models.CASCADE, related_name="bookings")
+    start_time = models.DateTimeField()
+    end_time = models.DateTimeField()
+    PENDING = "PENDING"
+    APPROVED = "APPROVED"
+    REJECTED = "REJECTED"
+    CANCELLED = "CANCELLED"
     STATUS_CHOICES = [
-        ("pending", "Pending"),
-        ("approved", "Approved"),
-        ("rejected", "Rejected"),
-        ("cancelled", "Cancelled"),
+        (PENDING, "Pending"),
+        (APPROVED, "Approved"),
+        (REJECTED, "Rejected"),
+        (CANCELLED, "Cancelled"),
     ]
-
-    room = models.ForeignKey(Room, on_delete=models.CASCADE)
-    user = models.ForeignKey(
-        settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="bookings"
-    )
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default=PENDING)
     approved_by = models.ForeignKey(
-        settings.AUTH_USER_MODEL,
+        CustomUser,
         on_delete=models.SET_NULL,
         null=True,
         blank=True,
         related_name="approved_bookings",
     )
-
-    start_time = models.DateTimeField()
-    end_time = models.DateTimeField()
-    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default="pending")
-    # Will be in the mongoDB log
-    # created_at = models.DateTimeField(auto_now_add=True)
-    # updated_at = models.DateTimeField(auto_now=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
     purpose = models.TextField(blank=True)
     participants = models.TextField(null=True, blank=True)
     cancellation_reason = models.TextField(null=True, blank=True)
 
     class Meta:
         permissions = [
-            ("can_view_booking", "Can view booking details"),
-            ("can_create_booking", "Can create bookings"),
-            ("can_approve_booking", "Can approve bookings"),
-            ("can_reject_booking", "Can reject bookings"),
-            ("can_cancel_booking", "Can cancel bookings"),
+            ("view_own_booking", "Can view own bookings"),
+            ("create_booking", "Can create bookings"),
+            ("modify_own_booking", "Can modify own bookings"),
+            ("cancel_own_booking", "Can cancel own bookings"),
+            ("view_all_bookings", "Can view all bookings"),
+            ("view_floor_dept_bookings", "Can view bookings for floor or department"),
+            ("approve_booking", "Can approve bookings"),
+            ("reject_booking", "Can reject bookings"),
+            ("override_booking", "Can override bookings"),
+        ]
+        indexes = [
+            models.Index(fields=["room", "start_time", "end_time"]),
+            models.Index(fields=["user"]),
+            models.Index(fields=["status"]),
         ]
 
     def __str__(self):
-        return f"{self.user.email} - {self.room.name} - {localtime(self.start_time)}"
+        return f"Booking {self.id} for {self.room.name} by {self.user.email}"

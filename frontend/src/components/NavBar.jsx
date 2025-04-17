@@ -15,7 +15,7 @@ const NavBar = ({ activePage }) => {
   const [scrolled, setScrolled] = useState(false);
   const location = useLocation();
   const path = location.pathname;
-  
+
   // Extract the current page from URL, handling both admin and user routes
   const currentPageFromPath = path.split("/").filter(Boolean).pop(); // get last segment
 
@@ -24,22 +24,30 @@ const NavBar = ({ activePage }) => {
 
   // Check if the user is an admin - improved detection with multiple approaches
   console.log("User object in NavBar:", user);
-  
+
   // Method 1: Check user object properties that might indicate admin status
-  const isAdminByProps = user?.is_staff || 
-                         user?.isAdmin || 
-                         user?.is_admin || 
-                         user?.admin ||
-                         user?.role === 'admin' || 
-                         user?.user_type === 'admin';
-                         
+  const isAdminByProps =
+    user?.is_staff ||
+    user?.isAdmin ||
+    user?.is_admin ||
+    user?.admin ||
+    user?.role === "admin" ||
+    user?.user_type === "admin";
+
   // Method 2: Check if the current URL is in the admin section
-  const isAdminByPath = path.includes('/admin/');
-  
+  const isAdminByPath = path.includes("/admin/");
+
   // Use either method to determine admin status
   const isAdmin = isAdminByProps || isAdminByPath || false;
-  
-  console.log("Admin detection - By props:", isAdminByProps, "By path:", isAdminByPath, "Final decision:", isAdmin);
+
+  console.log(
+    "Admin detection - By props:",
+    isAdminByProps,
+    "By path:",
+    isAdminByPath,
+    "Final decision:",
+    isAdmin
+  );
 
   // Handle scroll event for navbar transparency effect
   useEffect(() => {
@@ -75,6 +83,11 @@ const NavBar = ({ activePage }) => {
       id: "manage-bookings",
     },
     { name: "Manage Rooms", path: "/admin/manage-rooms", id: "manage-rooms" },
+    {
+      name: "Configuration",
+      path: "/admin/manage-config",
+      id: "manage-config",
+    },
     { name: "Analytics", path: "/admin/analytics", id: "analytics" },
   ];
 
@@ -106,16 +119,16 @@ const NavBar = ({ activePage }) => {
                 {navLinks.map((link) => {
                   // Extract the ID from path for comparison with current page
                   const linkId = link.path.split("/").filter(Boolean).pop();
-                  
+
                   // Special case for dashboard paths
-                  const isDashboard = 
-                    (link.id === "dashboard" && path === "/dashboard") || 
+                  const isDashboard =
+                    (link.id === "dashboard" && path === "/dashboard") ||
                     (link.id === "dashboard" && path === "/admin/dashboard");
-                  
+
                   // Check for active page
-                  const isActive = 
-                    isDashboard || 
-                    currentPage === linkId || 
+                  const isActive =
+                    isDashboard ||
+                    currentPage === linkId ||
                     currentPage === link.id;
 
                   return (
@@ -165,17 +178,15 @@ const NavBar = ({ activePage }) => {
           {navLinks.map((link) => {
             // Extract the ID from path for comparison with current page
             const linkId = link.path.split("/").filter(Boolean).pop();
-            
+
             // Special case for dashboard paths
-            const isDashboard = 
-              (link.id === "dashboard" && path === "/dashboard") || 
+            const isDashboard =
+              (link.id === "dashboard" && path === "/dashboard") ||
               (link.id === "dashboard" && path === "/admin/dashboard");
-            
+
             // Check for active page
-            const isActive = 
-              isDashboard || 
-              currentPage === linkId || 
-              currentPage === link.id;
+            const isActive =
+              isDashboard || currentPage === linkId || currentPage === link.id;
 
             return (
               <Link

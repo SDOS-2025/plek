@@ -1,12 +1,15 @@
 from rest_framework import serializers
 
+
 class CountStatSerializer(serializers.Serializer):
     label = serializers.CharField()
     value = serializers.IntegerField()
 
+
 class TimeSeriesStatSerializer(serializers.Serializer):
     date = serializers.DateField()
     total_bookings = serializers.IntegerField()
+
 
 class RoomUsageStatSerializer(serializers.Serializer):
     name = serializers.CharField()

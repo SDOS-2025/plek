@@ -1,67 +1,66 @@
 from rest_framework import serializers
 
-from .models import Room
+from .models import Amenity, Building, Department, Floor, Room
 
-"""
-    name = models.CharField(max_length=100, unique=True, default="Unnamed Room")
-    description = models.TextField(default="No description provided")
-    capacity = models.IntegerField(default=50)
-    available = models.BooleanField(default=True)
-    building = models.CharField(max_length=100, default="Lecture Hall Complex")
-    amenities = models.JSONField(default=dict)  # Store amenities as a JSON object
 
-"""
+class DepartmentSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Department
+        fields = ["id", "name", "description", "code"]
+
+
+class FloorSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Floor
+        fields = ["id", "number", "name", "building"]
+
+
+class BuildingSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Building
+        fields = ["id", "name", "description", "location"]
+
+
+class AmenitySerializer(serializers.ModelSerializer):
+    image = serializers.ImageField(read_only=True)
+
+    class Meta:
+        model = Amenity
+        fields = ["id", "name", "description", "image"]
 
 
 class RoomSerializer(serializers.ModelSerializer):
-    # Use a nested serializer defined with just the model name to avoid circular imports
-    bookings = serializers.SerializerMethodField(required=False, read_only=True)
-    
+    floor = serializers.PrimaryKeyRelatedField(queryset=Floor.objects.all())
+    departments = serializers.PrimaryKeyRelatedField(
+        many=True, queryset=Department.objects.all(), required=False
+    )
+    amenities = serializers.PrimaryKeyRelatedField(
+        many=True, queryset=Amenity.objects.all(), required=False
+    )
+    building = serializers.PrimaryKeyRelatedField(queryset=Building.objects.all())
+    amenity_names = serializers.SerializerMethodField()
+    building_name = serializers.SerializerMethodField()
+
+    def get_amenity_names(self, obj):
+        return [amenity.name.lower() for amenity in obj.amenities.all()]
+
+    def get_building_name(self, obj):
+        return obj.building.name if obj.building else None
+
     class Meta:
         model = Room
         fields = [
             "id",
             "name",
-            "description",
             "capacity",
-            "available",
+            "floor",
+            "departments",
             "building",
+            "building_name",
             "amenities",
-            "bookings",
+            "amenity_names",
+            "available",
+            "created_at",
+            "updated_at",
         ]
-
-    def validate(self, data):
-        """
-        Validate the data before creating or updating a room instance.
-        """
-        if "capacity" in data and data["capacity"] <= 0:
-            raise serializers.ValidationError(
-                {"capacity": "Capacity must be a positive integer."}
-            )
-        if "name" in data and not data["name"].strip():
-            raise serializers.ValidationError({"name": "Name cannot be empty."})
-        return data
-
-    def create(self, validated_data):
-        """
-        Create a new room instance with the provided validated data.
-        """
-        return Room.objects.create(**validated_data)
-
-    def get_bookings(self, obj):
-        """
-        Get the bookings associated with the room instance.
-        """
-        # Only import BookingSerializer here to avoid circular import
-        from bookings.serializers import BookingSerializer
-        
-        request = self.context.get('request')
-        if request:
-            date = request.query_params.get("date")
-            if date:
-                # Use start_time__date instead of date__gte
-                booking = obj.booking_set.filter(start_time__date=date)
-            else:
-                booking = obj.booking_set.all()
-            return BookingSerializer(booking, many=True).data
-        return []
+        read_only_fields = ["created_at", "updated_at"]
