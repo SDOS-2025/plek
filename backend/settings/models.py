@@ -2,10 +2,8 @@ from django.db import models
 
 # Create your models here.
 
+
 class InstitutePolicy(models.Model):
-    name = models.CharField(max_length=100, default="Institute Policy")
-    description = models.TextField(default="No description provided")
-    is_active = models.BooleanField(default=True)
     booking_opening_days = models.PositiveIntegerField(default=30)
     max_booking_duration_hours = models.PositiveIntegerField(default=4)
     min_gap_between_bookings_minutes = models.PositiveIntegerField(default=15)
@@ -14,6 +12,12 @@ class InstitutePolicy(models.Model):
     allow_backdated_bookings = models.BooleanField(default=False)
     enable_auto_approval = models.BooleanField(default=False)
     approval_window_hours = models.PositiveIntegerField(default=48)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        permissions = [
+            ("manage_institute_policies", "Can manage institute policies"),
+        ]
 
     def save(self, *args, **kwargs):
         self.pk = 1  # enforce singleton

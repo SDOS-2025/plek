@@ -1,5 +1,13 @@
 import React, { useState, useEffect } from "react";
-import { X, Building2, CalendarDays, CalendarClock, Users, Projector, Wifi, Square, Loader2, Trash2 } from "lucide-react";
+import {
+  X,
+  Building2,
+  CalendarDays,
+  CalendarClock,
+  Users,
+  Loader2,
+  Trash2,
+} from "lucide-react";
 import api from "../api";
 import { DateTime } from "luxon";
 
@@ -7,26 +15,26 @@ const ModifyBookingModal = ({ booking, onClose, onCancel }) => {
   // Pre-populate fields from the booking
   const [purpose, setPurpose] = useState(booking.purpose || "Team Meeting");
   const [attendees, setAttendees] = useState(booking.attendees || "6");
-  const [notes, setNotes] = useState(booking.notes || "Need whiteboard markers");
+  const [notes, setNotes] = useState(
+    booking.notes || "Need whiteboard markers"
+  );
   const [timeSlot, setTimeSlot] = useState(booking.slot);
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [showTimePicker, setShowTimePicker] = useState(false);
-  
+
   // Convert incoming date to proper ISO format or use today's date as fallback
   const [date, setDate] = useState(() => {
     try {
       // Try to parse the incoming booking date
-      return DateTime.fromFormat(booking.date, 'LLLL d, yyyy')
+      return DateTime.fromFormat(booking.date, "LLLL d, yyyy")
         .setZone("Asia/Kolkata")
         .toISODate();
     } catch (e) {
       // Fallback to today's date if parsing fails
-      return DateTime.now()
-        .setZone("Asia/Kolkata")
-        .toISODate();
+      return DateTime.now().setZone("Asia/Kolkata").toISODate();
     }
   });
-  
+
   // States for handling time slot availability
   const [availableTimeSlots, setAvailableTimeSlots] = useState([]);
   const [loadingTimeSlots, setLoadingTimeSlots] = useState(false);
@@ -36,19 +44,19 @@ const ModifyBookingModal = ({ booking, onClose, onCancel }) => {
   const generateDates = () => {
     const dates = [];
     const today = DateTime.now().setZone("Asia/Kolkata");
-    
+
     for (let i = 0; i < 14; i++) {
       const date = today.plus({ days: i });
       dates.push({
         value: date.toISODate(),
         label: date.toLocaleString({
-          day: 'numeric',
-          month: 'long',
-          year: 'numeric'
-        })
+          day: "numeric",
+          month: "long",
+          year: "numeric",
+        }),
       });
     }
-    
+
     return dates;
   };
 
@@ -59,7 +67,7 @@ const ModifyBookingModal = ({ booking, onClose, onCancel }) => {
     try {
       setLoadingTimeSlots(true);
       setTimeSlotError(null);
-      
+
       // Define all possible time slots
       const allTimeSlots = [
         "9:00 AM - 10:00 AM",
@@ -69,23 +77,30 @@ const ModifyBookingModal = ({ booking, onClose, onCancel }) => {
         "1:00 PM - 2:00 PM",
         "2:00 PM - 3:00 PM",
         "3:00 PM - 4:00 PM",
-        "4:00 PM - 5:00 PM"
+        "4:00 PM - 5:00 PM",
       ];
 
       const formattedDate = DateTime.fromISO(selectedDate)
-              .setZone("Asia/Kolkata")
-              .toISODate();
-      
+        .setZone("Asia/Kolkata")
+        .toISODate();
+
+      // Get the room ID from the booking object
+      // Make sure to use the correct property for room ID
+      const roomId =
+        booking.roomId ||
+        (booking.originalBooking && booking.originalBooking.room.id) ||
+        booking.id;
+
       // API call to get bookings for this room on the selected date
-      const response = await api.get(`/rooms/${booking.roomId}/?date=${formattedDate}`);
-      
+      const response = await api.get(`/rooms/${roomId}/?date=${formattedDate}`);
+
       // Get the booked slots from API response
       const bookings = response.data.bookings || [];
-      
+
       // Convert bookings into time slots format
       const bookedSlots = bookings
-        .filter(b => b.id !== booking.id) // Exclude current booking
-        .map(b => {
+        .filter((b) => b.id !== booking.id) // Exclude current booking
+        .map((b) => {
           const start = DateTime.fromISO(b.start_time)
             .setZone("Asia/Kolkata")
             .toFormat("h:mm a");
@@ -95,14 +110,24 @@ const ModifyBookingModal = ({ booking, onClose, onCancel }) => {
           return `${start} - ${end}`;
         });
 
+      console.log("Booked time slots:", bookedSlots);
+
       // Create array marking only actually booked slots as unavailable
-      const slotsWithStatus = allTimeSlots.map(time => ({
-        time,
-        isBooked: bookedSlots.includes(time)
-      }));
-      
+      // Normalize time slots to make comparison more reliable
+      const slotsWithStatus = allTimeSlots.map((time) => {
+        const normalizedTime = time.replace(/\s+/g, " ").toUpperCase();
+        const isBooked = bookedSlots.some((slot) => {
+          const normalizedSlot = slot.replace(/\s+/g, " ").toUpperCase();
+          return normalizedSlot === normalizedTime;
+        });
+
+        return {
+          time,
+          isBooked,
+        };
+      });
+
       setAvailableTimeSlots(slotsWithStatus);
-      
     } catch (error) {
       console.error("Error fetching time slots:", error);
       setTimeSlotError("Failed to load available time slots");
@@ -137,43 +162,49 @@ const ModifyBookingModal = ({ booking, onClose, onCancel }) => {
   // Parse time slot to ISO format for API
   const parseTimeSlot = (timeSlot, dateStr) => {
     const [startStr, endStr] = timeSlot.split(" - ");
-    
+
     // Create a DateTime object in Asia/Kolkata timezone
     const baseDate = DateTime.fromISO(dateStr, { zone: "Asia/Kolkata" });
-    
+
     // Parse hours and minutes from the time strings
-    const [startHours, startMinutes] = startStr.match(/(\d+):(\d+)/).slice(1, 3).map(Number);
-    const [endHours, endMinutes] = endStr.match(/(\d+):(\d+)/).slice(1, 3).map(Number);
-    
+    const [startHours, startMinutes] = startStr
+      .match(/(\d+):(\d+)/)
+      .slice(1, 3)
+      .map(Number);
+    const [endHours, endMinutes] = endStr
+      .match(/(\d+):(\d+)/)
+      .slice(1, 3)
+      .map(Number);
+
     // Adjust for PM times
-    const startPeriod = startStr.includes('PM');
-    const endPeriod = endStr.includes('PM');
-    
+    const startPeriod = startStr.includes("PM");
+    const endPeriod = endStr.includes("PM");
+
     let startHour = startHours;
     if (startPeriod && startHours !== 12) startHour += 12;
     if (!startPeriod && startHours === 12) startHour = 0;
-    
+
     let endHour = endHours;
     if (endPeriod && endHours !== 12) endHour += 12;
     if (!endPeriod && endHours === 12) endHour = 0;
-    
+
     // Set hours and minutes using DateTime
     const startTime = baseDate.set({ hour: startHour, minute: startMinutes });
     const endTime = baseDate.set({ hour: endHour, minute: endMinutes });
-    
+
     return {
       start_time: startTime.toISO(),
-      end_time: endTime.toISO()
+      end_time: endTime.toISO(),
     };
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    
+
     try {
       // Get time values from the selected time slot
       const timeValues = parseTimeSlot(timeSlot, date);
-      
+
       // Create booking update object
       const bookingUpdate = {
         start_time: timeValues.start_time,
@@ -182,10 +213,13 @@ const ModifyBookingModal = ({ booking, onClose, onCancel }) => {
         participants: attendees.toString(),
         notes: notes,
       };
-      
+
       console.log("Updating booking:", bookingUpdate);
-      const response = await api.put(`/book/update/${booking.id}/`, bookingUpdate);
-      
+      const response = await api.patch(
+        `/bookings/${booking.id}/`,
+        bookingUpdate
+      );
+
       if (response.status === 200) {
         alert("Booking updated successfully!");
         onClose();
@@ -226,11 +260,11 @@ const ModifyBookingModal = ({ booking, onClose, onCancel }) => {
               <div>
                 <p className="text-sm text-gray-400">Room</p>
                 <p>
-                  {booking.roomName || 'Room'} - {booking.building || 'Building'}
+                  {booking.roomName || "Room"} - {booking.building}
                 </p>
               </div>
             </div>
-            
+
             {/* Date picker */}
             <div className="bg-plek-lightgray rounded-lg relative">
               {/* Date picker trigger */}
@@ -242,20 +276,25 @@ const ModifyBookingModal = ({ booking, onClose, onCancel }) => {
                   <CalendarDays size={20} />
                   <div>
                     <p className="text-sm text-gray-400">Date</p>
-                    <p>{availableDates.find(d => d.value === date)?.label || date}</p>
+                    <p>
+                      {availableDates.find((d) => d.value === date)?.label ||
+                        date}
+                    </p>
                   </div>
                 </div>
-                <svg 
-                  xmlns="http://www.w3.org/2000/svg" 
-                  width="16" 
-                  height="16" 
-                  viewBox="0 0 24 24" 
-                  fill="none" 
-                  stroke="currentColor" 
-                  strokeWidth="2" 
-                  strokeLinecap="round" 
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  width="16"
+                  height="16"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
                   strokeLinejoin="round"
-                  className={`transition-transform ${showDatePicker ? "rotate-180" : ""}`}
+                  className={`transition-transform ${
+                    showDatePicker ? "rotate-180" : ""
+                  }`}
                 >
                   <polyline points="6 9 12 15 18 9"></polyline>
                 </svg>
@@ -267,19 +306,40 @@ const ModifyBookingModal = ({ booking, onClose, onCancel }) => {
                       <div
                         key={index}
                         className={`p-2 rounded-lg cursor-pointer flex justify-between items-center transition-all ${
-                          d.value === date 
-                            ? "bg-plek-purple text-white" 
+                          d.value === date
+                            ? "bg-plek-purple text-white"
                             : "hover:bg-plek-lightgray active:bg-plek-background"
                         }`}
                         onClick={() => handleDateSelect(d.value)}
                       >
                         <span>{d.label}</span>
                         {d.value === date ? (
-                          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                          <svg
+                            xmlns="http://www.w3.org/2000/svg"
+                            width="16"
+                            height="16"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            strokeWidth="2"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                          >
                             <polyline points="20 6 9 17 4 12"></polyline>
                           </svg>
                         ) : (
-                          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="opacity-0 group-hover:opacity-100">
+                          <svg
+                            xmlns="http://www.w3.org/2000/svg"
+                            width="16"
+                            height="16"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            strokeWidth="2"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            className="opacity-0 group-hover:opacity-100"
+                          >
                             <polyline points="9 18 15 12 9 6"></polyline>
                           </svg>
                         )}
@@ -290,36 +350,44 @@ const ModifyBookingModal = ({ booking, onClose, onCancel }) => {
               )}
             </div>
           </div>
-          
+
           <div className="space-y-4">
             {/* Time slot picker */}
             <div className="bg-plek-lightgray rounded-lg relative">
               {/* Time slot picker trigger */}
               <div
-                className={`flex items-center justify-between text-gray-300 cursor-pointer p-2 hover:bg-plek-background rounded-lg border border-gray-600 transition-colors ${loadingTimeSlots ? 'opacity-75' : ''}`}
+                className={`flex items-center justify-between text-gray-300 cursor-pointer p-2 hover:bg-plek-background rounded-lg border border-gray-600 transition-colors ${
+                  loadingTimeSlots ? "opacity-75" : ""
+                }`}
                 onClick={toggleTimePicker}
               >
                 <div className="flex items-center space-x-3">
                   <CalendarClock size={20} />
                   <div>
                     <p className="text-sm text-gray-400">Time Slot</p>
-                    <p>{loadingTimeSlots ? "Loading..." : timeSlot || "Select a time"}</p>
+                    <p>
+                      {loadingTimeSlots
+                        ? "Loading..."
+                        : timeSlot || "Select a time"}
+                    </p>
                   </div>
                 </div>
                 {loadingTimeSlots ? (
                   <Loader2 size={16} className="animate-spin" />
                 ) : (
-                  <svg 
-                    xmlns="http://www.w3.org/2000/svg" 
-                    width="16" 
-                    height="16" 
-                    viewBox="0 0 24 24" 
-                    fill="none" 
-                    stroke="currentColor" 
-                    strokeWidth="2" 
-                    strokeLinecap="round" 
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    width="16"
+                    height="16"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
                     strokeLinejoin="round"
-                    className={`transition-transform ${showTimePicker ? "rotate-180" : ""}`}
+                    className={`transition-transform ${
+                      showTimePicker ? "rotate-180" : ""
+                    }`}
                   >
                     <polyline points="6 9 12 15 18 9"></polyline>
                   </svg>
@@ -341,11 +409,11 @@ const ModifyBookingModal = ({ booking, onClose, onCancel }) => {
                         <div
                           key={index}
                           className={`p-2 rounded-lg flex justify-between items-center transition-all ${
-                            slot.isBooked 
-                              ? "bg-plek-dark text-gray-500 cursor-not-allowed" 
+                            slot.isBooked
+                              ? "bg-plek-dark text-gray-500 cursor-not-allowed"
                               : slot.time === timeSlot
-                                ? "bg-plek-purple text-white cursor-pointer" 
-                                : "hover:bg-plek-lightgray active:bg-plek-background cursor-pointer"
+                              ? "bg-plek-purple text-white cursor-pointer"
+                              : "hover:bg-plek-lightgray active:bg-plek-background cursor-pointer"
                           }`}
                           onClick={() => {
                             if (!slot.isBooked) {
@@ -356,8 +424,26 @@ const ModifyBookingModal = ({ booking, onClose, onCancel }) => {
                         >
                           <div className="flex items-center">
                             {slot.isBooked && (
-                              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="mr-2 text-gray-500">
-                                <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
+                              <svg
+                                xmlns="http://www.w3.org/2000/svg"
+                                width="16"
+                                height="16"
+                                viewBox="0 0 24 24"
+                                fill="none"
+                                stroke="currentColor"
+                                strokeWidth="2"
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                                className="mr-2 text-gray-500"
+                              >
+                                <rect
+                                  x="3"
+                                  y="4"
+                                  width="18"
+                                  height="18"
+                                  rx="2"
+                                  ry="2"
+                                ></rect>
                                 <line x1="16" y1="2" x2="16" y2="6"></line>
                                 <line x1="8" y1="2" x2="8" y2="6"></line>
                                 <line x1="3" y1="10" x2="21" y2="10"></line>
@@ -366,7 +452,17 @@ const ModifyBookingModal = ({ booking, onClose, onCancel }) => {
                             <span>{slot.time}</span>
                           </div>
                           {!slot.isBooked && slot.time === timeSlot && (
-                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                            <svg
+                              xmlns="http://www.w3.org/2000/svg"
+                              width="16"
+                              height="16"
+                              viewBox="0 0 24 24"
+                              fill="none"
+                              stroke="currentColor"
+                              strokeWidth="2"
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                            >
                               <polyline points="20 6 9 17 4 12"></polyline>
                             </svg>
                           )}
@@ -377,7 +473,7 @@ const ModifyBookingModal = ({ booking, onClose, onCancel }) => {
                 </div>
               )}
             </div>
-            
+
             {/* Capacity information - READ ONLY */}
             <div className="flex items-center space-x-3 text-gray-300">
               <Users size={20} />
@@ -390,28 +486,43 @@ const ModifyBookingModal = ({ booking, onClose, onCancel }) => {
         </div>
 
         {/* Amenities section */}
-        {booking.amenities && (
-          <div className="bg-plek-background rounded-lg p-4 mb-6">
-            <h3 className="font-semibold mb-2">Available Amenities</h3>
-            <div className="flex space-x-4">
-              {booking.amenities.includes("projector") && (
-                <div className="flex items-center space-x-2 text-gray-300">
-                  <Projector size={18} />
-                  <span>Projector</span>
+        {booking.amenities && booking.amenities.length > 0 && (
+          <div className="bg-plek-lightgray rounded-lg p-4 mb-6">
+            <div className="flex items-center space-x-3 text-gray-300">
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                width="20"
+                height="20"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                className="lucide lucide-package-check"
+              >
+                <path d="M16 16h6" />
+                <path d="M19 13v6" />
+                <path d="M12.5 3l-7.5 4.5v9l7.5 4.5 7.5-4.5v-9L12.5 3z" />
+                <path d="M12.5 3v9l7.5 4.5" />
+                <path d="M12.5 12L5 7.5" />
+              </svg>
+              <div>
+                <p className="text-sm text-gray-400 mb-2">
+                  Available Amenities
+                </p>
+                <div className="flex flex-wrap gap-2">
+                  {booking.amenities.map((amenity) => (
+                    <span
+                      key={amenity.id}
+                      className="px-3 py-1 bg-plek-purple/20 border border-purple-700/30 text-gray-200 text-sm flex items-center hover:bg-plek-purple/30 transition-colors shadow-sm"
+                    >
+                      <span className="w-1.5 h-1.5 rounded-sm bg-purple-400 mr-1.5"></span>
+                      {amenity.name}
+                    </span>
+                  ))}
                 </div>
-              )}
-              {booking.amenities.includes("wifi") && (
-                <div className="flex items-center space-x-2 text-gray-300">
-                  <Wifi size={18} />
-                  <span>Wi-Fi</span>
-                </div>
-              )}
-              {booking.amenities.includes("whiteboard") && (
-                <div className="flex items-center space-x-2 text-gray-300">
-                  <Square size={18} />
-                  <span>Whiteboard</span>
-                </div>
-              )}
+              </div>
             </div>
           </div>
         )}
@@ -462,7 +573,11 @@ const ModifyBookingModal = ({ booking, onClose, onCancel }) => {
             <button
               type="button"
               onClick={() => {
-                if (window.confirm("Are you sure you want to cancel this booking?")) {
+                if (
+                  window.confirm(
+                    "Are you sure you want to cancel this booking?"
+                  )
+                ) {
                   onCancel(booking.id);
                 }
               }}

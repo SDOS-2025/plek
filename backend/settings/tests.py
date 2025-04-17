@@ -1,14 +1,18 @@
-from django.urls import reverse
-from rest_framework.test import APITestCase
-from rest_framework import status
 from django.contrib.auth import get_user_model
+from django.urls import reverse
+from rest_framework import status
+from rest_framework.test import APITestCase
+
 from .models import InstitutePolicy
+
 
 class InstitutePolicyViewTests(APITestCase):
     def setUp(self):
         # Create a test admin user
         User = get_user_model()
-        self.admin_user = User.objects.create_superuser(email="admin@example.com", password="adminpass123")
+        self.admin_user = User.objects.create_superuser(
+            email="admin@example.com", password="adminpass123"
+        )
         self.client.force_authenticate(user=self.admin_user)
 
         # Create a test policy
@@ -36,8 +40,12 @@ class InstitutePolicyViewTests(APITestCase):
         self.assertEqual(response.data["booking_opening_days"], 30)
         self.assertEqual(response.data["max_booking_duration_hours"], 4)
         self.assertEqual(response.data["min_gap_between_bookings_minutes"], 15)
-        self.assertEqual(response.data["working_hours_start"], "08:00:00")  # Updated to match serialized format
-        self.assertEqual(response.data["working_hours_end"], "19:00:00")  # Updated to match serialized format
+        self.assertEqual(
+            response.data["working_hours_start"], "08:00:00"
+        )  # Updated to match serialized format
+        self.assertEqual(
+            response.data["working_hours_end"], "19:00:00"
+        )  # Updated to match serialized format
         self.assertFalse(response.data["allow_backdated_bookings"])
         self.assertFalse(response.data["enable_auto_approval"])
         self.assertEqual(response.data["approval_window_hours"], 48)
@@ -75,7 +83,9 @@ class InstitutePolicyViewTests(APITestCase):
     def test_non_admin_access(self):
         # Create a non-admin user
         User = get_user_model()
-        non_admin_user = User.objects.create_user(email="testuser@example.com", password="testpass123")  # Added email
+        non_admin_user = User.objects.create_user(
+            email="testuser@example.com", password="testpass123"
+        )  # Added email
         self.client.force_authenticate(user=non_admin_user)
 
         url = reverse("institute-policy")

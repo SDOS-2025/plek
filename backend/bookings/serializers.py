@@ -1,23 +1,21 @@
 import pytz
-from django.utils.timezone import localtime, now
+from django.utils.timezone import now
 from rest_framework import serializers
+
 from rooms.models import Room
 
 from .models import Booking
 
 
 class BookingSerializer(serializers.ModelSerializer):
-    # Use nested serializer representation to avoid circular imports
-    room = serializers.SerializerMethodField(read_only=True)
-    
-    # Add a serializer method field to get the display value for status
-    status_display = serializers.SerializerMethodField(read_only=True)
-
-    room_id = serializers.PrimaryKeyRelatedField(
-        queryset=Room.objects.all(),
-        source="room",
-        write_only=True,
-        required=True,  # Make room_id required for POST requests
+    room = serializers.PrimaryKeyRelatedField(queryset=Room.objects.all())
+    user_email = serializers.EmailField(
+        source="user.email",
+        read_only=True,
+    )
+    approved_by_email = serializers.EmailField(
+        source="approved_by.email",
+        read_only=True,
     )
 
     class Meta:
@@ -25,16 +23,25 @@ class BookingSerializer(serializers.ModelSerializer):
         fields = [
             "id",
             "room",
-            "room_id",
             "user",
+            "user_email",
             "approved_by",
+            "approved_by_email",
             "start_time",
             "end_time",
             "status",
-            "status_display",
             "purpose",
             "participants",
             "cancellation_reason",
+            "created_at",
+            "updated_at",
+        ]
+        read_only_fields = [
+            "user",
+            "approved_by",
+            "status",
+            "created_at",
+            "updated_at",
         ]
 
     def validate(self, data):
@@ -46,62 +53,52 @@ class BookingSerializer(serializers.ModelSerializer):
         print(f"start_time: {data['start_time']}")
         print(f"end_time: {data['end_time']}")
         print(f"now: {current_time}")
+
+        # Basic time validation
         if data["start_time"] >= data["end_time"]:
+            raise serializers.ValidationError({"end_time": "End time must be after start time."})
+        if data["start_time"] < current_time:
+            raise serializers.ValidationError({"start_time": "Cannot book in the past."})
+
+        # Get the current user from the request context
+        request = self.context.get("request")
+        current_user = request.user if request else None
+
+        # Check for APPROVED bookings (blocks everyone)
+        approved_conflicts = Booking.objects.filter(
+            room=data["room"],
+            status=Booking.APPROVED,
+            start_time__lt=data["end_time"],
+            end_time__gt=data["start_time"],
+        )
+
+        # If we're updating an existing booking, exclude the current booking
+        if self.instance:
+            approved_conflicts = approved_conflicts.exclude(id=self.instance.id)
+
+        if approved_conflicts.exists():
             raise serializers.ValidationError(
-                {"end_time": "End time must be after start time."}
+                {"room": "This room is already booked during this time."}
             )
-        if data["start_time"] < current_time or data["end_time"] < current_time:
-            raise serializers.ValidationError(
-                {
-                    "start_time": "Booking times must be in the future.",
-                    "end_time": "Booking times must be in the future.",
-                }
+
+        # Check for the user's own PENDING bookings (prevents duplicate requests)
+        if current_user:
+            user_pending_conflicts = Booking.objects.filter(
+                room=data["room"],
+                user=current_user,
+                status=Booking.PENDING,
+                start_time__lt=data["end_time"],
+                end_time__gt=data["start_time"],
             )
-        if "room" in data and data["room"].available == False:
-            raise serializers.ValidationError(
-                {"room": "Room is not available for booking."}
-            )
-        # if data["participants"] and data["room"].capacity < len(data["participants"].split(",")):
-        #     raise serializers.ValidationError(
-        #         {"participants": "Number of participants exceeds room capacity."}
-        #     )
+
+            if self.instance:
+                user_pending_conflicts = user_pending_conflicts.exclude(id=self.instance.id)
+
+            if user_pending_conflicts.exists():
+                raise serializers.ValidationError(
+                    {
+                        "room": "You already have a pending booking request for this room during this time."
+                    }
+                )
 
         return data
-
-    def create(self, validated_data):
-        """
-        Create a new booking instance with the provided validated data.
-        """
-        return Booking.objects.create(**validated_data)
-
-    def to_representation(self, instance):
-        # Get the default representation
-        representation = super().to_representation(instance)
-
-        # If this is a POST/PUT request with a room_id, remove the empty room object
-        if "room" in representation and not representation["room"]:
-            representation.pop("room")
-
-        # Replace status with status_display and remove status_display field
-        if "status_display" in representation:
-            representation["status"] = representation["status_display"]
-            representation.pop("status_display")
-
-        return representation
-
-    def get_room(self, obj):
-        """
-        Get room details without creating a circular import
-        """
-        from rooms.serializers import RoomSerializer
-
-        if obj.room:
-            return RoomSerializer(obj.room, context=self.context).data
-        return None
-        
-    def get_status_display(self, obj):
-        """
-        Get the display value for the status field.
-        """
-        return obj.get_status_display()
-

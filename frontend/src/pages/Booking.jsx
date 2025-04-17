@@ -2,11 +2,11 @@ import React, { useState, useEffect } from "react";
 import {
   Search,
   Filter,
-  Projector,
-  Wifi,
-  Square,
   Building2,
   X,
+  Plus,
+  Pencil,
+  Trash2,
   Users,
 } from "lucide-react";
 import { Link } from "react-router-dom";
@@ -14,6 +14,31 @@ import BookingModal from "../components/ConfirmBooking";
 import api from "../api";
 import NavBar from "../components/NavBar";
 import Footer from "../components/Footer";
+
+// Utility function to properly capitalize amenity names
+const formatAmenityName = (name) => {
+  if (!name) return "";
+
+  // Handle special cases like "TV", "WiFi", etc.
+  const specialCases = {
+    wifi: "WiFi",
+    tv: "TV",
+    hdmi: "HDMI",
+    usb: "USB",
+    ac: "AC",
+  };
+
+  const lowerName = name.toLowerCase();
+  if (specialCases[lowerName]) {
+    return specialCases[lowerName];
+  }
+
+  // Otherwise capitalize first letter of each word
+  return name
+    .split(" ")
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+    .join(" ");
+};
 
 function Booking() {
   const [searchQuery, setSearchQuery] = useState("");
@@ -26,8 +51,6 @@ function Booking() {
   const [rooms, setRooms] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-
-  const firstName = localStorage.getItem("FirstName");
 
   // Modify the useEffect hook to refresh data every minute
   useEffect(() => {
@@ -124,10 +147,7 @@ function Booking() {
       selectedAmenities.every((amenity) => room.amenities.includes(amenity));
 
     return (
-      matchesSearch &&
-      matchesBuilding &&
-      matchesCapacity &&
-      matchesAmenities
+      matchesSearch && matchesBuilding && matchesCapacity && matchesAmenities
     );
   });
 
@@ -201,7 +221,6 @@ function Booking() {
                     } rounded-lg flex items-center space-x-2`}
                     onClick={() => toggleAmenity("projector")}
                   >
-                    <Projector size={18} />
                     <span>Projector</span>
                   </button>
                   <button
@@ -212,7 +231,6 @@ function Booking() {
                     } rounded-lg flex items-center space-x-2`}
                     onClick={() => toggleAmenity("wifi")}
                   >
-                    <Wifi size={18} />
                     <span>Wi-Fi</span>
                   </button>
                   <button
@@ -223,7 +241,6 @@ function Booking() {
                     } rounded-lg flex items-center space-x-2`}
                     onClick={() => toggleAmenity("whiteboard")}
                   >
-                    <Square size={18} />
                     <span>Whiteboard</span>
                   </button>
                 </div>
@@ -246,39 +263,64 @@ function Booking() {
             </div>
           ) : filteredRooms.length === 0 ? (
             <div className="col-span-3 text-center py-10">
-              <p className="text-gray-300">No rooms match your search criteria.</p>
+              <p className="text-gray-300">
+                No rooms match your search criteria.
+              </p>
             </div>
           ) : (
             filteredRooms.map((room) => (
-              <div key={room.id} className="section-card">
-                <h3 className="text-xl font-semibold">{room.name}</h3>
-                <div className="mt-3 space-y-2">
-                  <div className="flex items-center">
-                    <Building2 className="h-4 w-4 text-gray-400 mr-2" />
-                    <span className="text-sm text-gray-300">{room.building}</span>
-                  </div>
-                  <div className="flex items-center">
-                    <Users className="h-4 w-4 text-gray-400 mr-2" />
-                    <span className="text-sm text-gray-300">Capacity: {room.capacity}</span>
-                  </div>
-                  <div className="flex space-x-2 mt-2">
-                    {room.amenities?.includes("projector") && (
-                      <Projector size={18} className="text-gray-400" />
-                    )}
-                    {room.amenities?.includes("wifi") && (
-                      <Wifi size={18} className="text-gray-400" />
-                    )}
-                    {room.amenities?.includes("whiteboard") && (
-                      <Square size={18} className="text-gray-400" />
-                    )}
-                  </div>
+              <div
+                key={room.id}
+                className="section-card overflow-hidden group hover:shadow-lg hover:shadow-purple-900/20 transition-all duration-300"
+              >
+                {/* Card header with room name */}
+                <div className="pb-3 border-b border-gray-700/50">
+                  <h3 className="text-xl font-semibold text-white">
+                    {room.name}
+                  </h3>
                 </div>
-                <button
-                  onClick={() => handleBookClick(room)}
-                  className="w-full py-2 bg-plek-purple hover:bg-purple-700 rounded-lg transition-colors mt-4"
-                >
-                  Book
-                </button>
+
+                {/* Room details - more compact layout */}
+                <div className="py-3">
+                  {/* Info section */}
+                  <div className="flex flex-wrap gap-x-6 gap-y-2 mb-5">
+                    <div className="flex items-center">
+                      <Building2 className="h-4 w-4 text-purple-400 mr-2" />
+                      <span className="text-sm text-gray-300">
+                        {room.building_name}
+                      </span>
+                    </div>
+                    <div className="flex items-center">
+                      <Users className="h-4 w-4 text-purple-400 mr-2" />
+                      <span className="text-sm text-gray-300">
+                        {room.capacity}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Amenities tags with new elegant style */}
+                  {room.amenity_names && room.amenity_names.length > 0 && (
+                    <div className="flex flex-wrap gap-1.5 mb-5">
+                      {room.amenity_names.map((amenityName, index) => (
+                        <span
+                          key={index}
+                          className="px-3 py-1 bg-gray-800/60 text-gray-200 text-sm flex items-center hover:bg-gray-700/60 transition-colors shadow-sm"
+                        >
+                          <span className="w-1.5 h-1.5 rounded-sm bg-purple-500 mr-1.5"></span>
+                          {formatAmenityName(amenityName)}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* Book button */}
+                  <button
+                    onClick={() => handleBookClick(room)}
+                    className="w-full py-2 bg-plek-purple hover:bg-purple-700 rounded-lg transition-colors flex items-center justify-center"
+                  >
+                    <span className="font-medium">Book</span>
+                  </button>
+                </div>
               </div>
             ))
           )}

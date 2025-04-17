@@ -9,7 +9,7 @@ const api = axios.create({
 const getCsrfToken = async () => {
   try {
     // This endpoint sets the CSRF cookie
-    await axios.get("http://127.0.0.1:8000/api/csrf/", {
+    await axios.get("http://127.0.0.1:8000/api/auth/csrf/", {
       withCredentials: true
     });
     

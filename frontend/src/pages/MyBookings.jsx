@@ -9,7 +9,7 @@ import {
   Wifi,
   X,
   Trash2,
-  Loader2
+  Loader2,
 } from "lucide-react";
 import api from "../api";
 import ModifyBookingModal from "../components/ModifyBooking";
@@ -43,22 +43,28 @@ function MyBookings() {
         const upcoming = [];
         const previous = [];
 
-        bookings.forEach(booking => {
+        bookings.forEach((booking) => {
           console.log("Booking:", booking);
 
           // Parse the start_time from the API response
-          const startTime = DateTime.fromISO(booking.start_time, { zone: "Asia/Kolkata" });
-          const endTime = DateTime.fromISO(booking.end_time, { zone: "Asia/Kolkata" });
+          const startTime = DateTime.fromISO(booking.start_time, {
+            zone: "Asia/Kolkata",
+          });
+          const endTime = DateTime.fromISO(booking.end_time, {
+            zone: "Asia/Kolkata",
+          });
 
           // Format date and time for display
           const formattedDate = startTime.toFormat("LLLL d, yyyy");
-          const formattedTimeSlot = `${startTime.toFormat("h a")} - ${endTime.toFormat("h a")}`;
+          const formattedTimeSlot = `${startTime.toFormat(
+            "h a"
+          )} - ${endTime.toFormat("h a")}`;
 
           // Create a processed booking object with the required fields
           const processedBooking = {
             id: booking.id,
             roomName: booking.room.name,
-            building: booking.room.building,
+            building: booking.room.building_name,
             capacity: booking.room.capacity,
             status: booking.status,
             purpose: booking.purpose,
@@ -69,10 +75,18 @@ function MyBookings() {
             endTime: endTime,
             amenities: booking.room.amenities,
             // Add any other fields you need from the original booking
-            originalBooking: booking // Keep the original data for reference if needed
+            originalBooking: booking, // Keep the original data for reference if needed
           };
 
-          if (startTime.toJSDate() > now) {
+          // Put cancelled or rejected bookings in previous, regardless of date
+          if (
+            booking.status.toLowerCase() === "cancelled" ||
+            booking.status.toLowerCase() === "rejected"
+          ) {
+            previous.push(processedBooking);
+          }
+          // For non-cancelled/non-rejected bookings, use date to categorize
+          else if (startTime.toJSDate() > now) {
             upcoming.push(processedBooking);
           } else {
             previous.push(processedBooking);
@@ -106,10 +120,42 @@ function MyBookings() {
 
   const handleCancel = async (bookingId) => {
     try {
-      await api.delete(`book/delete/${bookingId}/`);
+      // Find the booking before attempting to cancel
+      const bookingToCancel = upcomingBookings.find(
+        (booking) => booking.id === bookingId
+      );
 
-      // Update the state to remove the canceled booking
-      setUpcomingBookings(upcomingBookings.filter(booking => booking.id !== bookingId));
+      // Don't allow cancellation of rejected bookings
+      if (
+        bookingToCancel &&
+        bookingToCancel.status.toLowerCase() === "rejected"
+      ) {
+        alert("Cannot cancel a rejected booking.");
+        return;
+      }
+
+      await api.delete(`/bookings/${bookingId}/`);
+
+      // Find the booking that was just cancelled
+      const cancelledBooking = upcomingBookings.find(
+        (booking) => booking.id === bookingId
+      );
+
+      if (cancelledBooking) {
+        // Update the status to "CANCELLED"
+        const updatedBooking = {
+          ...cancelledBooking,
+          status: "CANCELLED",
+        };
+
+        // Remove from upcoming bookings
+        setUpcomingBookings(
+          upcomingBookings.filter((booking) => booking.id !== bookingId)
+        );
+
+        // Add to previous bookings at the beginning (most recent)
+        setPreviousBookings([updatedBooking, ...previousBookings]);
+      }
 
       alert("Booking canceled successfully");
     } catch (err) {
@@ -156,7 +202,10 @@ function MyBookings() {
           <div className="scrollable-area">
             {loading ? (
               <div className="flex flex-col items-center justify-center py-10">
-                <Loader2 size={40} className="animate-spin text-purple-500 mb-4" />
+                <Loader2
+                  size={40}
+                  className="animate-spin text-purple-500 mb-4"
+                />
                 <p className="text-gray-400">Loading your bookings...</p>
               </div>
             ) : error ? (
@@ -167,17 +216,17 @@ function MyBookings() {
               upcomingBookings.length === 0 ? (
                 <div className="text-center py-10 text-gray-400">
                   <p>You don't have any upcoming bookings.</p>
-                  <Link to="/booking" className="text-purple-400 hover:text-purple-300 mt-2 inline-block">
+                  <Link
+                    to="/booking"
+                    className="text-purple-400 hover:text-purple-300 mt-2 inline-block"
+                  >
                     Book a room now
                   </Link>
                 </div>
               ) : (
                 <div className="space-y-4">
                   {upcomingBookings.map((booking) => (
-                    <div
-                      key={booking.id}
-                      className="section-card"
-                    >
+                    <div key={booking.id} className="section-card">
                       <div className="flex justify-between items-start">
                         <div>
                           <h3 className="text-lg font-medium mb-2">
@@ -214,74 +263,77 @@ function MyBookings() {
                           </div>
                         </div>
                         <div className="flex space-x-3">
-                          <button
-                            onClick={() => handleCancel(booking.id)}
-                            className="px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded-lg transition-colors"
-                          >
-                            Cancel
-                          </button>
-                          <button
-                            onClick={() => handleModify(booking)}
-                            className="px-4 py-2 bg-purple-600 hover:bg-purple-700 rounded-lg transition-colors"
-                          >
-                            Modify
-                          </button>
+                          {booking.status.toLowerCase() !== "rejected" && (
+                            <>
+                              <button
+                                onClick={() => handleCancel(booking.id)}
+                                className="px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded-lg transition-colors"
+                              >
+                                Cancel
+                              </button>
+                              <button
+                                onClick={() => handleModify(booking)}
+                                className="px-4 py-2 bg-purple-600 hover:bg-purple-700 rounded-lg transition-colors"
+                              >
+                                Modify
+                              </button>
+                            </>
+                          )}
                         </div>
                       </div>
                     </div>
                   ))}
                 </div>
               )
+            ) : previousBookings.length === 0 ? (
+              <div className="text-center py-10 text-gray-400">
+                <p>No previous bookings found.</p>
+              </div>
             ) : (
-              previousBookings.length === 0 ? (
-                <div className="text-center py-10 text-gray-400">
-                  <p>No previous bookings found.</p>
-                </div>
-              ) : (
-                <div className="space-y-4">
-                  {previousBookings.map((booking) => (
-                    <div
-                      key={booking.id}
-                      className="section-card"
-                    >
-                      <div className="flex justify-between items-start">
-                        <div>
-                          <h3 className="text-lg font-medium mb-2">
-                            Room: {booking.roomName}
-                          </h3>
-                          <p className="text-gray-400">
-                            Building: {booking.building}
-                          </p>
-                          <div className="mt-4 space-y-2">
-                            {/* Updated date and time display */}
-                            <div className="flex items-center space-x-2 text-gray-300">
-                              <CalendarDays size={16} />
-                              <span>{booking.date}</span>
-                            </div>
-                            <div className="flex items-center space-x-2 text-gray-300">
-                              <CalendarClock size={16} />
-                              <span>{booking.slot}</span>
-                            </div>
-                            <div className="flex items-center space-x-2 text-gray-300">
-                              <Users size={16} />
-                              <span>Capacity: {booking.capacity}</span>
-                            </div>
-                            <p
-                              className={`flex items-center space-x-2 ${
-                                booking.status.toLowerCase() === "completed"
-                                  ? "text-green-400"
-                                  : "text-red-400"
-                              }`}
-                            >
-                              <span>Status: {booking.status}</span>
-                            </p>
+              <div className="space-y-4">
+                {previousBookings.map((booking) => (
+                  <div key={booking.id} className="section-card">
+                    <div className="flex justify-between items-start">
+                      <div>
+                        <h3 className="text-lg font-medium mb-2">
+                          Room: {booking.roomName}
+                        </h3>
+                        <p className="text-gray-400">
+                          Building: {booking.building}
+                        </p>
+                        <div className="mt-4 space-y-2">
+                          {/* Updated date and time display */}
+                          <div className="flex items-center space-x-2 text-gray-300">
+                            <CalendarDays size={16} />
+                            <span>{booking.date}</span>
                           </div>
+                          <div className="flex items-center space-x-2 text-gray-300">
+                            <CalendarClock size={16} />
+                            <span>{booking.slot}</span>
+                          </div>
+                          <div className="flex items-center space-x-2 text-gray-300">
+                            <Users size={16} />
+                            <span>Capacity: {booking.capacity}</span>
+                          </div>
+                          <p
+                            className={`flex items-center space-x-2 ${
+                              booking.status.toLowerCase() === "completed"
+                                ? "text-green-400"
+                                : booking.status.toLowerCase() === "rejected"
+                                ? "text-red-400"
+                                : booking.status.toLowerCase() === "cancelled"
+                                ? "text-red-400"
+                                : "text-gray-400"
+                            }`}
+                          >
+                            <span>Status: {booking.status}</span>
+                          </p>
                         </div>
                       </div>
                     </div>
-                  ))}
-                </div>
-              )
+                  </div>
+                ))}
+              </div>
             )}
           </div>
         </div>

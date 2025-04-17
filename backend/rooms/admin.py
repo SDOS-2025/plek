@@ -1,8 +1,8 @@
 # room/models.py
 from django.contrib import admin
-from .models import Room, Building, Amenity
+
+from .models import Amenity, Building, Room
 
 admin.site.register(Room)
 admin.site.register(Building)
 admin.site.register(Amenity)
-

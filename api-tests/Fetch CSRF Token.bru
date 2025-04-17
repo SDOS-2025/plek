@@ -1,0 +1,11 @@
+meta {
+  name: Fetch CSRF Token
+  type: http
+  seq: 4
+}
+
+get {
+  url: {{BASE_URL}}/api/auth/csrf
+  body: none
+  auth: inherit
+}

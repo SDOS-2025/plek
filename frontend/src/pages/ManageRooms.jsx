@@ -1,16 +1,19 @@
-import React, { useState, useMemo, useEffect, useContext, useCallback } from "react";
+import React, {
+  useState,
+  useMemo,
+  useEffect,
+  useContext,
+  useCallback,
+} from "react";
 import PropTypes from "prop-types";
 import {
   Search,
   Filter,
-  Projector,
-  Wifi,
   Building2,
   X,
   Plus,
   Pencil,
   Trash2,
-  Square,
   Users,
 } from "lucide-react";
 import { Link } from "react-router-dom";
@@ -19,6 +22,31 @@ import { AuthContext } from "../context/AuthProvider";
 import Toast, { DeleteConfirmation } from "../components/AlertToast";
 import NavBar from "../components/NavBar";
 import Footer from "../components/Footer";
+
+// Utility function to properly capitalize amenity names
+const formatAmenityName = (name) => {
+  if (!name) return "";
+
+  // Handle special cases like "TV", "WiFi", etc.
+  const specialCases = {
+    wifi: "WiFi",
+    tv: "TV",
+    hdmi: "HDMI",
+    usb: "USB",
+    ac: "AC",
+  };
+
+  const lowerName = name.toLowerCase();
+  if (specialCases[lowerName]) {
+    return specialCases[lowerName];
+  }
+
+  // Otherwise capitalize first letter of each word
+  return name
+    .split(" ")
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+    .join(" ");
+};
 
 function ManageRooms() {
   const { user } = useContext(AuthContext);
@@ -39,7 +67,6 @@ function ManageRooms() {
   });
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [roomToDelete, setRoomToDelete] = useState(null);
-  const firstName = user?.first_name || "User";
 
   const showAlert = (type, message) => {
     setAlert({ show: true, type, message });
@@ -158,7 +185,7 @@ function ManageRooms() {
     if (roomToDelete) {
       try {
         console.log("Deleting room:", roomToDelete);
-        const response = await api.delete(`rooms/delete/${roomToDelete}/`);
+        const response = await api.delete(`rooms/${roomToDelete}/`);
         console.log("response:", response.data);
         showAlert("success", "Room deleted successfully!");
 
@@ -177,42 +204,125 @@ function ManageRooms() {
 
   const RoomModal = React.memo(({ room, onClose, isEdit, setRooms }) => {
     const [name, setName] = useState(room ? room.name : "");
-    const [building, setBuilding] = useState(room ? room.building : "");
+    const [buildingId, setBuildingId] = useState(room ? room.building : "");
+    const [floorId, setFloorId] = useState(room ? room.floor : "");
     const [capacity, setCapacity] = useState(room ? room.capacity : "");
-    const [amenities, setAmenities] = useState(room ? room.amenities : []);
+    const [amenityIds, setAmenityIds] = useState(room ? room.amenities : []);
+
+    // Add new state variables for data fetching
+    const [buildingsList, setBuildingsList] = useState([]);
+    const [floorsList, setFloorsList] = useState([]);
+    const [amenitiesList, setAmenitiesList] = useState([]);
+    const [loadingData, setLoadingData] = useState(true);
+    const [fetchError, setFetchError] = useState(null);
+
+    // Fetch required data on component mount
+    useEffect(() => {
+      const fetchData = async () => {
+        setLoadingData(true);
+        try {
+          // Fetch buildings
+          const buildingsResponse = await api.get("/buildings/");
+          setBuildingsList(buildingsResponse.data);
+
+          // Set initial building ID if editing
+          if (isEdit && room) {
+            setBuildingId(room.building);
+          } else if (buildingsResponse.data.length > 0) {
+            // Default to first building for new rooms
+            setBuildingId(buildingsResponse.data[0].id);
+          }
+
+          // Fetch amenities
+          const amenitiesResponse = await api.get("/amenities/");
+          setAmenitiesList(amenitiesResponse.data);
+
+          // Set initial amenity IDs if editing
+          if (isEdit && room && Array.isArray(room.amenities)) {
+            // Map string amenities to their IDs
+            const amenityMapping = {};
+            amenitiesResponse.data.forEach((a) => {
+              amenityMapping[a.name.toLowerCase()] = a.id;
+            });
+
+            const mappedIds = room.amenities
+              .map((name) => amenityMapping[name.toLowerCase()])
+              .filter((id) => id !== undefined);
+
+            setAmenityIds(mappedIds);
+          }
+
+          setFetchError(null);
+        } catch (error) {
+          console.error("Error fetching data:", error);
+          setFetchError("Failed to load required data. Please try again.");
+        } finally {
+          setLoadingData(false);
+        }
+      };
+
+      fetchData();
+    }, [isEdit, room]);
+
+    // Fetch floors when building ID changes
+    useEffect(() => {
+      if (!buildingId) return;
+
+      const fetchFloors = async () => {
+        try {
+          const floorsResponse = await api.get(
+            `/buildings/${buildingId}/floors/`
+          );
+          setFloorsList(floorsResponse.data);
+
+          // Set initial floor if available, or default to first floor
+          if (isEdit && room) {
+            setFloorId(room.floor);
+          } else if (floorsResponse.data.length > 0) {
+            setFloorId(floorsResponse.data[0].id);
+          }
+        } catch (error) {
+          console.error("Error fetching floors:", error);
+        }
+      };
+
+      fetchFloors();
+    }, [buildingId, isEdit, room]);
+
+    const toggleAmenity = (amenityId) => {
+      if (amenityIds.includes(amenityId)) {
+        setAmenityIds(amenityIds.filter((id) => id !== amenityId));
+      } else {
+        setAmenityIds([...amenityIds, amenityId]);
+      }
+    };
 
     useEffect(() => {
       console.log("Modal state initialized:", {
         name,
-        building,
+        buildingId,
+        floorId,
         capacity,
-        amenities,
+        amenityIds,
       });
-    }, [name, building, capacity, amenities]);
-
-    const toggleAmenity = (amenity) => {
-      if (amenities.includes(amenity)) {
-        setAmenities(amenities.filter((a) => a !== amenity));
-      } else {
-        setAmenities([...amenities, amenity]);
-      }
-    };
+    }, [name, buildingId, floorId, capacity, amenityIds]);
 
     const handleSubmit = async (e) => {
       e.preventDefault();
       // Handle room creation/update logic
       const roomData = {
         name,
-        building,
+        building: buildingId,
+        floor: floorId,
         capacity: parseInt(capacity),
-        amenities,
+        amenities: amenityIds,
       };
       try {
         if (isEdit && room) {
           await api.patch(`rooms/${room.id}/`, roomData);
           showAlert("success", "Room updated successfully!");
         } else {
-          await api.post("rooms/add/", roomData);
+          await api.post("rooms/create/", roomData);
           showAlert("success", "Room created successfully!");
         }
         // Fetch updated rooms
@@ -296,56 +406,56 @@ function ManageRooms() {
               <label className="block text-sm font-medium text-gray-300 mb-2">
                 Building
               </label>
-              <input
-                type="text"
-                value={building}
-                onChange={(e) => setBuilding(e.target.value)}
+              <select
+                value={buildingId}
+                onChange={(e) => setBuildingId(e.target.value)}
                 className="w-full bg-plek-background rounded-lg p-3 focus:outline-none focus:ring-2 focus:ring-plek-purple"
-                placeholder="e.g., R&D Building"
                 required
-              />
+              >
+                {buildingsList.map((building) => (
+                  <option key={building.id} value={building.id}>
+                    {building.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-300 mb-2">
+                Floor
+              </label>
+              <select
+                value={floorId}
+                onChange={(e) => setFloorId(e.target.value)}
+                className="w-full bg-plek-background rounded-lg p-3 focus:outline-none focus:ring-2 focus:ring-plek-purple"
+                required
+              >
+                {floorsList.map((floor) => (
+                  <option key={floor.id} value={floor.id}>
+                    {floor.name}
+                  </option>
+                ))}
+              </select>
             </div>
 
             {/* Amenities section with consistent styling */}
             <div className="bg-plek-background rounded-lg p-4 mb-6">
               <h3 className="font-semibold mb-2">Amenities</h3>
-              <div className="flex space-x-4">
-                <button
-                  type="button"
-                  className={`px-4 py-2 ${
-                    amenities.includes("projector")
-                      ? "bg-plek-purple"
-                      : "bg-plek-lightgray"
-                  } rounded-lg flex items-center space-x-2 transition-colors`}
-                  onClick={() => toggleAmenity("projector")}
-                >
-                  <Projector size={18} />
-                  <span>Projector</span>
-                </button>
-                <button
-                  type="button"
-                  className={`px-4 py-2 ${
-                    amenities.includes("wifi")
-                      ? "bg-plek-purple"
-                      : "bg-plek-lightgray"
-                  } rounded-lg flex items-center space-x-2 transition-colors`}
-                  onClick={() => toggleAmenity("wifi")}
-                >
-                  <Wifi size={18} />
-                  <span>Wi-Fi</span>
-                </button>
-                <button
-                  type="button"
-                  className={`px-4 py-2 ${
-                    amenities.includes("whiteboard")
-                      ? "bg-plek-purple"
-                      : "bg-plek-lightgray"
-                  } rounded-lg flex items-center space-x-2 transition-colors`}
-                  onClick={() => toggleAmenity("whiteboard")}
-                >
-                  <Square size={18} />
-                  <span>Whiteboard</span>
-                </button>
+              <div className="flex flex-wrap gap-2">
+                {amenitiesList.map((amenity) => (
+                  <button
+                    key={amenity.id}
+                    type="button"
+                    className={`px-3 py-2 ${
+                      amenityIds.includes(amenity.id)
+                        ? "bg-plek-purple"
+                        : "bg-plek-lightgray"
+                    } rounded-lg transition-colors`}
+                    onClick={() => toggleAmenity(amenity.id)}
+                  >
+                    <span>{amenity.name}</span>
+                  </button>
+                ))}
               </div>
             </div>
 
@@ -375,6 +485,7 @@ function ManageRooms() {
       id: PropTypes.number,
       name: PropTypes.string,
       building: PropTypes.string,
+      floor: PropTypes.string,
       capacity: PropTypes.number,
       amenities: PropTypes.arrayOf(PropTypes.string),
     }),
@@ -480,14 +591,13 @@ function ManageRooms() {
             </div>
           ) : filteredRooms.length === 0 ? (
             <div className="col-span-3 text-center py-10">
-              <p className="text-gray-300">No rooms match your search criteria.</p>
+              <p className="text-gray-300">
+                No rooms match your search criteria.
+              </p>
             </div>
           ) : (
             filteredRooms.map((room) => (
-              <div
-                key={room.id}
-                className="section-card"
-              >
+              <div key={room.id} className="section-card">
                 <div className="flex justify-between items-start">
                   <h3 className="text-xl font-semibold">{room.name}</h3>
                   <div className="flex space-x-2">
@@ -507,24 +617,30 @@ function ManageRooms() {
                 </div>
                 <div className="mt-3 space-y-2">
                   <div className="flex items-center">
-                    <Building2 className="h-4 w-4 text-gray-400 mr-2" />
-                    <span className="text-sm text-gray-300">{room.building}</span>
+                    <Building2 className="h-4 w-4 text-purple-400 mr-2" />
+                    <span className="text-sm text-gray-300">
+                      {room.building_name || room.building}
+                    </span>
                   </div>
                   <div className="flex items-center">
-                    <Users className="h-4 w-4 text-gray-400 mr-2" />
-                    <span className="text-sm text-gray-300">Capacity: {room.capacity}</span>
+                    <Users className="h-4 w-4 text-purple-400 mr-2" />
+                    <span className="text-sm text-gray-300">
+                      {room.capacity}
+                    </span>
                   </div>
-                  <div className="flex space-x-2 mt-2">
-                    {room.amenities.includes("projector") && (
-                      <Projector size={18} className="text-gray-400" />
-                    )}
-                    {room.amenities.includes("wifi") && (
-                      <Wifi size={18} className="text-gray-400" />
-                    )}
-                    {room.amenities.includes("whiteboard") && (
-                      <Square size={18} className="text-gray-400" />
-                    )}
-                  </div>
+                  {room.amenity_names && room.amenity_names.length > 0 && (
+                    <div className="flex flex-wrap gap-1.5 mt-2">
+                      {room.amenity_names.map((amenityName, index) => (
+                        <span
+                          key={index}
+                          className="px-3 py-1 bg-gray-800/60 text-gray-200 text-sm flex items-center hover:bg-gray-700/60 transition-colors shadow-sm"
+                        >
+                          <span className="w-1.5 h-1.5 rounded-sm bg-purple-500 mr-1.5"></span>
+                          {formatAmenityName(amenityName)}
+                        </span>
+                      ))}
+                    </div>
+                  )}
                 </div>
               </div>
             ))

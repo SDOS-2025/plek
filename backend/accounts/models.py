@@ -1,16 +1,10 @@
 # accounts/models.py
-from django.contrib.auth.models import (AbstractBaseUser, BaseUserManager,
-                                        Group, Permission, PermissionsMixin)
+from django.contrib.auth.models import (
+    AbstractBaseUser,
+    BaseUserManager,
+    PermissionsMixin,
+)
 from django.db import models
-from django.db.models.signals import post_migrate
-from django.dispatch import receiver
-
-
-class Department(models.Model):
-    name = models.CharField(max_length=100)
-
-    def __str__(self):
-        return self.name
 
 
 class CustomUserManager(BaseUserManager):
@@ -35,27 +29,36 @@ class CustomUser(AbstractBaseUser, PermissionsMixin):
     last_name = models.CharField(max_length=100)
     is_active = models.BooleanField(default=True)
     is_staff = models.BooleanField(default=False)
-    is_faculty = models.BooleanField(default=False)
-
-    USER_CATEGORY_CHOICES = [
-        ("student", "Student"),
-        ("coordinator", "Coordinator"),
-        ("admin", "Admin"),
-        ("super_admin", "Super Admin"),
-    ]
-
-    user_category = models.CharField(
-        max_length=20, choices=USER_CATEGORY_CHOICES, default="student"
-    )
-
-    department = models.ForeignKey(
-        Department, on_delete=models.CASCADE, null=True, blank=True
-    )
+    managed_floors = models.ManyToManyField("rooms.Floor", blank=True)
+    managed_departments = models.ManyToManyField("rooms.Department", blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
 
     objects = CustomUserManager()
 
     USERNAME_FIELD = "email"
     REQUIRED_FIELDS = ["first_name", "last_name"]
 
+    class Meta:
+        permissions = [
+            ("view_all_users", "Can view all users"),
+            ("moderate_user", "Can moderate users"),
+            ("promote_to_coordinator", "Can promote to Coordinator"),
+            ("promote_to_admin", "Can promote to Admin"),
+            ("promote_to_super_admin", "Can promote to SuperAdmin"),
+            ("demote_to_user", "Can demote to User"),
+            ("demote_to_coordinator", "Can demote to Coordinator"),
+            ("demote_to_admin", "Can demote to Admin"),
+        ]
+
     def __str__(self):
         return self.email
+
+    def can_manage_room(self, room):
+        if self.groups.filter(name__in=["Admin", "SuperAdmin"]).exists():
+            return True
+        if self.groups.filter(name="Coordinator").exists():
+            return room.floor in self.managed_floors.all() or (
+                room.department and room.department in self.managed_departments.all()
+            )
+        return False

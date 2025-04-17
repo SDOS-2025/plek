@@ -11,7 +11,7 @@ import {
   Building2,
   Plus,
   Pencil,
-  Trash2
+  Trash2,
 } from "lucide-react";
 import api from "../api";
 import { DateTime } from "luxon";
@@ -55,28 +55,37 @@ function ManageBookings() {
 
   // Process bookings to match expected format
   const processBookings = (bookings) => {
-    return bookings.map(booking => {
+    return bookings.map((booking) => {
       // Parse start and end times
-      const startTime = DateTime.fromISO(booking.start_time, { zone: "Asia/Kolkata" });
-      const endTime = DateTime.fromISO(booking.end_time, { zone: "Asia/Kolkata" });
-      
+      const startTime = DateTime.fromISO(booking.start_time, {
+        zone: "Asia/Kolkata",
+      });
+      const endTime = DateTime.fromISO(booking.end_time, {
+        zone: "Asia/Kolkata",
+      });
+
       // Format date and time slot
       const formattedDate = startTime.toFormat("LLLL d, yyyy");
-      const formattedTimeSlot = `${startTime.toFormat("h a")} - ${endTime.toFormat("h a")}`;
-      
+      const formattedTimeSlot = `${startTime.toFormat(
+        "h a"
+      )} - ${endTime.toFormat("h a")}`;
+
       // Create processed booking with correct structure
       return {
         id: booking.id,
         room: booking.room.name,
-        building: booking.room.building,
+        building: booking.room.building_name,
         capacity: booking.room.capacity,
         date: formattedDate,
         slot: formattedTimeSlot,
         status: booking.status,
         purpose: booking.purpose,
         participants: booking.participants,
-        user: typeof booking.user === 'number' ? `User ${booking.user}` : booking.user,
-        original: booking // Keep original data in case we need it
+        user:
+          typeof booking.user === "number"
+            ? `User ${booking.user}`
+            : booking.user,
+        original: booking, // Keep original data in case we need it
       };
     });
   };
@@ -89,13 +98,17 @@ function ManageBookings() {
 
         // Get all bookings from a single endpoint
         const response = await api.get("/bookings/?all=true");
-        
+
         const allBookings = processBookings(response.data || []);
-        
+
         // Split bookings into pending requests and approved bookings
-        const requests = allBookings.filter(booking => booking.status.toLowerCase() === "pending");
-        const approved = allBookings.filter(booking => booking.status.toLowerCase() === "approved");
-        
+        const requests = allBookings.filter(
+          (booking) => booking.status.toLowerCase() === "pending"
+        );
+        const approved = allBookings.filter(
+          (booking) => booking.status.toLowerCase() === "approved"
+        );
+
         setBookingRequests(requests);
         setApprovedBookings(approved);
         setError(null);
@@ -124,15 +137,26 @@ function ManageBookings() {
 
   const handleApprove = async (bookingId) => {
     try {
-      const response = await api.put(`/book/approve/${bookingId}/`);
+      const payload = {
+        action: "approve",
+      };
+
+      const response = await api.post(
+        `/bookings/approval/${bookingId}/`,
+        payload
+      );
 
       if (response.status === 200) {
         // Update local state
-        const updatedRequests = bookingRequests.filter(req => req.id !== bookingId);
-        const approvedBooking = bookingRequests.find(req => req.id === bookingId);
+        const updatedRequests = bookingRequests.filter(
+          (req) => req.id !== bookingId
+        );
+        const approvedBooking = bookingRequests.find(
+          (req) => req.id === bookingId
+        );
 
         if (approvedBooking) {
-          approvedBooking.status = "approved";
+          approvedBooking.action = "APPROVED";
           setApprovedBookings([...approvedBookings, approvedBooking]);
         }
 
@@ -147,6 +171,63 @@ function ManageBookings() {
     }
   };
 
+  const handleReject = async (bookingId) => {
+    try {
+      const payload = {
+        action: "reject",
+      };
+
+      const response = await api.post(
+        `/bookings/approval/${bookingId}/`,
+        payload
+      );
+
+      if (response.status === 200) {
+        // Remove the rejected booking from pending requests
+        const updatedRequests = bookingRequests.filter(
+          (req) => req.id !== bookingId
+        );
+        setBookingRequests(updatedRequests);
+
+        // Show success alert
+        showAlert("success", "Booking request rejected successfully!");
+      }
+    } catch (error) {
+      console.error("Error rejecting booking:", error);
+      showAlert("danger", "Failed to reject booking. Please try again.");
+    }
+  };
+
+  const handleRejectApproved = async (bookingId) => {
+    try {
+      const payload = {
+        action: "reject",
+      };
+
+      const response = await api.post(
+        `/bookings/approval/${bookingId}/`,
+        payload
+      );
+
+      if (response.status === 200) {
+        // Remove the rejected booking from approved bookings
+        const updatedApproved = approvedBookings.filter(
+          (booking) => booking.id !== bookingId
+        );
+        setApprovedBookings(updatedApproved);
+
+        // Show success alert
+        showAlert("success", "Booking has been rejected!");
+      }
+    } catch (error) {
+      console.error("Error rejecting booking:", error);
+      showAlert("danger", "Failed to reject booking. Please try again.");
+    } finally {
+      setShowDeleteConfirm(false);
+      setBookingToDelete(null);
+    }
+  };
+
   const handleDeleteClick = (bookingId) => {
     setBookingToDelete(bookingId);
     setShowDeleteConfirm(true);
@@ -155,13 +236,24 @@ function ManageBookings() {
   const confirmDelete = async () => {
     if (!bookingToDelete) return;
 
-    try {
-      const response = await api.delete(`/book/delete/${bookingToDelete}/`);
+    // If we're in the approved bookings tab, reject the booking instead of deleting it
+    if (activeTab === "bookings") {
+      await handleRejectApproved(bookingToDelete);
+      return;
+    }
 
-      if (response.status === 200 || response.status === 204) {
+    // Otherwise delete the booking (for pending requests)
+    try {
+      const response = await api.delete(`/bookings/${bookingToDelete}/`);
+
+      if (response.status === 204 || response.status === 200) {
         // Update local state
-        const updatedRequests = bookingRequests.filter(req => req.id !== bookingToDelete);
-        const updatedApproved = approvedBookings.filter(booking => booking.id !== bookingToDelete);
+        const updatedRequests = bookingRequests.filter(
+          (req) => req.id !== bookingToDelete
+        );
+        const updatedApproved = approvedBookings.filter(
+          (booking) => booking.id !== bookingToDelete
+        );
 
         setBookingRequests(updatedRequests);
         setApprovedBookings(updatedApproved);
@@ -179,10 +271,13 @@ function ManageBookings() {
   };
 
   // Extract unique buildings for filter dropdown
-  const buildings = ["all", ...new Set([
-    ...bookingRequests.map(booking => booking.building),
-    ...approvedBookings.map(booking => booking.building)
-  ])];
+  const buildings = [
+    "all",
+    ...new Set([
+      ...bookingRequests.map((booking) => booking.building),
+      ...approvedBookings.map((booking) => booking.building),
+    ]),
+  ];
 
   // Date range options for filter
   const dateRanges = [
@@ -201,28 +296,29 @@ function ManageBookings() {
 
   // Filter bookings based on search query and filters
   const filterBookings = (bookings) => {
-    return bookings.filter(booking => {
+    return bookings.filter((booking) => {
       const matchesSearch =
         booking.room?.toLowerCase().includes(searchQuery.toLowerCase()) ||
         booking.building?.toLowerCase().includes(searchQuery.toLowerCase()) ||
         booking.user?.toLowerCase().includes(searchQuery.toLowerCase());
 
-      const matchesBuilding = selectedBuilding === "all" || booking.building === selectedBuilding;
+      const matchesBuilding =
+        selectedBuilding === "all" || booking.building === selectedBuilding;
 
       // Date filtering
       let matchesDate = true;
       if (selectedDateRange !== "all") {
         const bookingDate = DateTime.fromFormat(booking.date, "LLLL d, yyyy");
-        const today = DateTime.now().startOf('day');
+        const today = DateTime.now().startOf("day");
 
         if (selectedDateRange === "today") {
-          matchesDate = bookingDate.hasSame(today, 'day');
+          matchesDate = bookingDate.hasSame(today, "day");
         } else if (selectedDateRange === "week") {
-          const startOfWeek = today.startOf('week');
-          const endOfWeek = today.endOf('week');
+          const startOfWeek = today.startOf("week");
+          const endOfWeek = today.endOf("week");
           matchesDate = bookingDate >= startOfWeek && bookingDate <= endOfWeek;
         } else if (selectedDateRange === "month") {
-          matchesDate = bookingDate.hasSame(today, 'month');
+          matchesDate = bookingDate.hasSame(today, "month");
         }
       }
 
@@ -239,7 +335,8 @@ function ManageBookings() {
   const filteredBookings = filterBookings(approvedBookings);
 
   // Get current data based on active tab
-  const currentData = activeTab === "requests" ? filteredRequests : filteredBookings;
+  const currentData =
+    activeTab === "requests" ? filteredRequests : filteredBookings;
 
   return (
     <div className="page-container">
@@ -377,7 +474,9 @@ function ManageBookings() {
             currentData.map((booking) => (
               <div key={booking.id} className="section-card">
                 <div className="flex justify-between items-start">
-                  <h3 className="text-xl font-semibold">Room: {booking.room}</h3>
+                  <h3 className="text-xl font-semibold">
+                    Room: {booking.room}
+                  </h3>
                   <div className="flex space-x-2">
                     {activeTab === "requests" ? (
                       <>
@@ -389,9 +488,9 @@ function ManageBookings() {
                           <Check size={18} className="text-green-400" />
                         </button>
                         <button
-                          onClick={() => handleDeleteClick(booking.id)}
+                          onClick={() => handleReject(booking.id)}
                           className="p-2 hover:bg-red-500/20 rounded-lg transition-colors"
-                          title="Deny"
+                          title="Reject"
                         >
                           <X size={18} className="text-red-400" />
                         </button>
@@ -407,10 +506,10 @@ function ManageBookings() {
                         </button>
                         <button
                           onClick={() => handleDeleteClick(booking.id)}
-                          className="p-2 hover:bg-gray-700 rounded-lg transition-colors"
-                          title="Cancel"
+                          className="p-2 hover:bg-red-500/20 rounded-lg transition-colors"
+                          title="Reject"
                         >
-                          <Trash2 size={18} className="text-red-400" />
+                          <X size={18} className="text-red-400" />
                         </button>
                       </>
                     )}
@@ -422,20 +521,28 @@ function ManageBookings() {
                 <div className="mt-3 space-y-2">
                   <div className="flex items-center">
                     <Clock className="h-4 w-4 text-gray-400 mr-2" />
-                    <span className="text-sm text-gray-300">{booking.slot}</span>
+                    <span className="text-sm text-gray-300">
+                      {booking.slot}
+                    </span>
                   </div>
                   <div className="flex items-center">
                     <Calendar className="h-4 w-4 text-gray-400 mr-2" />
-                    <span className="text-sm text-gray-300">{booking.date}</span>
+                    <span className="text-sm text-gray-300">
+                      {booking.date}
+                    </span>
                   </div>
                   <div className="flex items-center">
                     <Users className="h-4 w-4 text-gray-400 mr-2" />
-                    <span className="text-sm text-gray-300">Capacity: {booking.capacity}</span>
+                    <span className="text-sm text-gray-300">
+                      Capacity: {booking.capacity}
+                    </span>
                   </div>
                   <div className="flex items-center">
                     <Building2 className="h-4 w-4 text-gray-400 mr-2" />
                     <span className="text-sm text-gray-300">
-                      {activeTab === "requests" ? "Requested by: " : "Booked by: "}
+                      {activeTab === "requests"
+                        ? "Requested by: "
+                        : "Booked by: "}
                       {booking.user}
                     </span>
                   </div>
@@ -444,7 +551,8 @@ function ManageBookings() {
                 {booking.purpose && (
                   <div className="mt-3 border-t border-gray-700 pt-2">
                     <p className="text-sm text-gray-300">
-                      <span className="text-gray-400">Purpose:</span> {booking.purpose}
+                      <span className="text-gray-400">Purpose:</span>{" "}
+                      {booking.purpose}
                     </p>
                   </div>
                 )}
@@ -483,11 +591,20 @@ function ManageBookings() {
         />
       )}
 
-      {/* Delete Confirmation Dialog */}
+      {/* Delete/Reject Confirmation Dialog */}
       <DeleteConfirmation
         show={showDeleteConfirm}
         onConfirm={confirmDelete}
         onCancel={() => setShowDeleteConfirm(false)}
+        title={activeTab === "bookings" ? "Reject Booking" : "Cancel Booking"}
+        message={
+          activeTab === "bookings"
+            ? "Are you sure you want to reject this approved booking? This action cannot be undone."
+            : "Are you sure you want to cancel this booking? This action cannot be undone."
+        }
+        confirmButtonText={
+          activeTab === "bookings" ? "Reject" : "Cancel Booking"
+        }
       />
     </div>
   );

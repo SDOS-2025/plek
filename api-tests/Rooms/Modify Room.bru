@@ -1,0 +1,11 @@
+meta {
+  name: Modify Room
+  type: http
+  seq: 7
+}
+
+patch {
+  url: {{BASE_URL}}/rooms/2/
+  body: json
+  auth: inherit
+}
