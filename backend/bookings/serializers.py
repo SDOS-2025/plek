@@ -62,10 +62,20 @@ class BookingSerializer(serializers.ModelSerializer):
         # Get the current user from the request context
         request = self.context.get("request")
         current_user = request.user if request else None
+        
+        # For PATCH requests, if room is not provided, use the existing instance's room
+        if self.instance and 'room' not in data:
+            room = self.instance.room
+        else:
+            room = data.get('room')
+            
+            # If room is still None (which shouldn't happen for POST), raise an error
+            if room is None and self.instance is None:
+                raise serializers.ValidationError({"room": "Room is required for booking creation."})
 
         # Check for APPROVED bookings (blocks everyone)
         approved_conflicts = Booking.objects.filter(
-            room=data["room"],
+            room=room,
             status=Booking.APPROVED,
             start_time__lt=data["end_time"],
             end_time__gt=data["start_time"],
@@ -83,7 +93,7 @@ class BookingSerializer(serializers.ModelSerializer):
         # Check for the user's own PENDING bookings (prevents duplicate requests)
         if current_user:
             user_pending_conflicts = Booking.objects.filter(
-                room=data["room"],
+                room=room,
                 user=current_user,
                 status=Booking.PENDING,
                 start_time__lt=data["end_time"],

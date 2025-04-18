@@ -167,6 +167,7 @@ function ManageBookings() {
       processedBookings.push({
         id: booking.id,
         room: roomName,
+        roomId: booking.room_id || booking.room || "",
         building: buildingName || booking.building || "",
         capacity: roomCapacity || booking.capacity || 0,
         date: formattedDate,

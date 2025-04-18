@@ -10,6 +10,7 @@ import {
 } from "lucide-react";
 import api from "../api";
 import { DateTime } from "luxon";
+import Toast from "../components/AlertToast";
 
 const ModifyBookingModal = ({ booking, onClose, onCancel }) => {
   // Pre-populate fields from the booking
@@ -22,16 +23,21 @@ const ModifyBookingModal = ({ booking, onClose, onCancel }) => {
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [showTimePicker, setShowTimePicker] = useState(false);
 
+  // Add alert state
+  const [alert, setAlert] = useState({
+    show: false,
+    type: "success",
+    message: "",
+  });
+
   // Convert incoming date to proper ISO format or use today's date as fallback
   const [date, setDate] = useState(() => {
     try {
       // Try to parse the incoming booking date
-      return DateTime.fromFormat(booking.date, "LLLL d, yyyy")
-        .setZone("Asia/Kolkata")
-        .toISODate();
+      return DateTime.fromFormat(booking.date, "LLLL d, yyyy").toISODate();
     } catch (e) {
       // Fallback to today's date if parsing fails
-      return DateTime.now().setZone("Asia/Kolkata").toISODate();
+      return DateTime.now().toISODate();
     }
   });
 
@@ -80,44 +86,76 @@ const ModifyBookingModal = ({ booking, onClose, onCancel }) => {
         "4:00 PM - 5:00 PM",
       ];
 
-      const formattedDate = DateTime.fromISO(selectedDate)
-        .setZone("Asia/Kolkata")
-        .toISODate();
+      // Format date properly for API
+      const formattedDate = DateTime.fromISO(selectedDate).toISODate();
 
-      // Get the room ID from the booking object
-      // Make sure to use the correct property for room ID
-      const roomId =
-        booking.roomId ||
-        (booking.originalBooking && booking.originalBooking.room.id) ||
-        booking.id;
+      // Extract room ID more carefully
+      let roomId = null;
+
+      // Try different properties to find room ID
+      if (booking.originalBooking && booking.originalBooking.room) {
+        // Case 1: Room object in originalBooking
+        if (typeof booking.originalBooking.room === "object") {
+          roomId = booking.originalBooking.room.id;
+        } else {
+          // Case 2: Room ID directly in originalBooking.room
+          roomId = booking.originalBooking.room;
+        }
+      } else if (booking.roomId) {
+        // Case 3: Direct roomId property
+        roomId = booking.roomId;
+      } else if (booking.room) {
+        // Case 4: Room property directly on booking
+        roomId =
+          typeof booking.room === "object" ? booking.room.id : booking.room;
+      }
+
+      console.log("Room ID extraction details:", {
+        originalBookingRoom: booking.originalBooking?.room,
+        bookingRoomId: booking.roomId,
+        bookingRoom: booking.room,
+        extractedRoomId: roomId,
+        booking: booking,
+      });
+
+      if (!roomId) {
+        setTimeSlotError("Could not identify the room for this booking");
+        setLoadingTimeSlots(false);
+        return;
+      }
 
       // API call to get bookings for this room on the selected date
+      console.log(
+        `Making API call to: /rooms/${roomId}/?date=${formattedDate}`
+      );
       const response = await api.get(`/rooms/${roomId}/?date=${formattedDate}`);
+      console.log("API response:", response);
 
-      // Get the booked slots from API response
+      // Check if the response structure is as expected
+      if (!response.data) {
+        throw new Error("Invalid response format from API");
+      }
+
+      // Get bookings from API response
       const bookings = response.data.bookings || [];
+      console.log("Bookings for this date:", bookings);
 
-      // Convert bookings into time slots format
+      // Process booked slots - extract the ID from each booking to exclude current booking
       const bookedSlots = bookings
-        .filter((b) => b.id !== booking.id) // Exclude current booking
+        .filter((b) => b.id !== booking.id) // Exclude current booking if present
         .map((b) => {
-          const start = DateTime.fromISO(b.start_time)
-            .setZone("Asia/Kolkata")
-            .toFormat("h:mm a");
-          const end = DateTime.fromISO(b.end_time)
-            .setZone("Asia/Kolkata")
-            .toFormat("h:mm a");
+          const start = DateTime.fromISO(b.start_time).toFormat("h:mm a");
+          const end = DateTime.fromISO(b.end_time).toFormat("h:mm a");
           return `${start} - ${end}`;
         });
 
-      console.log("Booked time slots:", bookedSlots);
-
-      // Create array marking only actually booked slots as unavailable
-      // Normalize time slots to make comparison more reliable
+      // Create array marking which slots are available
       const slotsWithStatus = allTimeSlots.map((time) => {
-        const normalizedTime = time.replace(/\s+/g, " ").toUpperCase();
+        // Normalize time format for comparison (remove extra spaces, uppercase AM/PM)
+        const normalizedTime = time.toUpperCase().replace(/\s+/g, " ");
+
         const isBooked = bookedSlots.some((slot) => {
-          const normalizedSlot = slot.replace(/\s+/g, " ").toUpperCase();
+          const normalizedSlot = slot.toUpperCase().replace(/\s+/g, " ");
           return normalizedSlot === normalizedTime;
         });
 
@@ -127,10 +165,24 @@ const ModifyBookingModal = ({ booking, onClose, onCancel }) => {
         };
       });
 
+      console.log("Final available time slots:", slotsWithStatus);
       setAvailableTimeSlots(slotsWithStatus);
+
+      // If current time slot is not available, reset it
+      const currentSlotAvailable = !slotsWithStatus.find(
+        (slot) => slot.time === timeSlot
+      )?.isBooked;
+
+      if (timeSlot && !currentSlotAvailable) {
+        // Find first available slot
+        const firstAvailable = slotsWithStatus.find((slot) => !slot.isBooked);
+        if (firstAvailable) {
+          setTimeSlot(firstAvailable.time);
+        }
+      }
     } catch (error) {
-      console.error("Error fetching time slots:", error);
-      setTimeSlotError("Failed to load available time slots");
+      console.error("Error details:", error);
+      setTimeSlotError(`Failed to load available time slots: ${error.message}`);
       setAvailableTimeSlots([]);
     } finally {
       setLoadingTimeSlots(false);
@@ -163,34 +215,37 @@ const ModifyBookingModal = ({ booking, onClose, onCancel }) => {
   const parseTimeSlot = (timeSlot, dateStr) => {
     const [startStr, endStr] = timeSlot.split(" - ");
 
-    // Create a DateTime object in Asia/Kolkata timezone
-    const baseDate = DateTime.fromISO(dateStr, { zone: "Asia/Kolkata" });
+    // Create a DateTime object in local timezone
+    const baseDate = DateTime.fromISO(dateStr);
 
     // Parse hours and minutes from the time strings
-    const [startHours, startMinutes] = startStr
-      .match(/(\d+):(\d+)/)
-      .slice(1, 3)
-      .map(Number);
-    const [endHours, endMinutes] = endStr
-      .match(/(\d+):(\d+)/)
-      .slice(1, 3)
-      .map(Number);
+    const startMatch = startStr.match(/(\d+):(\d+)\s*(AM|PM)/i);
+    const endMatch = endStr.match(/(\d+):(\d+)\s*(AM|PM)/i);
 
-    // Adjust for PM times
-    const startPeriod = startStr.includes("PM");
-    const endPeriod = endStr.includes("PM");
+    if (!startMatch || !endMatch) {
+      console.error("Invalid time format:", timeSlot);
+      return { start_time: "", end_time: "" };
+    }
 
-    let startHour = startHours;
-    if (startPeriod && startHours !== 12) startHour += 12;
-    if (!startPeriod && startHours === 12) startHour = 0;
+    let [, startHours, startMinutes, startPeriod] = startMatch;
+    let [, endHours, endMinutes, endPeriod] = endMatch;
 
-    let endHour = endHours;
-    if (endPeriod && endHours !== 12) endHour += 12;
-    if (!endPeriod && endHours === 12) endHour = 0;
+    startHours = parseInt(startHours);
+    startMinutes = parseInt(startMinutes);
+    endHours = parseInt(endHours);
+    endMinutes = parseInt(endMinutes);
+
+    // Adjust for 12-hour clock
+    if (startPeriod.toUpperCase() === "PM" && startHours !== 12)
+      startHours += 12;
+    if (startPeriod.toUpperCase() === "AM" && startHours === 12) startHours = 0;
+
+    if (endPeriod.toUpperCase() === "PM" && endHours !== 12) endHours += 12;
+    if (endPeriod.toUpperCase() === "AM" && endHours === 12) endHours = 0;
 
     // Set hours and minutes using DateTime
-    const startTime = baseDate.set({ hour: startHour, minute: startMinutes });
-    const endTime = baseDate.set({ hour: endHour, minute: endMinutes });
+    const startTime = baseDate.set({ hour: startHours, minute: startMinutes });
+    const endTime = baseDate.set({ hour: endHours, minute: endMinutes });
 
     return {
       start_time: startTime.toISO(),
@@ -205,13 +260,14 @@ const ModifyBookingModal = ({ booking, onClose, onCancel }) => {
       // Get time values from the selected time slot
       const timeValues = parseTimeSlot(timeSlot, date);
 
-      // Create booking update object
+      // Create booking update object - include status change to PENDING for re-approval
       const bookingUpdate = {
         start_time: timeValues.start_time,
         end_time: timeValues.end_time,
         purpose: purpose,
         participants: attendees.toString(),
         notes: notes,
+        status: "PENDING", // Reset status to PENDING for re-approval
       };
 
       console.log("Updating booking:", bookingUpdate);
@@ -221,18 +277,40 @@ const ModifyBookingModal = ({ booking, onClose, onCancel }) => {
       );
 
       if (response.status === 200) {
-        alert("Booking updated successfully!");
-        onClose();
-        // Refresh the bookings list
-        window.location.reload();
+        // Replace alert with custom alert
+        setAlert({
+          show: true,
+          type: "success",
+          message:
+            "Booking updated successfully! Your booking will require re-approval.",
+        });
+
+        // Close modal and refresh page after a short delay
+        setTimeout(() => {
+          onClose();
+          window.location.reload();
+        }, 2000);
       } else {
         console.error("Update failed:", response.data);
-        alert("Failed to update booking. Please try again.");
+        setAlert({
+          show: true,
+          type: "danger",
+          message: "Failed to update booking. Please try again.",
+        });
       }
     } catch (error) {
       console.error("Error updating booking:", error);
-      alert("An error occurred while updating the booking.");
+      setAlert({
+        show: true,
+        type: "danger",
+        message: "An error occurred while updating the booking.",
+      });
     }
+  };
+
+  // Add function to hide alert
+  const hideAlert = () => {
+    setAlert((prev) => ({ ...prev, show: false }));
   };
 
   return (
@@ -573,13 +651,21 @@ const ModifyBookingModal = ({ booking, onClose, onCancel }) => {
             <button
               type="button"
               onClick={() => {
-                if (
-                  window.confirm(
-                    "Are you sure you want to cancel this booking?"
-                  )
-                ) {
-                  onCancel(booking.id);
-                }
+                setAlert({
+                  show: true,
+                  type: "warning",
+                  message: "Are you sure you want to cancel this booking?",
+                });
+                // Use setTimeout to give the user time to read the alert before proceeding
+                setTimeout(() => {
+                  if (
+                    window.confirm(
+                      "Are you sure you want to cancel this booking?"
+                    )
+                  ) {
+                    onCancel(booking.id);
+                  }
+                }, 500);
               }}
               className="flex items-center justify-center space-x-2 py-3 px-4 bg-red-600 hover:bg-red-700 rounded-lg transition-colors"
             >
@@ -603,6 +689,16 @@ const ModifyBookingModal = ({ booking, onClose, onCancel }) => {
           </div>
         </form>
       </div>
+
+      {/* Add Toast component */}
+      {alert.show && (
+        <Toast
+          type={alert.type}
+          message={alert.message}
+          show={alert.show}
+          onClose={hideAlert}
+        />
+      )}
     </div>
   );
 };

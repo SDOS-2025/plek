@@ -16,6 +16,7 @@ import {
 } from "lucide-react";
 import api from "../api";
 import { DateTime } from "luxon";
+import Toast from "../components/AlertToast";
 
 // Utility function to properly capitalize amenity names
 const formatAmenityName = (name) => {
@@ -59,6 +60,13 @@ const BookingModal = ({ room, onClose }) => {
   const [date, setDate] = useState(
     DateTime.now().setZone("Asia/Kolkata").toISODate()
   );
+
+  // Add alert state
+  const [alert, setAlert] = useState({
+    show: false,
+    type: "success",
+    message: "",
+  });
 
   // Generate dates for the next 14 days
   const generateDates = () => {
@@ -269,17 +277,37 @@ const BookingModal = ({ room, onClose }) => {
 
       if (response.status === 200 || response.status === 201) {
         console.log("Booking successful:", response.data);
-        // Show success message
-        alert("Booking request sent!");
-        onClose();
+        // Show success message with custom alert
+        setAlert({
+          show: true,
+          type: "success",
+          message: "Booking request sent successfully!",
+        });
+        // Close the modal after a short delay
+        setTimeout(() => {
+          onClose();
+        }, 2000);
       } else {
         console.error("Booking failed:", response.data);
-        alert("Failed to book room. Please try again.");
+        setAlert({
+          show: true,
+          type: "danger",
+          message: "Failed to book room. Please try again.",
+        });
       }
     } catch (error) {
       console.error("Error submitting booking:", error);
-      alert("An error occurred while booking the room.");
+      setAlert({
+        show: true,
+        type: "danger",
+        message: "An error occurred while booking the room.",
+      });
     }
+  };
+
+  // Add function to hide alert
+  const hideAlert = () => {
+    setAlert((prev) => ({ ...prev, show: false }));
   };
 
   // Handle opening dropdowns and closing others
@@ -770,6 +798,15 @@ const BookingModal = ({ room, onClose }) => {
           </div>
         </form>
       </div>
+      {/* Add Toast component */}
+      {alert.show && (
+        <Toast
+          type={alert.type}
+          message={alert.message}
+          show={alert.show}
+          onClose={hideAlert}
+        />
+      )}
     </div>
   );
 };
