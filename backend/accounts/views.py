@@ -18,7 +18,6 @@ from rest_framework_simplejwt.tokens import RefreshToken
 from django.contrib.auth import login
 from allauth.socialaccount.providers.google.views import GoogleOAuth2Adapter
 from allauth.socialaccount.providers.oauth2.client import OAuth2Client
-from allauth.socialaccount.providers.oauth2.views import SocialLoginView
 
 from .permissions import (
     CanModerateUsers,
@@ -40,6 +39,17 @@ def assign_role(user, role_name):
             {"error": "Role does not exist."}, status=status.HTTP_400_BAD_REQUEST
         )
     user.groups.add(group)
+
+
+def get_tokens_for_user(user):
+    """
+    Generate JWT tokens (access and refresh) for a given user.
+    """
+    refresh = RefreshToken.for_user(user)
+    return {
+        "refresh": str(refresh),
+        "access": str(refresh.access_token),
+    }
 
 
 class UserListView(APIView):
@@ -288,17 +298,29 @@ class GoogleLoginCallbackView(APIView):
             social_login = SocialLogin(login=login_data)
 
             # Process the login
+            user = None
             if social_login.is_existing:
                 # Login the existing user
                 user = social_login.account.user
                 login(request, user)
                 logger.info(f"Existing user logged in: {user.email}")
             else:
-                # Connect or create a new user
-                from allauth.account.utils import perform_login
-
-                user = social_login.connect(request)
-                logger.info(f"New social account connected to user: {user.email}")
+                # Check if a superuser exists with the same email
+                email = social_login.account.extra_data.get("email")
+                try:
+                    user = User.objects.get(email=email, is_superuser=True)
+                    # Link the social account to the superuser
+                    social_account, created = SocialAccount.objects.get_or_create(
+                        user=user,
+                        provider="google",
+                        defaults={"uid": social_login.account.uid},
+                    )
+                    if created:
+                        logger.info(f"Linked Google account to superuser: {user.email}")
+                except User.DoesNotExist:
+                    # Create a new user if no matching superuser exists
+                    user = social_login.connect(request)
+                    logger.info(f"New social account connected to user: {user.email}")
 
             # Generate tokens for the user
             tokens = get_tokens_for_user(user)
@@ -350,3 +372,59 @@ class GoogleLoginCallbackView(APIView):
 
             logger.error(traceback.format_exc())
             return HttpResponseRedirect(f"http://localhost:3000/login?error={str(e)}")
+
+
+class CheckSocialAccountLinkageView(APIView):
+    """
+    API view to check if a specific user is linked to a social account.
+    Can be used to verify if a superuser created via terminal is properly linked.
+    """
+
+    permission_classes = [IsAuthenticated, CanViewUsers]
+
+    def get(self, request, user_id=None):
+        """Check if a user is linked to a social account"""
+        try:
+            # If user_id is provided, check that specific user
+            # Otherwise check the currently authenticated user
+            if user_id:
+                user = User.objects.get(id=user_id)
+            else:
+                user = request.user
+
+            # Check for social accounts linked to this user
+            social_accounts = SocialAccount.objects.filter(user=user)
+
+            # Prepare the response data
+            result = {
+                "user_id": user.id,
+                "email": user.email,
+                "is_superuser": user.is_superuser,
+                "is_linked": social_accounts.exists(),
+                "accounts": [],
+            }
+
+            # Add details for each linked account
+            for account in social_accounts:
+                result["accounts"].append(
+                    {
+                        "provider": account.provider,
+                        "uid": account.uid,
+                        "date_joined": account.date_joined.isoformat(),
+                        "last_login": (
+                            account.last_login.isoformat()
+                            if account.last_login
+                            else None
+                        ),
+                    }
+                )
+
+            logger.info(
+                f"Social account check for user {user.email}: {result['is_linked']}"
+            )
+            return Response(result)
+
+        except User.DoesNotExist:
+            return Response(
+                {"error": "User not found"}, status=status.HTTP_404_NOT_FOUND
+            )

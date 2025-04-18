@@ -1,10 +1,16 @@
 from allauth.socialaccount.providers.google.views import GoogleOAuth2Adapter
 from allauth.socialaccount.providers.oauth2.client import OAuth2Error
 import requests
-from django.conf import settings
 
 
 class CustomGoogleOAuth2Adapter(GoogleOAuth2Adapter):
+    """
+    Custom adapter for Google OAuth2 authentication.
+
+    This adapter extends the standard GoogleOAuth2Adapter to provide
+    additional validation for ID tokens via Google's tokeninfo endpoint.
+    """
+
     def complete_login(self, request, app, token, **kwargs):
         try:
             # Validate ID token via Google's tokeninfo endpoint

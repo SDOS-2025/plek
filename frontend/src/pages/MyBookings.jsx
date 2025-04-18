@@ -13,7 +13,6 @@ import {
 } from "lucide-react";
 import api from "../api";
 import ModifyBookingModal from "../components/ModifyBooking";
-import CalendarIntegration from "../components/CalendarIntegration";
 import NavBar from "../components/NavBar";
 import { DateTime } from "luxon";
 import Footer from "../components/Footer";
@@ -282,22 +281,11 @@ function MyBookings() {
                           )}
                         </div>
                       </div>
-                      
+
                       {/* Google Calendar integration - only show for approved bookings */}
                       {booking.status.toLowerCase() === "approved" && (
                         <div className="mt-4 pt-4 border-t border-gray-700">
-                          <CalendarIntegration 
-                            bookingId={booking.id} 
-                            onSuccess={(action) => {
-                              if (action === 'added') {
-                                alert("Booking successfully added to your Google Calendar");
-                              } else if (action === 'updated') {
-                                alert("Calendar event successfully updated");
-                              } else if (action === 'removed') {
-                                alert("Booking removed from your Google Calendar");
-                              }
-                            }}
-                          />
+                          {/* Removed Google Calendar integration code */}
                         </div>
                       )}
                     </div>

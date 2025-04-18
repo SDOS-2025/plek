@@ -1,4 +1,7 @@
-# room/models.py
+"""
+Admin configuration for the rooms module.
+"""
+
 from django.contrib import admin
 
 from .models import Amenity, Building, Room
