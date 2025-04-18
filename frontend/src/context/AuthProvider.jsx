@@ -7,7 +7,6 @@ export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
 
-  // Fetch CSRF token on initial load
   useEffect(() => {
     const fetchInitialCsrfToken = async () => {
       try {
@@ -16,7 +15,6 @@ export const AuthProvider = ({ children }) => {
         console.error("Failed to fetch initial CSRF token:", err);
       }
     };
-    
     fetchInitialCsrfToken();
   }, []);
 
@@ -28,7 +26,10 @@ export const AuthProvider = ({ children }) => {
         console.log("checkAuth: Success - Response:", response.data);
         setUser(response.data);
       } catch (err) {
-        console.error("checkAuth: Failed - Error:", err.response?.data || err.message);
+        console.error(
+          "checkAuth: Failed - Error:",
+          err.response?.data || err.message
+        );
         setUser(null);
       } finally {
         setLoading(false);
@@ -37,18 +38,29 @@ export const AuthProvider = ({ children }) => {
     checkAuth();
   }, []);
 
-  const login = async (credentials) => {
+  const login = async ({ email, password, social = false, socialData }) => {
     try {
-      console.log("login: Attempting to post /api/auth/login/");
-      const response = await api.post("/api/auth/login", credentials);
-      console.log("login: Success - Response:", response.data);
-      setUser(response.data);
-      return response.data;
+      if (social) {
+        console.log("login: Attempting social login with /api/auth/google/");
+        const response = await api.post("/api/auth/google/", socialData);
+        console.log("login: Social login success - Response:", response.data);
+        setUser(response.data.user);
+        return response.data;
+      } else {
+        console.log("login: Attempting to post /api/auth/login/");
+        const response = await api.post("/api/auth/login", { email, password });
+        console.log("login: Success - Response:", response.data);
+        setUser(response.data);
+        return response.data;
+      }
     } catch (err) {
-      console.error("login: Failed - Error:", err.response?.data || err.message);
+      console.error(
+        "login: Failed - Error:",
+        err.response?.data || err.message
+      );
       throw err;
     }
-  }
+  };
 
   const logout = async () => {
     try {
@@ -59,7 +71,10 @@ export const AuthProvider = ({ children }) => {
       document.cookie = "plek-refresh=; Max-Age=0; path=/;";
       document.cookie = "csrftoken=; Max-Age=0; path=/;";
     } catch (err) {
-      console.error("logout: Failed - Error:", err.response?.data || err.message);
+      console.error(
+        "logout: Failed - Error:",
+        err.response?.data || err.message
+      );
       throw err;
     }
   };

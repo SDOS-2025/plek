@@ -4,6 +4,7 @@ import logging
 from django.contrib.auth.models import Group
 from django.db.models.signals import m2m_changed, post_save, pre_save
 from django.dispatch import receiver
+from allauth.socialaccount.models import SocialAccount
 
 from .models import CustomUser
 
@@ -40,7 +41,9 @@ def log_group_changes(sender, instance, action, pk_set, **kwargs):
         logger.info(f"User {instance.email} added to groups: {', '.join(group_names)}")
     elif action == "post_remove" and pk_set:
         group_names = Group.objects.filter(pk__in=pk_set).values_list("name", flat=True)
-        logger.info(f"User {instance.email} removed from groups: {', '.join(group_names)}")
+        logger.info(
+            f"User {instance.email} removed from groups: {', '.join(group_names)}"
+        )
 
 
 @receiver(pre_save, sender=CustomUser)
@@ -68,7 +71,9 @@ def log_floor_management_changes(sender, instance, action, pk_set, **kwargs):
         logger.info(f"User {instance.email} assigned to manage floor IDs: {floor_ids}")
     elif action == "post_remove" and pk_set:
         floor_ids = list(pk_set)
-        logger.info(f"User {instance.email} removed from managing floor IDs: {floor_ids}")
+        logger.info(
+            f"User {instance.email} removed from managing floor IDs: {floor_ids}"
+        )
 
 
 @receiver(m2m_changed, sender=CustomUser.managed_departments.through)
@@ -78,7 +83,11 @@ def log_department_management_changes(sender, instance, action, pk_set, **kwargs
     """
     if action == "post_add" and pk_set:
         department_ids = list(pk_set)
-        logger.info(f"User {instance.email} assigned to manage department IDs: {department_ids}")
+        logger.info(
+            f"User {instance.email} assigned to manage department IDs: {department_ids}"
+        )
     elif action == "post_remove" and pk_set:
         department_ids = list(pk_set)
-        logger.info(f"User {instance.email} removed from managing department IDs: {department_ids}")
+        logger.info(
+            f"User {instance.email} removed from managing department IDs: {department_ids}"
+        )

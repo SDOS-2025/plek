@@ -1,4 +1,5 @@
 from pathlib import Path
+from decouple import config
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -37,7 +38,7 @@ INSTALLED_APPS = [
     "dj_rest_auth.registration",
     "allauth.socialaccount",
     "allauth.socialaccount.providers.google",
-    "accounts",
+    "accounts.apps.AccountsConfig",
     "rooms",
     "bookings",
     "notifications",
@@ -67,10 +68,10 @@ MIDDLEWARE = [
     "allauth.account.middleware.AccountMiddleware",
 ]
 
-CORS_ALLOWED_ORIGINS = ["http://127.0.0.1:3000"]
+CORS_ALLOWED_ORIGINS = ["http://localhost:3000"]
 CORS_ALLOW_CREDENTIALS = True
 CORS_ALLOW_METHODS = ["GET", "POST", "OPTIONS", "PUT", "DELETE", "PATCH"]
-CSRF_TRUSTED_ORIGINS = ["http://127.0.0.1:3000"]
+CSRF_TRUSTED_ORIGINS = ["http://localhost:3000"]
 
 CSRF_COOKIE_NAME = "csrftoken"
 CSRF_HEADER_NAME = "HTTP_X_CSRFTOKEN"
@@ -78,6 +79,8 @@ CSRF_COOKIE_SECURE = False  # Set to True in production with HTTPS
 CSRF_COOKIE_HTTPONLY = False
 CSRF_USE_SESSIONS = False
 CSRF_COOKIE_SAMESITE = "Lax"
+
+SECURE_REFERRER_POLICY = "strict-origin-when-cross-origin"
 
 ROOT_URLCONF = "backend.urls"
 
@@ -100,7 +103,7 @@ SIMPLE_JWT = {
     "BLACKLIST_AFTER_ROTATION": True,
     "ALGORITHM": "HS256",
     "SIGNING_KEY": SECRET_KEY,
-    "AUTH_HEADER_TYPES": ("Bearer",),
+    "AUTH_HEADER_TYPES": ("",),
     "AUTH_COOKIE_SAMESITE": "Lax",
     "AUTH_COOKIE_SECURE": False,  # Set to True in production with HTTPS
 }
@@ -121,23 +124,24 @@ TEMPLATES = [
     },
 ]
 
+ACCOUNT_EMAIL_REQUIRED = True
+ACCOUNT_EMAIL_VERIFICATION = "none"
+SOCIALACCOUNT_EMAIL_AUTHENTICATION = True
+SOCIALACCOUNT_EMAIL_AUTHENTICATION_AUTO_CONNECT = True
 ACCOUNT_LOGIN_METHODS = {"email"}
 ACCOUNT_SIGNUP_FIELDS = ["email*", "password1*", "password2*"]
-ACCOUNT_EMAIL_VERIFICATION = "optional"
 ACCOUNT_USER_MODEL_USERNAME_FIELD = None
+SOCIALACCOUNT_LOGIN_ON_GET = True
+LOGIN_REDIRECT_URL = "http://localhost:3000/"
+ACCOUNT_LOGOUT_REDIRECT_URL = "/"
 
 SOCIALACCOUNT_PROVIDERS = {
     "google": {
-        "EMAIL_AUTHENTICATION": True,
-        "EMAIL_AUTHENTICATION_AUTO_CONNECT": True,
-        "EMAIL_REQUIRED": True,
-        "AUTO_SIGN_UP": True,
-        "APPS": [
-            {
-                "client_id": "YOUR_GOOGLE_CLIENT_ID",
-                "secret": "YOUR_GOOGLE_CLIENT_SECRET",
-            },
-        ],
+        "APP": {
+            "client_id": "47840497232-2q9v23fnco2ijfok7l56hlh8356of7lb.apps.googleusercontent.com",
+            "secret": "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",
+            "key": "",
+        },
         "SCOPE": ["profile", "email"],
         "AUTH_PARAMS": {
             "access_type": "online",

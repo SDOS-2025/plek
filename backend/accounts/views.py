@@ -6,6 +6,19 @@ from rest_framework import status
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
+from django.http import HttpResponseRedirect
+from django.urls import reverse
+from allauth.socialaccount.models import SocialLogin, SocialToken, SocialAccount
+from allauth.socialaccount.helpers import complete_social_login
+from allauth.socialaccount.providers.oauth2.views import OAuth2CallbackView
+from django.views.decorators.csrf import csrf_exempt
+from django.utils.decorators import method_decorator
+from rest_framework.permissions import AllowAny
+from rest_framework_simplejwt.tokens import RefreshToken
+from django.contrib.auth import login
+from allauth.socialaccount.providers.google.views import GoogleOAuth2Adapter
+from allauth.socialaccount.providers.oauth2.client import OAuth2Client
+from allauth.socialaccount.providers.oauth2.views import SocialLoginView
 
 from .permissions import (
     CanModerateUsers,
@@ -23,7 +36,9 @@ def assign_role(user, role_name):
     try:
         group = Group.objects.get(name=role_name)
     except Group.DoesNotExist:
-        return Response({"error": "Role does not exist."}, status=status.HTTP_400_BAD_REQUEST)
+        return Response(
+            {"error": "Role does not exist."}, status=status.HTTP_400_BAD_REQUEST
+        )
     user.groups.add(group)
 
 
@@ -60,7 +75,9 @@ class UserDetailView(APIView):
         try:
             user = User.objects.get(id=user_id)
         except User.DoesNotExist:
-            return Response({"error": "User not found"}, status=status.HTTP_404_NOT_FOUND)
+            return Response(
+                {"error": "User not found"}, status=status.HTTP_404_NOT_FOUND
+            )
 
         serializer = CustomUserSerializer(user)
         return Response(serializer.data)
@@ -76,7 +93,9 @@ class UserDetailView(APIView):
         try:
             user = User.objects.get(id=user_id)
         except User.DoesNotExist:
-            return Response({"error": "User not found"}, status=status.HTTP_404_NOT_FOUND)
+            return Response(
+                {"error": "User not found"}, status=status.HTTP_404_NOT_FOUND
+            )
 
         # Check object-level permission
         permission = CanModerateUsers()
@@ -111,7 +130,9 @@ class UserDetailView(APIView):
         try:
             user = User.objects.get(id=user_id)
         except User.DoesNotExist:
-            return Response({"error": "User not found"}, status=status.HTTP_404_NOT_FOUND)
+            return Response(
+                {"error": "User not found"}, status=status.HTTP_404_NOT_FOUND
+            )
 
         # Check object-level permission
         permission = CanModerateUsers()
@@ -150,7 +171,9 @@ class UserRoleManagementView(APIView):
         try:
             user = User.objects.get(id=user_id)
         except User.DoesNotExist:
-            return Response({"error": "User not found"}, status=status.HTTP_404_NOT_FOUND)
+            return Response(
+                {"error": "User not found"}, status=status.HTTP_404_NOT_FOUND
+            )
 
         # Check object-level permission
         permission = CanPromoteOrDemote()
@@ -182,8 +205,12 @@ class UserRoleManagementView(APIView):
         user.groups.clear()
         user.groups.add(target_group)
 
-        logger.info(f"User {user.email} {action}d to {target_group_name} by {request.user.email}")
-        return Response({"status": f"User successfully {action}d to {target_group_name}"})
+        logger.info(
+            f"User {user.email} {action}d to {target_group_name} by {request.user.email}"
+        )
+        return Response(
+            {"status": f"User successfully {action}d to {target_group_name}"}
+        )
 
 
 class UserProfileView(APIView):
@@ -206,3 +233,120 @@ class UserProfileView(APIView):
             logger.info(f"User {request.user.email} updated their profile")
             return Response(serializer.data)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+class GoogleLoginCallbackView(APIView):
+    permission_classes = [AllowAny]
+
+    @method_decorator(csrf_exempt)
+    def get(self, request, *args, **kwargs):
+        """
+        Handle the OAuth callback from Google and return JWT tokens
+        """
+        logger.info("Google OAuth callback received")
+
+        # Check if we have the code parameter
+        code = request.GET.get("code")
+
+        if not code:
+            logger.error("No authorization code received from Google")
+            return HttpResponseRedirect("http://localhost:3000/login?error=no_code")
+
+        try:
+            # Get the adapter for Google OAuth
+            adapter = GoogleOAuth2Adapter(request)
+            callback_url = request.build_absolute_uri()
+
+            # Find the app from the database
+            from allauth.socialaccount.models import SocialApp
+
+            try:
+                app = SocialApp.objects.get(provider="google")
+                logger.info(f"Found Google app: {app.name}")
+            except SocialApp.DoesNotExist:
+                logger.error("Google OAuth app not found in the database")
+                return HttpResponseRedirect(
+                    "http://localhost:3000/login?error=google_app_not_found"
+                )
+
+            # Create client
+            client = OAuth2Client(
+                request,
+                app.client_id,
+                app.secret,
+                adapter.access_token_url,
+                callback_url,
+                adapter.basic_auth,
+            )
+
+            # Get access token
+            token = client.get_access_token(code)
+            token_dict = {"access_token": token}
+
+            # Complete login with received token
+            login_data = adapter.complete_login(request, app, token_dict)
+            social_login = SocialLogin(login=login_data)
+
+            # Process the login
+            if social_login.is_existing:
+                # Login the existing user
+                user = social_login.account.user
+                login(request, user)
+                logger.info(f"Existing user logged in: {user.email}")
+            else:
+                # Connect or create a new user
+                from allauth.account.utils import perform_login
+
+                user = social_login.connect(request)
+                logger.info(f"New social account connected to user: {user.email}")
+
+            # Generate tokens for the user
+            tokens = get_tokens_for_user(user)
+
+            # Set the tokens in cookies and redirect
+            redirect_url = f"http://localhost:3000/oauth-callback?success=true"
+            response = HttpResponseRedirect(redirect_url)
+
+            # Set the access token cookie
+            response.set_cookie(
+                "plek-access",
+                tokens["access"],
+                max_age=300,  # 5 minutes
+                path="/",
+                secure=False,  # Set to True in production with HTTPS
+                httponly=True,
+                samesite="Lax",
+            )
+
+            # Set the refresh token cookie
+            response.set_cookie(
+                "plek-refresh",
+                tokens["refresh"],
+                max_age=86400,  # 1 day
+                path="/",
+                secure=False,  # Set to True in production with HTTPS
+                httponly=True,
+                samesite="Lax",
+            )
+
+            # Store user data in localStorage via URL params
+            user_data = {
+                "firstName": user.first_name or "",
+                "lastName": user.last_name or "",
+                "email": user.email,
+            }
+
+            param_string = "&".join(
+                [f"{key}={value}" for key, value in user_data.items()]
+            )
+            full_redirect_url = f"{redirect_url}&{param_string}"
+
+            logger.info(f"Redirecting to: {full_redirect_url}")
+            return HttpResponseRedirect(full_redirect_url)
+
+        except Exception as e:
+            logger.error(f"Error during OAuth callback: {str(e)}")
+            import traceback
+
+            logger.error(traceback.format_exc())
+            return HttpResponseRedirect(f"http://localhost:3000/login?error={str(e)}")

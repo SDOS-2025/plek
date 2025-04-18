@@ -6,6 +6,7 @@ from django.http import JsonResponse
 from django.urls import include, path
 from django.views.decorators.csrf import ensure_csrf_cookie
 from rest_framework_simplejwt.views import TokenBlacklistView
+from .views import GoogleLogin
 
 
 @ensure_csrf_cookie
@@ -24,6 +25,7 @@ urlpatterns = [
     path("", include("bookings.urls")),
     path("api/analytics/", include("analytics.urls")),
     path("settings/", include("settings.urls")),
+    path("api/auth/google/", GoogleLogin.as_view(), name="google_login"),
 ]
 
 if settings.DEBUG:

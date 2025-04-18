@@ -55,3 +55,14 @@ class Booking(models.Model):
 
     def __str__(self):
         return f"Booking {self.id} for {self.room.name} by {self.user.email}"
+
+
+class CalendarEvent(models.Model):
+    booking = models.OneToOneField(Booking, on_delete=models.CASCADE, related_name="calendar_event")
+    calendar_id = models.CharField(max_length=255)
+    event_id = models.CharField(max_length=255)
+    html_link = models.URLField(max_length=500, null=True, blank=True)
+    synced_at = models.DateTimeField(auto_now=True)
+    
+    def __str__(self):
+        return f"Calendar event for booking {self.booking.id}"

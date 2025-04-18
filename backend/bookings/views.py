@@ -16,7 +16,8 @@ from accounts.permissions import (
     CanViewOwnBooking,
 )
 
-from .models import Booking
+from accounts.calendar_service import GoogleCalendarService
+from .models import Booking, CalendarEvent
 from .serializers import BookingSerializer
 
 logger = logging.getLogger(__name__)
@@ -206,3 +207,274 @@ class OverrideBookingView(APIView):
 
             return Response(serializer.data, status=status.HTTP_200_OK)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+class CalendarIntegrationView(APIView):
+    """
+    View for Google Calendar integration with bookings
+    """
+    
+    def get(self, request, booking_id=None):
+        # Initialize the Google Calendar service
+        calendar_service = GoogleCalendarService(request.user.id)
+        
+        if not calendar_service.service:
+            return Response(
+                {"detail": "Google Calendar service unavailable. Please ensure you've connected your Google account."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # List calendars if no booking_id is provided
+        if booking_id is None:
+            # Get user's Google Calendars
+            calendars = calendar_service.list_calendars()
+            return Response(calendars, status=status.HTTP_200_OK)
+        
+        # Get information about a specific booking's calendar integration
+        try:
+            booking = Booking.objects.get(id=booking_id)
+            
+            # Check if user has permission to access this booking
+            if booking.user != request.user and not request.user.has_perm("bookings.view_all_bookings"):
+                return Response(
+                    {"detail": "You don't have permission to access this booking"},
+                    status=status.HTTP_403_FORBIDDEN
+                )
+            
+            # Check if booking has a calendar event
+            try:
+                calendar_event = CalendarEvent.objects.get(booking=booking)
+                return Response({
+                    "has_calendar_event": True,
+                    "calendar_id": calendar_event.calendar_id,
+                    "event_id": calendar_event.event_id,
+                    "html_link": calendar_event.html_link,
+                    "synced_at": calendar_event.synced_at
+                }, status=status.HTTP_200_OK)
+            except CalendarEvent.DoesNotExist:
+                return Response({
+                    "has_calendar_event": False
+                }, status=status.HTTP_200_OK)
+                
+        except Booking.DoesNotExist:
+            return Response(
+                {"detail": "Booking not found"}, 
+                status=status.HTTP_404_NOT_FOUND
+            )
+    
+    def post(self, request, booking_id=None):
+        """
+        Add a booking to Google Calendar
+        """
+        if booking_id is None:
+            return Response(
+                {"detail": "Booking ID is required"}, 
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Get the calendar_id from request data
+        calendar_id = request.data.get("calendar_id")
+        if not calendar_id:
+            return Response(
+                {"detail": "Calendar ID is required"}, 
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Get the booking
+        try:
+            booking = Booking.objects.get(id=booking_id)
+            
+            # Check if user has permission to modify this booking
+            if booking.user != request.user and not request.user.has_perm("bookings.override_booking"):
+                return Response(
+                    {"detail": "You don't have permission to add this booking to a calendar"},
+                    status=status.HTTP_403_FORBIDDEN
+                )
+            
+            # Check if booking already has a calendar event
+            if hasattr(booking, 'calendar_event'):
+                return Response(
+                    {"detail": "This booking already has a calendar event"},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            # Initialize the Google Calendar service
+            calendar_service = GoogleCalendarService(request.user.id)
+            
+            if not calendar_service.service:
+                return Response(
+                    {"detail": "Google Calendar service unavailable. Please ensure you've connected your Google account."},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            # Create the calendar event
+            result = calendar_service.create_event(calendar_id, booking)
+            
+            if result:
+                # Save the calendar event information
+                calendar_event = CalendarEvent.objects.create(
+                    booking=booking,
+                    calendar_id=calendar_id,
+                    event_id=result["event_id"],
+                    html_link=result.get("html_link")
+                )
+                
+                logger.info(f"Calendar event created for booking {booking_id} by user {request.user.email}")
+                
+                return Response({
+                    "detail": "Calendar event created successfully",
+                    "calendar_id": calendar_event.calendar_id,
+                    "event_id": calendar_event.event_id,
+                    "html_link": calendar_event.html_link,
+                    "synced_at": calendar_event.synced_at
+                }, status=status.HTTP_201_CREATED)
+            else:
+                return Response(
+                    {"detail": "Failed to create calendar event"},
+                    status=status.HTTP_500_INTERNAL_SERVER_ERROR
+                )
+                
+        except Booking.DoesNotExist:
+            return Response(
+                {"detail": "Booking not found"}, 
+                status=status.HTTP_404_NOT_FOUND
+            )
+    
+    def put(self, request, booking_id=None):
+        """
+        Update a booking's calendar event
+        """
+        if booking_id is None:
+            return Response(
+                {"detail": "Booking ID is required"}, 
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Get the booking
+        try:
+            booking = Booking.objects.get(id=booking_id)
+            
+            # Check if user has permission to modify this booking
+            if booking.user != request.user and not request.user.has_perm("bookings.override_booking"):
+                return Response(
+                    {"detail": "You don't have permission to update this booking's calendar event"},
+                    status=status.HTTP_403_FORBIDDEN
+                )
+            
+            # Check if booking has a calendar event
+            try:
+                calendar_event = CalendarEvent.objects.get(booking=booking)
+            except CalendarEvent.DoesNotExist:
+                return Response(
+                    {"detail": "This booking doesn't have a calendar event"},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            # Initialize the Google Calendar service
+            calendar_service = GoogleCalendarService(request.user.id)
+            
+            if not calendar_service.service:
+                return Response(
+                    {"detail": "Google Calendar service unavailable. Please ensure you've connected your Google account."},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            # Update the calendar event
+            result = calendar_service.update_event(
+                calendar_event.calendar_id, 
+                calendar_event.event_id, 
+                booking
+            )
+            
+            if result:
+                # Update the calendar event information if needed
+                if result.get("html_link") != calendar_event.html_link:
+                    calendar_event.html_link = result.get("html_link")
+                    calendar_event.save()
+                
+                logger.info(f"Calendar event updated for booking {booking_id} by user {request.user.email}")
+                
+                return Response({
+                    "detail": "Calendar event updated successfully",
+                    "calendar_id": calendar_event.calendar_id,
+                    "event_id": calendar_event.event_id,
+                    "html_link": calendar_event.html_link,
+                    "synced_at": calendar_event.synced_at
+                }, status=status.HTTP_200_OK)
+            else:
+                return Response(
+                    {"detail": "Failed to update calendar event"},
+                    status=status.HTTP_500_INTERNAL_SERVER_ERROR
+                )
+                
+        except Booking.DoesNotExist:
+            return Response(
+                {"detail": "Booking not found"}, 
+                status=status.HTTP_404_NOT_FOUND
+            )
+    
+    def delete(self, request, booking_id=None):
+        """
+        Remove a booking from Google Calendar
+        """
+        if booking_id is None:
+            return Response(
+                {"detail": "Booking ID is required"}, 
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Get the booking
+        try:
+            booking = Booking.objects.get(id=booking_id)
+            
+            # Check if user has permission to modify this booking
+            if booking.user != request.user and not request.user.has_perm("bookings.override_booking"):
+                return Response(
+                    {"detail": "You don't have permission to remove this booking's calendar event"},
+                    status=status.HTTP_403_FORBIDDEN
+                )
+            
+            # Check if booking has a calendar event
+            try:
+                calendar_event = CalendarEvent.objects.get(booking=booking)
+            except CalendarEvent.DoesNotExist:
+                return Response(
+                    {"detail": "This booking doesn't have a calendar event"},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            # Initialize the Google Calendar service
+            calendar_service = GoogleCalendarService(request.user.id)
+            
+            if not calendar_service.service:
+                return Response(
+                    {"detail": "Google Calendar service unavailable. Please ensure you've connected your Google account."},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            # Delete the calendar event
+            success = calendar_service.delete_event(
+                calendar_event.calendar_id, 
+                calendar_event.event_id
+            )
+            
+            if success:
+                # Delete the calendar event record
+                calendar_event.delete()
+                
+                logger.info(f"Calendar event removed for booking {booking_id} by user {request.user.email}")
+                
+                return Response({
+                    "detail": "Calendar event removed successfully"
+                }, status=status.HTTP_200_OK)
+            else:
+                return Response(
+                    {"detail": "Failed to remove calendar event"},
+                    status=status.HTTP_500_INTERNAL_SERVER_ERROR
+                )
+                
+        except Booking.DoesNotExist:
+            return Response(
+                {"detail": "Booking not found"}, 
+                status=status.HTTP_404_NOT_FOUND
+            )

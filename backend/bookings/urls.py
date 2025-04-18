@@ -5,6 +5,7 @@ from .views import (
     BookingApprovalView,
     BookingCreateView,
     BookingManageView,
+    CalendarIntegrationView,
     FloorDeptBookingView,
     OverrideBookingView,
 )
@@ -31,5 +32,16 @@ urlpatterns = [
         "bookings/override/<int:booking_id>/",
         OverrideBookingView.as_view(),
         name="override-booking",
+    ),
+    # Calendar integration
+    path(
+        "bookings/calendar/",
+        CalendarIntegrationView.as_view(),
+        name="calendar-integration",
+    ),
+    path(
+        "bookings/<int:booking_id>/calendar/",
+        CalendarIntegrationView.as_view(),
+        name="booking-calendar",
     ),
 ]
