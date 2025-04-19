@@ -206,62 +206,60 @@ const BookingModal = ({ room, onClose }) => {
       const baseDate = DateTime.fromISO(dateStr).setZone("Asia/Kolkata");
 
       // Parse hours and minutes from the time strings
-      const [startHours, startMinutes] = startStr
-        .match(/(\d+):(\d+)/)
-        .slice(1, 3)
-        .map(Number);
-      const [endHours, endMinutes] = endStr
-        .match(/(\d+):(\d+)/)
-        .slice(1, 3)
-        .map(Number);
+      const startMatch = startStr.match(/(\d+):(\d+)\s*(AM|PM)/i);
+      const endMatch = endStr.match(/(\d+):(\d+)\s*(AM|PM)/i);
 
-      // Adjust for PM times
-      const startPeriod = startStr.includes("PM");
-      const endPeriod = endStr.includes("PM");
+      if (!startMatch || !endMatch) {
+        console.error("Invalid time format:", timeSlot);
+        return { start_time: "", end_time: "" };
+      }
 
-      let startHour = startHours;
-      if (startPeriod && startHours !== 12) startHour += 12;
-      if (!startPeriod && startHours === 12) startHour = 0;
+      let [, startHours, startMinutes, startPeriod] = startMatch;
+      let [, endHours, endMinutes, endPeriod] = endMatch;
 
-      let endHour = endHours;
-      if (endPeriod && endHours !== 12) endHour += 12;
-      if (!endPeriod && endHours === 12) endHour = 0;
+      startHours = parseInt(startHours);
+      startMinutes = parseInt(startMinutes);
+      endHours = parseInt(endHours);
+      endMinutes = parseInt(endMinutes);
+
+      // Adjust for 12-hour clock
+      if (startPeriod.toUpperCase() === "PM" && startHours !== 12)
+        startHours += 12;
+      if (startPeriod.toUpperCase() === "AM" && startHours === 12)
+        startHours = 0;
+
+      if (endPeriod.toUpperCase() === "PM" && endHours !== 12) endHours += 12;
+      if (endPeriod.toUpperCase() === "AM" && endHours === 12) endHours = 0;
 
       // Set hours and minutes using DateTime, maintaining IST timezone
       const startTime = baseDate.set({
-        hour: startHour,
+        hour: startHours,
         minute: startMinutes,
         second: 0,
         millisecond: 0,
       });
 
       const endTime = baseDate.set({
-        hour: endHour,
+        hour: endHours,
         minute: endMinutes,
         second: 0,
         millisecond: 0,
       });
 
+      // Format in the exact format Django expects (ISO 8601)
+      // Use toISO() which gives the proper ISO 8601 format with timezone information
       return {
-        start_time: startTime.toISO({ includeOffset: true }),
-        end_time: endTime.toISO({ includeOffset: true }),
+        start_time: startTime.toISO(),
+        end_time: endTime.toISO(),
       };
     };
 
     // Get time values from the selected time slot
     const timeValues = parseTimeSlot(timeSlot, date);
 
-    // Get user ID from localStorage
-    // const userId = localStorage.getItem("FirstName")
-
-    // if (!userId) {
-    //   alert("User information is missing. Please log in again.");
-    //   return;
-    // }
-
     // Create booking details object that matches the backend model
     const bookingDetails = {
-      room: room.id, // Changed from nested object to simple field
+      room: room.id,
       start_time: timeValues.start_time,
       end_time: timeValues.end_time,
       status: "PENDING",

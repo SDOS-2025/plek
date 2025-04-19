@@ -40,31 +40,6 @@ const formatAmenityName = (name) => {
     .join(" ");
 };
 
-// Utility function to properly capitalize amenity names
-const formatAmenityName = (name) => {
-  if (!name) return "";
-
-  // Handle special cases like "TV", "WiFi", etc.
-  const specialCases = {
-    wifi: "WiFi",
-    tv: "TV",
-    hdmi: "HDMI",
-    usb: "USB",
-    ac: "AC",
-  };
-
-  const lowerName = name.toLowerCase();
-  if (specialCases[lowerName]) {
-    return specialCases[lowerName];
-  }
-
-  // Otherwise capitalize first letter of each word
-  return name
-    .split(" ")
-    .map((word) => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
-    .join(" ");
-};
-
 function Booking() {
   const [searchQuery, setSearchQuery] = useState("");
   const [showBookingModal, setShowBookingModal] = useState(false);

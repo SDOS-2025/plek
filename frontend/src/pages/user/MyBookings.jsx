@@ -27,8 +27,6 @@ function MyBookings() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
-  const firstName = localStorage.getItem("FirstName");
-
   // Add alert and confirmation state
   const [alert, setAlert] = useState({
     show: false,

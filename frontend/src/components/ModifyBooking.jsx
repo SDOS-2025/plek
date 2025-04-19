@@ -247,6 +247,8 @@ const ModifyBookingModal = ({ booking, onClose, onCancel }) => {
     const startTime = baseDate.set({ hour: startHours, minute: startMinutes });
     const endTime = baseDate.set({ hour: endHours, minute: endMinutes });
 
+    // Format in the exact format Django expects: YYYY-MM-DDThh:mm:ssZ
+    // Use toISO which gives the proper ISO 8601 format with timezone information
     return {
       start_time: startTime.toISO(),
       end_time: endTime.toISO(),
@@ -260,8 +262,32 @@ const ModifyBookingModal = ({ booking, onClose, onCancel }) => {
       // Get time values from the selected time slot
       const timeValues = parseTimeSlot(timeSlot, date);
 
+      // Extract room ID using the same logic from fetchAvailableTimeSlots
+      let roomId = null;
+      if (booking.originalBooking && booking.originalBooking.room) {
+        // Case 1: Room object in originalBooking
+        if (typeof booking.originalBooking.room === "object") {
+          roomId = booking.originalBooking.room.id;
+        } else {
+          // Case 2: Room ID directly in originalBooking.room
+          roomId = booking.originalBooking.room;
+        }
+      } else if (booking.roomId) {
+        // Case 3: Direct roomId property
+        roomId = booking.roomId;
+      } else if (booking.room) {
+        // Case 4: Room property directly on booking
+        roomId =
+          typeof booking.room === "object" ? booking.room.id : booking.room;
+      }
+
+      if (!roomId) {
+        throw new Error("Could not identify the room for this booking");
+      }
+
       // Create booking update object - include status change to PENDING for re-approval
       const bookingUpdate = {
+        room: roomId, // Include the room ID in the update
         start_time: timeValues.start_time,
         end_time: timeValues.end_time,
         purpose: purpose,
@@ -303,7 +329,8 @@ const ModifyBookingModal = ({ booking, onClose, onCancel }) => {
       setAlert({
         show: true,
         type: "danger",
-        message: "An error occurred while updating the booking.",
+        message:
+          error.message || "An error occurred while updating the booking.",
       });
     }
   };

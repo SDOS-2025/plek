@@ -58,7 +58,10 @@ function ManageBookings() {
     const processedBookings = [];
 
     for (const booking of bookings) {
-      // Parse start and end times
+      // Parse start and end times - store original ISO strings for API interactions
+      const originalStartTime = booking.start_time;
+      const originalEndTime = booking.end_time;
+
       const startTime = DateTime.fromISO(booking.start_time, {
         zone: "Asia/Kolkata",
       });
@@ -172,6 +175,8 @@ function ManageBookings() {
         capacity: roomCapacity || booking.capacity || 0,
         date: formattedDate,
         slot: formattedTimeSlot,
+        start_time: originalStartTime, // Add original ISO format start time
+        end_time: originalEndTime, // Add original ISO format end time
         status: booking.status,
         purpose: booking.purpose || "",
         participants: booking.participants || 0, // Ensure participants field is available
