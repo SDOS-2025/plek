@@ -47,7 +47,9 @@ class RoomListView(APIView):
             department_id = int(department_id) if department_id else None
         except (ValueError, TypeError):
             return Response(
-                {"detail": "Invalid date, capacity, floor number, or department ID format"},
+                {
+                    "detail": "Invalid date, capacity, floor number, or department ID format"
+                },
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
@@ -98,8 +100,12 @@ class RoomManageView(APIView):
                     try:
                         date_obj = datetime.fromisoformat(date_param)
                         # Start and end of the day
-                        start_of_day = datetime.combine(date_obj.date(), datetime.min.time())
-                        end_of_day = datetime.combine(date_obj.date(), datetime.max.time())
+                        start_of_day = datetime.combine(
+                            date_obj.date(), datetime.min.time()
+                        )
+                        end_of_day = datetime.combine(
+                            date_obj.date(), datetime.max.time()
+                        )
 
                         # Get all bookings for this room on the specified date
                         bookings = Booking.objects.filter(
@@ -118,7 +124,9 @@ class RoomManageView(APIView):
 
                 return Response(room_data, status=status.HTTP_200_OK)
             except Room.DoesNotExist:
-                return Response({"detail": "Room not found"}, status=status.HTTP_404_NOT_FOUND)
+                return Response(
+                    {"detail": "Room not found"}, status=status.HTTP_404_NOT_FOUND
+                )
         # Handle GET request for a list of rooms (fallback to RoomListView)
         else:
             rooms = Room.objects.filter(available=True)
@@ -137,9 +145,11 @@ class RoomManageView(APIView):
         try:
             room = Room.objects.get(id=room_id)
         except Room.DoesNotExist:
-            return Response({"detail": "Room not found"}, status=status.HTTP_404_NOT_FOUND)
+            return Response(
+                {"detail": "Room not found"}, status=status.HTTP_404_NOT_FOUND
+            )
 
-        serializer = RoomSerializer(room, data=request.data, partial=True)
+        serializer = RoomSerializer(room, data=request.data)
         if serializer.is_valid():
             serializer.save()
             logger.info(f"Room {room_id} updated by user {request.user.email}")
@@ -150,7 +160,9 @@ class RoomManageView(APIView):
         try:
             room = Room.objects.get(id=room_id)
         except Room.DoesNotExist:
-            return Response({"detail": "Room not found"}, status=status.HTTP_404_NOT_FOUND)
+            return Response(
+                {"detail": "Room not found"}, status=status.HTTP_404_NOT_FOUND
+            )
 
         room.delete()
         logger.info(f"Room {room_id} deleted by user {request.user.email}")
@@ -167,7 +179,9 @@ class BuildingManageView(APIView):
                 serializer = BuildingSerializer(building)
                 return Response(serializer.data, status=status.HTTP_200_OK)
             except Building.DoesNotExist:
-                return Response({"detail": "Building not found"}, status=status.HTTP_404_NOT_FOUND)
+                return Response(
+                    {"detail": "Building not found"}, status=status.HTTP_404_NOT_FOUND
+                )
         else:
             buildings = Building.objects.all()
             serializer = BuildingSerializer(buildings, many=True)
@@ -185,7 +199,9 @@ class BuildingManageView(APIView):
         try:
             building = Building.objects.get(id=building_id)
         except Building.DoesNotExist:
-            return Response({"detail": "Building not found"}, status=status.HTTP_404_NOT_FOUND)
+            return Response(
+                {"detail": "Building not found"}, status=status.HTTP_404_NOT_FOUND
+            )
 
         serializer = BuildingSerializer(building, data=request.data, partial=True)
         if serializer.is_valid():
@@ -198,11 +214,15 @@ class BuildingManageView(APIView):
         try:
             building = Building.objects.get(id=building_id)
         except Building.DoesNotExist:
-            return Response({"detail": "Building not found"}, status=status.HTTP_404_NOT_FOUND)
+            return Response(
+                {"detail": "Building not found"}, status=status.HTTP_404_NOT_FOUND
+            )
 
         building.delete()
         logger.info(f"Building {building_id} deleted by user {request.user.email}")
-        return Response({"status": "building deleted"}, status=status.HTTP_204_NO_CONTENT)
+        return Response(
+            {"status": "building deleted"}, status=status.HTTP_204_NO_CONTENT
+        )
 
 
 class AmenityManageView(APIView):
@@ -215,7 +235,9 @@ class AmenityManageView(APIView):
                 serializer = AmenitySerializer(amenity)
                 return Response(serializer.data, status=status.HTTP_200_OK)
             except Amenity.DoesNotExist:
-                return Response({"detail": "Amenity not found"}, status=status.HTTP_404_NOT_FOUND)
+                return Response(
+                    {"detail": "Amenity not found"}, status=status.HTTP_404_NOT_FOUND
+                )
         else:
             amenities = Amenity.objects.all()
             serializer = AmenitySerializer(amenities, many=True)
@@ -233,7 +255,9 @@ class AmenityManageView(APIView):
         try:
             amenity = Amenity.objects.get(id=amenity_id)
         except Amenity.DoesNotExist:
-            return Response({"detail": "Amenity not found"}, status=status.HTTP_404_NOT_FOUND)
+            return Response(
+                {"detail": "Amenity not found"}, status=status.HTTP_404_NOT_FOUND
+            )
 
         serializer = AmenitySerializer(amenity, data=request.data, partial=True)
         if serializer.is_valid():
@@ -246,11 +270,15 @@ class AmenityManageView(APIView):
         try:
             amenity = Amenity.objects.get(id=amenity_id)
         except Amenity.DoesNotExist:
-            return Response({"detail": "Amenity not found"}, status=status.HTTP_404_NOT_FOUND)
+            return Response(
+                {"detail": "Amenity not found"}, status=status.HTTP_404_NOT_FOUND
+            )
 
         amenity.delete()
         logger.info(f"Amenity {amenity_id} deleted by user {request.user.email}")
-        return Response({"status": "amenity deleted"}, status=status.HTTP_204_NO_CONTENT)
+        return Response(
+            {"status": "amenity deleted"}, status=status.HTTP_204_NO_CONTENT
+        )
 
 
 class FloorManageView(APIView):
@@ -262,7 +290,9 @@ class FloorManageView(APIView):
             try:
                 building = Building.objects.get(id=building_id)
             except Building.DoesNotExist:
-                return Response({"detail": "Building not found"}, status=status.HTTP_404_NOT_FOUND)
+                return Response(
+                    {"detail": "Building not found"}, status=status.HTTP_404_NOT_FOUND
+                )
             floors = Floor.objects.filter(building_id=building_id)
         else:
             # Otherwise, check if it's in query parameters
@@ -290,7 +320,9 @@ class FloorManageView(APIView):
         try:
             floor = Floor.objects.get(id=floor_id)
         except Floor.DoesNotExist:
-            return Response({"detail": "Floor not found"}, status=status.HTTP_404_NOT_FOUND)
+            return Response(
+                {"detail": "Floor not found"}, status=status.HTTP_404_NOT_FOUND
+            )
 
         serializer = FloorSerializer(floor, data=request.data, partial=True)
         if serializer.is_valid():
@@ -306,7 +338,9 @@ class FloorManageView(APIView):
         try:
             floor = Floor.objects.get(id=floor_id)
         except Floor.DoesNotExist:
-            return Response({"detail": "Floor not found"}, status=status.HTTP_404_NOT_FOUND)
+            return Response(
+                {"detail": "Floor not found"}, status=status.HTTP_404_NOT_FOUND
+            )
 
         # Capture info for logging before deleting
         floor_number = floor.number
@@ -339,7 +373,9 @@ class DepartmentManageView(APIView):
         serializer = DepartmentSerializer(data=request.data)
         if serializer.is_valid():
             department = serializer.save()
-            logger.info(f"Department '{department.name}' created by user {request.user.email}")
+            logger.info(
+                f"Department '{department.name}' created by user {request.user.email}"
+            )
             return Response(serializer.data, status=status.HTTP_201_CREATED)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
@@ -347,7 +383,9 @@ class DepartmentManageView(APIView):
         try:
             department = Department.objects.get(id=department_id)
         except Department.DoesNotExist:
-            return Response({"detail": "Department not found"}, status=status.HTTP_404_NOT_FOUND)
+            return Response(
+                {"detail": "Department not found"}, status=status.HTTP_404_NOT_FOUND
+            )
 
         serializer = DepartmentSerializer(department, data=request.data, partial=True)
         if serializer.is_valid():
@@ -362,11 +400,17 @@ class DepartmentManageView(APIView):
         try:
             department = Department.objects.get(id=department_id)
         except Department.DoesNotExist:
-            return Response({"detail": "Department not found"}, status=status.HTTP_404_NOT_FOUND)
+            return Response(
+                {"detail": "Department not found"}, status=status.HTTP_404_NOT_FOUND
+            )
 
         # Capture info for logging before deleting
         department_name = department.name
 
         department.delete()
-        logger.info(f"Department '{department_name}' deleted by user {request.user.email}")
-        return Response({"status": "department deleted"}, status=status.HTTP_204_NO_CONTENT)
+        logger.info(
+            f"Department '{department_name}' deleted by user {request.user.email}"
+        )
+        return Response(
+            {"status": "department deleted"}, status=status.HTTP_204_NO_CONTENT
+        )

@@ -15,7 +15,6 @@ def get_csrf_token(request):
     return JsonResponse({"detail": "CSRF cookie set"})
 
 
-# Core URL patterns for the application
 urlpatterns = [
     # Admin and authentication
     path("admin/", admin.site.urls),

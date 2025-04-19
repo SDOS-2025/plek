@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import {
   X,
   Building2,
@@ -11,9 +11,12 @@ import {
   CalendarDays,
   CalendarClock,
   Loader2,
+  ChevronLeft,
+  ChevronRight,
 } from "lucide-react";
 import api from "../api";
 import { DateTime } from "luxon";
+import Toast from "../components/AlertToast";
 
 // Utility function to properly capitalize amenity names
 const formatAmenityName = (name) => {
@@ -57,6 +60,13 @@ const BookingModal = ({ room, onClose }) => {
   const [date, setDate] = useState(
     DateTime.now().setZone("Asia/Kolkata").toISODate()
   );
+
+  // Add alert state
+  const [alert, setAlert] = useState({
+    show: false,
+    type: "success",
+    message: "",
+  });
 
   // Generate dates for the next 14 days
   const generateDates = () => {
@@ -267,17 +277,37 @@ const BookingModal = ({ room, onClose }) => {
 
       if (response.status === 200 || response.status === 201) {
         console.log("Booking successful:", response.data);
-        // Show success message
-        alert("Booking request sent!");
-        onClose();
+        // Show success message with custom alert
+        setAlert({
+          show: true,
+          type: "success",
+          message: "Booking request sent successfully!",
+        });
+        // Close the modal after a short delay
+        setTimeout(() => {
+          onClose();
+        }, 2000);
       } else {
         console.error("Booking failed:", response.data);
-        alert("Failed to book room. Please try again.");
+        setAlert({
+          show: true,
+          type: "danger",
+          message: "Failed to book room. Please try again.",
+        });
       }
     } catch (error) {
       console.error("Error submitting booking:", error);
-      alert("An error occurred while booking the room.");
+      setAlert({
+        show: true,
+        type: "danger",
+        message: "An error occurred while booking the room.",
+      });
     }
+  };
+
+  // Add function to hide alert
+  const hideAlert = () => {
+    setAlert((prev) => ({ ...prev, show: false }));
   };
 
   // Handle opening dropdowns and closing others
@@ -300,6 +330,138 @@ const BookingModal = ({ room, onClose }) => {
     setDate(selectedDate);
     setShowDatePicker(false);
     // Fetch time slots is handled by useEffect
+  };
+
+  // Utility function to determine if a date is in the past
+  const isDateInPast = (dateStr) => {
+    const today = DateTime.now().setZone("Asia/Kolkata").startOf("day");
+    const checkDate = DateTime.fromISO(dateStr).startOf("day");
+    return checkDate < today;
+  };
+
+  // Utility function to determine if a time slot is in the past
+  const isTimeSlotInPast = (slot, date) => {
+    const now = DateTime.now().setZone("Asia/Kolkata");
+    const [startTime] = slot.split(" - ");
+
+    // Convert string time like "9 AM" to proper DateTime
+    const slotTime = DateTime.fromFormat(startTime, "h a", {
+      zone: "Asia/Kolkata",
+    });
+
+    // Combine selected date with slot time
+    const slotDateTime = DateTime.fromISO(date).set({
+      hour: slotTime.hour,
+      minute: slotTime.minute,
+    });
+
+    return slotDateTime < now;
+  };
+
+  // Find the next available day (either today if slots are available or tomorrow)
+  const findNextAvailableDay = () => {
+    const now = DateTime.now().setZone("Asia/Kolkata");
+    const today = now.toISODate();
+
+    // Check if current time is past the last slot of the day (e.g., after 5 PM)
+    const lastSlotTime = DateTime.fromFormat("5 PM", "h a", {
+      zone: "Asia/Kolkata",
+    });
+    const lastSlotToday = DateTime.fromISO(today).set({
+      hour: lastSlotTime.hour,
+      minute: lastSlotTime.minute,
+    });
+
+    // If current time is past the last slot, return tomorrow's date
+    if (now > lastSlotToday) {
+      return now.plus({ days: 1 }).toISODate();
+    }
+
+    return today;
+  };
+
+  // Update selectedDate to next available day on component mount
+  useEffect(() => {
+    setDate(findNextAvailableDay());
+  }, []);
+
+  // Fetch available time slots for the selected date
+  useEffect(() => {
+    // ...existing code for fetching time slots...
+
+    // After fetching the slots, filter out past slots if it's today
+    const today = DateTime.now().setZone("Asia/Kolkata").toISODate();
+
+    if (date === today) {
+      // Filter out past time slots for today
+      const availableSlots = availableTimeSlots.filter(
+        (slot) => !isTimeSlotInPast(slot.time, date)
+      );
+
+      // If no slots available today, automatically advance to tomorrow
+      if (availableSlots.length === 0 && availableTimeSlots.length > 0) {
+        const tomorrow = DateTime.now()
+          .setZone("Asia/Kolkata")
+          .plus({ days: 1 })
+          .toISODate();
+        setDate(tomorrow);
+      } else {
+        // Update timeSlots with available ones
+        setAvailableTimeSlots(availableSlots);
+      }
+    }
+  }, [date]);
+
+  // Handle date change
+  const handleDateChange = (offset) => {
+    const currentDate = DateTime.fromISO(date);
+    const newDate = currentDate.plus({ days: offset }).toISODate();
+
+    // Don't allow selecting dates in the past
+    if (!isDateInPast(newDate)) {
+      setDate(newDate);
+      setTimeSlot(null); // Reset selected time slot when changing date
+    }
+  };
+
+  // Time slot selection component
+  const renderTimeSlots = () => {
+    if (availableTimeSlots.length === 0) {
+      return (
+        <p className="text-gray-400 text-center">
+          No available slots for this date
+        </p>
+      );
+    }
+
+    return (
+      <div className="grid grid-cols-3 gap-3">
+        {availableTimeSlots.map((slot, index) => {
+          const isPastSlot = isTimeSlotInPast(slot.time, date);
+
+          return (
+            <button
+              key={index}
+              className={`p-3 rounded-lg text-center ${
+                timeSlot === slot.time
+                  ? "bg-plek-purple text-white"
+                  : isPastSlot
+                  ? "bg-gray-600 text-gray-400 cursor-not-allowed" // Grayed out for past slots
+                  : "bg-gray-700 hover:bg-gray-600 text-white"
+              }`}
+              onClick={() => {
+                if (!isPastSlot) {
+                  setTimeSlot(slot.time);
+                }
+              }}
+              disabled={isPastSlot} // Disable past slots
+            >
+              {slot.time}
+            </button>
+          );
+        })}
+      </div>
+    );
   };
 
   return (
@@ -636,6 +798,15 @@ const BookingModal = ({ room, onClose }) => {
           </div>
         </form>
       </div>
+      {/* Add Toast component */}
+      {alert.show && (
+        <Toast
+          type={alert.type}
+          message={alert.message}
+          show={alert.show}
+          onClose={hideAlert}
+        />
+      )}
     </div>
   );
 };

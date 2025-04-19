@@ -10,10 +10,35 @@ import {
   Users,
 } from "lucide-react";
 import { Link } from "react-router-dom";
-import BookingModal from "../components/ConfirmBooking";
-import api from "../api";
-import NavBar from "../components/NavBar";
-import Footer from "../components/Footer";
+import BookingModal from "../../components/ConfirmBooking";
+import api from "../../api";
+import NavBar from "../../components/NavBar";
+import Footer from "../../components/Footer";
+
+// Utility function to properly capitalize amenity names
+const formatAmenityName = (name) => {
+  if (!name) return "";
+
+  // Handle special cases like "TV", "WiFi", etc.
+  const specialCases = {
+    wifi: "WiFi",
+    tv: "TV",
+    hdmi: "HDMI",
+    usb: "USB",
+    ac: "AC",
+  };
+
+  const lowerName = name.toLowerCase();
+  if (specialCases[lowerName]) {
+    return specialCases[lowerName];
+  }
+
+  // Otherwise capitalize first letter of each word
+  return name
+    .split(" ")
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+    .join(" ");
+};
 
 // Utility function to properly capitalize amenity names
 const formatAmenityName = (name) => {

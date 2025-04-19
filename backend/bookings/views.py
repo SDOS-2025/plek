@@ -53,26 +53,49 @@ class BookingManageView(APIView):
                 status=status.HTTP_404_NOT_FOUND,
             )
 
+        # Check if this is a modification that requires re-approval
+        is_significant_change = False
+        if (
+            "start_time" in request.data
+            or "end_time" in request.data
+            or "purpose" in request.data
+            or "participants" in request.data
+        ):
+            is_significant_change = True
+
         serializer = BookingSerializer(booking, data=request.data, partial=True)
         if serializer.is_valid():
             updated_booking = serializer.save()
-            # Log details about modified purpose and participants if they were updated
-            update_details = []
-            if "purpose" in request.data:
-                update_details.append(
-                    f"purpose updated to: {updated_booking.purpose[:30]}..."
-                )
-            if "participants" in request.data:
-                update_details.append(
-                    f"participants updated to: {updated_booking.participants or 'none'}"
-                )
 
-            details_str = (
-                ", ".join(update_details) if update_details else "no detail changes"
-            )
-            logger.info(
-                f"Booking {booking_id} modified by user {request.user.email} ({details_str})"
-            )
+            # Reset status to PENDING if it was a significant change and not already cancelled/rejected
+            if is_significant_change and updated_booking.status not in [
+                Booking.CANCELLED,
+                Booking.REJECTED,
+            ]:
+                updated_booking.status = Booking.PENDING
+                updated_booking.approved_by = None  # Remove previous approver
+                updated_booking.save()
+                logger.info(
+                    f"Booking {booking_id} modified by user {request.user.email} - Status reset to PENDING"
+                )
+            else:
+                # Log details about modified purpose and participants if they were updated
+                update_details = []
+                if "purpose" in request.data:
+                    update_details.append(
+                        f"purpose updated to: {updated_booking.purpose[:30]}..."
+                    )
+                if "participants" in request.data:
+                    update_details.append(
+                        f"participants updated to: {updated_booking.participants or 'none'}"
+                    )
+
+                details_str = (
+                    ", ".join(update_details) if update_details else "no detail changes"
+                )
+                logger.info(
+                    f"Booking {booking_id} modified by user {request.user.email} ({details_str})"
+                )
             return Response(serializer.data, status=status.HTTP_200_OK)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 

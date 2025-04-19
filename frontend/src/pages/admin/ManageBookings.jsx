@@ -13,12 +13,12 @@ import {
   Pencil,
   Trash2,
 } from "lucide-react";
-import api from "../api";
+import api from "../../api";
 import { DateTime } from "luxon";
-import ModifyBookingModal from "../components/ModifyBooking";
-import NavBar from "../components/NavBar";
-import Footer from "../components/Footer";
-import Toast, { DeleteConfirmation } from "../components/AlertToast";
+import ModifyBookingModal from "../../components/ModifyBooking";
+import NavBar from "../../components/NavBar";
+import Footer from "../../components/Footer";
+import Toast, { DeleteConfirmation } from "../../components/AlertToast";
 
 function ManageBookings() {
   const [activeTab, setActiveTab] = useState("requests");
@@ -54,8 +54,10 @@ function ManageBookings() {
   };
 
   // Process bookings to match expected format
-  const processBookings = (bookings) => {
-    return bookings.map((booking) => {
+  const processBookings = async (bookings) => {
+    const processedBookings = [];
+
+    for (const booking of bookings) {
       // Parse start and end times
       const startTime = DateTime.fromISO(booking.start_time, {
         zone: "Asia/Kolkata",
@@ -70,24 +72,119 @@ function ManageBookings() {
         "h a"
       )} - ${endTime.toFormat("h a")}`;
 
+      // Extract room information
+      let roomName = "Unknown Room";
+      let buildingName = "";
+      let roomCapacity = 0;
+
+      // Handle different possible room data structures
+      if (booking.room) {
+        if (typeof booking.room === "object") {
+          roomName = booking.room.name || "Unknown Room";
+          buildingName = booking.room.building_name || "";
+          roomCapacity = booking.room.capacity || 0;
+        } else {
+          // If room is just an ID, fetch the room details
+          try {
+            const roomId =
+              typeof booking.room === "string"
+                ? parseInt(booking.room)
+                : booking.room;
+            const roomResponse = await api.get(`/rooms/${roomId}/`);
+            if (roomResponse.data) {
+              roomName = roomResponse.data.name || "Unknown Room";
+              buildingName = roomResponse.data.building_name || "";
+              roomCapacity = roomResponse.data.capacity || 0;
+            }
+          } catch (err) {
+            console.error(
+              `Failed to fetch room details for room ID: ${booking.room}`,
+              err
+            );
+          }
+        }
+      }
+
+      // Get user name and details from nested object structure if available
+      let userName = "Unknown User";
+      let firstName = "";
+      let lastName = "";
+      let userEmail = "";
+
+      if (booking.user) {
+        if (typeof booking.user === "object") {
+          firstName = booking.user.first_name || "";
+          lastName = booking.user.last_name || "";
+          userEmail = booking.user.email || "";
+
+          // Create a formatted user display name
+          if (firstName && lastName) {
+            userName = `${firstName} ${lastName}`;
+          } else if (firstName) {
+            userName = firstName;
+          } else if (userEmail) {
+            userName = userEmail;
+          }
+        } else {
+          // If we only have user ID, try to fetch full user data from the accounts API
+          try {
+            const userId =
+              typeof booking.user === "string"
+                ? parseInt(booking.user)
+                : booking.user;
+
+            // Use the accounts/users endpoint as defined in accounts/urls.py
+            const userResponse = await api.get(`/users/${userId}/`);
+
+            if (userResponse && userResponse.data) {
+              firstName = userResponse.data.first_name || "";
+              lastName = userResponse.data.last_name || "";
+              userEmail = userResponse.data.email || "";
+
+              if (firstName && lastName) {
+                userName = `${firstName} ${lastName}`;
+              } else if (firstName) {
+                userName = firstName;
+              } else if (userEmail) {
+                userName = userEmail;
+              } else {
+                userName = `User ${userId}`;
+              }
+
+              console.log(`Fetched user data for ID ${userId}: ${userName}`);
+            }
+          } catch (err) {
+            console.error(
+              `Failed to fetch user details for ID: ${booking.user}`,
+              err
+            );
+            userName = `User ${booking.user}`;
+          }
+        }
+      }
+
       // Create processed booking with correct structure
-      return {
+      processedBookings.push({
         id: booking.id,
-        room: booking.room.name,
-        building: booking.room.building_name,
-        capacity: booking.room.capacity,
+        room: roomName,
+        roomId: booking.room_id || booking.room || "",
+        building: buildingName || booking.building || "",
+        capacity: roomCapacity || booking.capacity || 0,
         date: formattedDate,
         slot: formattedTimeSlot,
         status: booking.status,
-        purpose: booking.purpose,
-        participants: booking.participants,
-        user:
-          typeof booking.user === "number"
-            ? `User ${booking.user}`
-            : booking.user,
+        purpose: booking.purpose || "",
+        participants: booking.participants || 0, // Ensure participants field is available
+        attendees: booking.participants || 0, // Add a clear field name for attendees
+        user: userName,
+        userFirstName: firstName,
+        userLastName: lastName,
+        userEmail: userEmail,
         original: booking, // Keep original data in case we need it
-      };
-    });
+      });
+    }
+
+    return processedBookings;
   };
 
   // Fetch bookings data
@@ -99,7 +196,7 @@ function ManageBookings() {
         // Get all bookings from a single endpoint
         const response = await api.get("/bookings/?all=true");
 
-        const allBookings = processBookings(response.data || []);
+        const allBookings = await processBookings(response.data || []);
 
         // Split bookings into pending requests and approved bookings
         const requests = allBookings.filter(
@@ -297,10 +394,25 @@ function ManageBookings() {
   // Filter bookings based on search query and filters
   const filterBookings = (bookings) => {
     return bookings.filter((booking) => {
+      const roomText =
+        typeof booking.room === "string"
+          ? booking.room.toLowerCase()
+          : String(booking.room).toLowerCase();
+      const buildingText =
+        typeof booking.building === "string"
+          ? booking.building.toLowerCase()
+          : String(booking.building).toLowerCase();
+      const userText =
+        typeof booking.user === "string"
+          ? booking.user.toLowerCase()
+          : String(booking.user).toLowerCase();
+
+      const searchTermLower = searchQuery.toLowerCase();
+
       const matchesSearch =
-        booking.room?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        booking.building?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        booking.user?.toLowerCase().includes(searchQuery.toLowerCase());
+        roomText.includes(searchTermLower) ||
+        buildingText.includes(searchTermLower) ||
+        userText.includes(searchTermLower);
 
       const matchesBuilding =
         selectedBuilding === "all" || booking.building === selectedBuilding;
@@ -475,7 +587,7 @@ function ManageBookings() {
               <div key={booking.id} className="section-card">
                 <div className="flex justify-between items-start">
                   <h3 className="text-xl font-semibold">
-                    Room: {booking.room}
+                    {booking.building} - {booking.room}
                   </h3>
                   <div className="flex space-x-2">
                     {activeTab === "requests" ? (
@@ -516,8 +628,6 @@ function ManageBookings() {
                   </div>
                 </div>
 
-                <p className="text-gray-400 mt-1">{booking.building}</p>
-
                 <div className="mt-3 space-y-2">
                   <div className="flex items-center">
                     <Clock className="h-4 w-4 text-gray-400 mr-2" />
@@ -532,9 +642,9 @@ function ManageBookings() {
                     </span>
                   </div>
                   <div className="flex items-center">
-                    <Users className="h-4 w-4 text-gray-400 mr-2" />
+                    <Users className="h-4 w-4 text-purple-400 mr-2" />
                     <span className="text-sm text-gray-300">
-                      Capacity: {booking.capacity}
+                      Attendees: {booking.attendees || 0}
                     </span>
                   </div>
                   <div className="flex items-center">
@@ -543,7 +653,7 @@ function ManageBookings() {
                       {activeTab === "requests"
                         ? "Requested by: "
                         : "Booked by: "}
-                      {booking.user}
+                      <span className="font-medium">{booking.user}</span>
                     </span>
                   </div>
                 </div>

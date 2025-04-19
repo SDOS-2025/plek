@@ -11,11 +11,12 @@ import {
   Trash2,
   Loader2,
 } from "lucide-react";
-import api from "../api";
-import ModifyBookingModal from "../components/ModifyBooking";
-import NavBar from "../components/NavBar";
+import api from "../../api";
+import ModifyBookingModal from "../../components/ModifyBooking";
+import NavBar from "../../components/NavBar";
 import { DateTime } from "luxon";
-import Footer from "../components/Footer";
+import Footer from "../../components/Footer";
+import Toast, { DeleteConfirmation } from "../../components/AlertToast";
 
 function MyBookings() {
   const [activeTab, setActiveTab] = useState("upcoming");
@@ -26,6 +27,17 @@ function MyBookings() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
+  const firstName = localStorage.getItem("FirstName");
+
+  // Add alert and confirmation state
+  const [alert, setAlert] = useState({
+    show: false,
+    type: "success",
+    message: "",
+  });
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [bookingToDelete, setBookingToDelete] = useState(null);
+
   // Fetch bookings when component mounts
   useEffect(() => {
     const fetchBookings = async () => {
@@ -33,26 +45,22 @@ function MyBookings() {
         setLoading(true);
 
         // Make API call to get user's bookings
-        const response = await api.get("/bookings/?all=false");
+        const response = await api.get("bookings/?all=false");
 
         // Process the response data
         const bookings = response.data;
-        const now = DateTime.now().setZone("Asia/Kolkata").toJSDate();
+        const now = DateTime.now().toJSDate(); // Use local time
 
         // Split bookings into upcoming and previous
         const upcoming = [];
         const previous = [];
 
-        bookings.forEach((booking) => {
+        for (const booking of bookings) {
           console.log("Booking:", booking);
 
-          // Parse the start_time from the API response
-          const startTime = DateTime.fromISO(booking.start_time, {
-            zone: "Asia/Kolkata",
-          });
-          const endTime = DateTime.fromISO(booking.end_time, {
-            zone: "Asia/Kolkata",
-          });
+          // Parse the start_time from the API response - use local time
+          const startTime = DateTime.fromISO(booking.start_time);
+          const endTime = DateTime.fromISO(booking.end_time);
 
           // Format date and time for display
           const formattedDate = startTime.toFormat("LLLL d, yyyy");
@@ -60,12 +68,47 @@ function MyBookings() {
             "h a"
           )} - ${endTime.toFormat("h a")}`;
 
+          // Extract room data - handle both object and ID cases
+          let roomName = "Unknown Room";
+          let buildingName = "Unknown Building";
+          let roomCapacity = 0;
+
+          if (booking.room) {
+            if (typeof booking.room === "object") {
+              // If room is already an object, extract data directly
+              roomName = booking.room.name || "Unknown Room";
+              buildingName = booking.room.building_name || "Unknown Building";
+              roomCapacity = booking.room.capacity || 0;
+            } else {
+              // If room is just an ID, fetch the room details from API
+              try {
+                const roomId =
+                  typeof booking.room === "string"
+                    ? parseInt(booking.room)
+                    : booking.room;
+                const roomResponse = await api.get(`/rooms/${roomId}/`);
+
+                if (roomResponse.data) {
+                  roomName = roomResponse.data.name || "Unknown Room";
+                  buildingName =
+                    roomResponse.data.building_name || "Unknown Building";
+                  roomCapacity = roomResponse.data.capacity || 0;
+                }
+              } catch (err) {
+                console.error(
+                  `Failed to fetch room details for room ID: ${booking.room}`,
+                  err
+                );
+              }
+            }
+          }
+
           // Create a processed booking object with the required fields
           const processedBooking = {
             id: booking.id,
-            roomName: booking.room.name,
-            building: booking.room.building_name,
-            capacity: booking.room.capacity,
+            roomName: roomName,
+            building: buildingName,
+            capacity: roomCapacity,
             status: booking.status,
             purpose: booking.purpose,
             participants: booking.participants,
@@ -73,8 +116,7 @@ function MyBookings() {
             slot: formattedTimeSlot,
             startTime: startTime,
             endTime: endTime,
-            amenities: booking.room.amenities,
-            // Add any other fields you need from the original booking
+            amenities: booking.room?.amenities || [],
             originalBooking: booking, // Keep the original data for reference if needed
           };
 
@@ -89,15 +131,39 @@ function MyBookings() {
           else if (startTime.toJSDate() > now) {
             upcoming.push(processedBooking);
           } else {
-            previous.push(processedBooking);
+            previous.push(processedBooking); // FIXED: Push the processed booking, not the original
           }
-        });
+        }
 
         // Sort upcoming bookings by date (closest first)
-        upcoming.sort((a, b) => a.startTime - b.startTime);
+        upcoming.sort((a, b) => {
+          const dateA = DateTime.fromFormat(
+            `${a.date} ${a.slot.split(" - ")[0]}`,
+            "d MMMM yyyy h a"
+          );
+
+          const dateB = DateTime.fromFormat(
+            `${b.date} ${b.slot.split(" - ")[0]}`,
+            "d MMMM yyyy h a"
+          );
+
+          return dateA - dateB;
+        });
 
         // Sort previous bookings by date (most recent first)
-        previous.sort((a, b) => b.startTime - a.startTime);
+        previous.sort((a, b) => {
+          const dateA = DateTime.fromFormat(
+            `${a.date} ${a.slot.split(" - ")[0]}`,
+            "d MMMM yyyy h a"
+          );
+
+          const dateB = DateTime.fromFormat(
+            `${b.date} ${b.slot.split(" - ")[0]}`,
+            "d MMMM yyyy h a"
+          );
+
+          return dateB - dateA;
+        });
 
         setUpcomingBookings(upcoming);
         setPreviousBookings(previous);
@@ -130,7 +196,11 @@ function MyBookings() {
         bookingToCancel &&
         bookingToCancel.status.toLowerCase() === "rejected"
       ) {
-        alert("Cannot cancel a rejected booking.");
+        setAlert({
+          show: true,
+          type: "danger",
+          message: "Cannot cancel a rejected booking.",
+        });
         return;
       }
 
@@ -157,11 +227,37 @@ function MyBookings() {
         setPreviousBookings([updatedBooking, ...previousBookings]);
       }
 
-      alert("Booking canceled successfully");
+      setAlert({
+        show: true,
+        type: "success",
+        message: "Booking canceled successfully",
+      });
     } catch (err) {
       console.error("Error canceling booking:", err);
-      alert("Failed to cancel booking. Please try again.");
+      setAlert({
+        show: true,
+        type: "danger",
+        message: "Failed to cancel booking. Please try again.",
+      });
     }
+  };
+
+  // Add function to confirm deletion using the DeleteConfirmation component
+  const handleDeleteClick = (bookingId) => {
+    setBookingToDelete(bookingId);
+    setShowDeleteConfirm(true);
+  };
+
+  const confirmDelete = () => {
+    if (bookingToDelete) {
+      handleCancel(bookingToDelete);
+      setShowDeleteConfirm(false);
+    }
+  };
+
+  // Hide alert function
+  const hideAlert = () => {
+    setAlert((prev) => ({ ...prev, show: false }));
   };
 
   return (
@@ -230,11 +326,8 @@ function MyBookings() {
                       <div className="flex justify-between items-start">
                         <div>
                           <h3 className="text-lg font-medium mb-2">
-                            Room: {booking.roomName}
+                            {booking.building} - {booking.roomName}
                           </h3>
-                          <p className="text-gray-400">
-                            Building: {booking.building}
-                          </p>
                           <div className="mt-4 space-y-2">
                             {/* Updated date and time display */}
                             <div className="flex items-center space-x-2 text-gray-300">
@@ -266,7 +359,7 @@ function MyBookings() {
                           {booking.status.toLowerCase() !== "rejected" && (
                             <>
                               <button
-                                onClick={() => handleCancel(booking.id)}
+                                onClick={() => handleDeleteClick(booking.id)}
                                 className="px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded-lg transition-colors"
                               >
                                 Cancel
@@ -281,13 +374,6 @@ function MyBookings() {
                           )}
                         </div>
                       </div>
-
-                      {/* Google Calendar integration - only show for approved bookings */}
-                      {booking.status.toLowerCase() === "approved" && (
-                        <div className="mt-4 pt-4 border-t border-gray-700">
-                          {/* Removed Google Calendar integration code */}
-                        </div>
-                      )}
                     </div>
                   ))}
                 </div>
@@ -303,11 +389,8 @@ function MyBookings() {
                     <div className="flex justify-between items-start">
                       <div>
                         <h3 className="text-lg font-medium mb-2">
-                          Room: {booking.roomName}
+                          {booking.building} - {booking.roomName}
                         </h3>
-                        <p className="text-gray-400">
-                          Building: {booking.building}
-                        </p>
                         <div className="mt-4 space-y-2">
                           {/* Updated date and time display */}
                           <div className="flex items-center space-x-2 text-gray-300">
@@ -355,11 +438,31 @@ function MyBookings() {
           booking={selectedBooking}
           onClose={() => setShowModifyModal(false)}
           onCancel={(id) => {
-            handleCancel(id);
+            handleDeleteClick(id);
             setShowModifyModal(false);
           }}
         />
       )}
+
+      {/* Toast Alert */}
+      {alert.show && (
+        <Toast
+          type={alert.type}
+          message={alert.message}
+          show={alert.show}
+          onClose={hideAlert}
+        />
+      )}
+
+      {/* Delete Confirmation Dialog */}
+      <DeleteConfirmation
+        show={showDeleteConfirm}
+        onConfirm={confirmDelete}
+        onCancel={() => setShowDeleteConfirm(false)}
+        title="Cancel Booking"
+        message="Are you sure you want to cancel this booking? This action cannot be undone."
+        confirmButtonText="Cancel Booking"
+      />
     </div>
   );
 }

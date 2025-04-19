@@ -17,11 +17,11 @@ import {
   Users,
 } from "lucide-react";
 import { Link } from "react-router-dom";
-import api from "../api"; // Adjust the import path as needed
-import { AuthContext } from "../context/AuthProvider";
-import Toast, { DeleteConfirmation } from "../components/AlertToast";
-import NavBar from "../components/NavBar";
-import Footer from "../components/Footer";
+import api from "../../api"; // Adjust the import path as needed
+import { AuthContext } from "../../context/AuthProvider";
+import Toast, { DeleteConfirmation } from "../../components/AlertToast";
+import NavBar from "../../components/NavBar";
+import Footer from "../../components/Footer";
 
 // Utility function to properly capitalize amenity names
 const formatAmenityName = (name) => {
@@ -208,11 +208,15 @@ function ManageRooms() {
     const [floorId, setFloorId] = useState(room ? room.floor : "");
     const [capacity, setCapacity] = useState(room ? room.capacity : "");
     const [amenityIds, setAmenityIds] = useState(room ? room.amenities : []);
+    const [departmentIds, setDepartmentIds] = useState(
+      room ? room.departments || [] : []
+    );
 
     // Add new state variables for data fetching
     const [buildingsList, setBuildingsList] = useState([]);
     const [floorsList, setFloorsList] = useState([]);
     const [amenitiesList, setAmenitiesList] = useState([]);
+    const [departmentsList, setDepartmentsList] = useState([]);
     const [loadingData, setLoadingData] = useState(true);
     const [fetchError, setFetchError] = useState(null);
 
@@ -237,6 +241,10 @@ function ManageRooms() {
           const amenitiesResponse = await api.get("/amenities/");
           setAmenitiesList(amenitiesResponse.data);
 
+          // Fetch departments
+          const departmentsResponse = await api.get("/departments/");
+          setDepartmentsList(departmentsResponse.data);
+
           // Set initial amenity IDs if editing
           if (isEdit && room && Array.isArray(room.amenities)) {
             // Map string amenities to their IDs
@@ -250,6 +258,11 @@ function ManageRooms() {
               .filter((id) => id !== undefined);
 
             setAmenityIds(mappedIds);
+          }
+
+          // Set initial department IDs if editing
+          if (isEdit && room && Array.isArray(room.departments)) {
+            setDepartmentIds(room.departments);
           }
 
           setFetchError(null);
@@ -297,6 +310,14 @@ function ManageRooms() {
       }
     };
 
+    const toggleDepartment = (departmentId) => {
+      if (departmentIds.includes(departmentId)) {
+        setDepartmentIds(departmentIds.filter((id) => id !== departmentId));
+      } else {
+        setDepartmentIds([...departmentIds, departmentId]);
+      }
+    };
+
     useEffect(() => {
       console.log("Modal state initialized:", {
         name,
@@ -304,8 +325,9 @@ function ManageRooms() {
         floorId,
         capacity,
         amenityIds,
+        departmentIds,
       });
-    }, [name, buildingId, floorId, capacity, amenityIds]);
+    }, [name, buildingId, floorId, capacity, amenityIds, departmentIds]);
 
     const handleSubmit = async (e) => {
       e.preventDefault();
@@ -316,6 +338,7 @@ function ManageRooms() {
         floor: floorId,
         capacity: parseInt(capacity),
         amenities: amenityIds,
+        departments: departmentIds,
       };
       try {
         if (isEdit && room) {
@@ -438,6 +461,35 @@ function ManageRooms() {
               </select>
             </div>
 
+            {/* Departments section */}
+            <div className="bg-plek-background rounded-lg p-4 mb-6">
+              <h3 className="font-semibold mb-2">Departments</h3>
+              <div className="flex flex-wrap gap-2">
+                {departmentsList.map((department) => (
+                  <button
+                    key={department.id}
+                    type="button"
+                    className={`px-3 py-2 ${
+                      departmentIds.includes(department.id)
+                        ? "bg-plek-purple"
+                        : "bg-plek-lightgray"
+                    } rounded-lg transition-colors`}
+                    onClick={() => toggleDepartment(department.id)}
+                  >
+                    <span>{department.name}</span>
+                    {department.code && (
+                      <span className="ml-1 text-xs">({department.code})</span>
+                    )}
+                  </button>
+                ))}
+              </div>
+              {departmentsList.length === 0 && (
+                <p className="text-gray-400 text-sm">
+                  No departments available
+                </p>
+              )}
+            </div>
+
             {/* Amenities section with consistent styling */}
             <div className="bg-plek-background rounded-lg p-4 mb-6">
               <h3 className="font-semibold mb-2">Amenities</h3>
@@ -488,6 +540,7 @@ function ManageRooms() {
       floor: PropTypes.string,
       capacity: PropTypes.number,
       amenities: PropTypes.arrayOf(PropTypes.string),
+      departments: PropTypes.arrayOf(PropTypes.number),
     }),
     onClose: PropTypes.func.isRequired,
     isEdit: PropTypes.bool.isRequired,

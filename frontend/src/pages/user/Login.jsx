@@ -1,43 +1,38 @@
 import React, { useState, useContext, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import api from "../api";
-import { AuthContext } from "../context/AuthProvider";
-import Footer from "../components/Footer";
+import api from "../../api";
+import { AuthContext } from "../../context/AuthProvider";
+import Footer from "../../components/Footer";
 
-export default function Signup() {
-  const [firstName, setFirstName] = useState("");
-  const [lastName, setLastName] = useState("");
+export default function Login() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [confirmPassword, setConfirmPassword] = useState("");
   const [error, setError] = useState("");
   const [googleSdkLoaded, setGoogleSdkLoaded] = useState(false);
   const navigate = useNavigate();
   const { user, login, loading } = useContext(AuthContext);
 
-  // Navigate to dashboard if user is already authenticated
   useEffect(() => {
     if (user && !loading) {
       navigate("/dashboard");
     }
   }, [user, loading, navigate]);
 
-  // Initialize Google Sign-In SDK
   useEffect(() => {
     if (window.google && window.google.accounts) {
       console.log("Google SDK loaded, initializing...");
       window.google.accounts.id.initialize({
         client_id:
           "47840497232-2q9v23fnco2ijfok7l56hlh8356of7lb.apps.googleusercontent.com",
-        callback: handleGoogleSignup,
+        callback: handleGoogleLogin,
         auto_select: false,
       });
       window.google.accounts.id.renderButton(
-        document.getElementById("google-signup-button"),
+        document.getElementById("google-signin-button"),
         {
           type: "standard",
           size: "large",
-          text: "signup_with",
+          text: "sign_in_with",
           shape: "rectangular",
           theme: "filled_black",
           logo_alignment: "left",
@@ -61,72 +56,47 @@ export default function Signup() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError("");
-
-    if (!firstName || !lastName || !email || !password || !confirmPassword) {
-      setError("All fields are required");
+    if (!email || !password) {
+      setError("Email and password are required");
       return;
     }
-
-    if (password !== confirmPassword) {
-      setError("Passwords do not match");
-      return;
-    }
-
     try {
-      console.log("Sending signup request:", {
-        firstName,
-        lastName,
-        email,
-        password,
-      });
-      const response = await api.post(
-        "/api/auth/register/",
-        {
-          first_name: firstName,
-          last_name: lastName,
-          email,
-          password1: password,
-          password2: confirmPassword,
-          user_category: "student",
-        },
-        { withCredentials: true }
-      );
-      console.log("Signup response:", response.data);
-      await login({ email, password }); // Login after signup
-      navigate("/dashboard");
+      console.log("Sending login request with email:", email);
+      const response = await login({ email, password });
+      console.log("Login response:", response);
     } catch (err) {
-      console.error("Signup error:", err.response?.data || err.message);
-      const errorMsg =
-        err.response?.data?.email?.[0] ||
+      console.error("Login error:", err.response?.data || err.message);
+      setError(
         err.response?.data?.non_field_errors?.[0] ||
-        "Signup failed. Please try again.";
-      setError(errorMsg);
+          err.response?.data?.email?.[0] ||
+          "Invalid email or password"
+      );
     }
   };
 
-  const handleGoogleSignup = async (response) => {
+  const handleGoogleLogin = async (response) => {
     try {
       setError("");
-      console.log("Google signup response:", response);
+      console.log("Google login response:", response);
       const socialData = { access_token: response.credential };
       const res = await login({ social: true, socialData });
-      console.log("Google signup response:", res);
+      console.log("Google login response:", res);
       navigate("/dashboard");
     } catch (err) {
-      console.error("Google signup error:", {
+      console.error("Google login error:", {
         message: err.message,
         response: err.response?.data,
         status: err.response?.status,
       });
       setError(
         err.response?.data?.error ||
-          "Failed to sign up with Google. Please try again."
+          "Failed to sign in with Google. Please try again."
       );
     }
   };
 
-  const handleManualGoogleSignup = () => {
-    console.log("Manual Google signup triggered");
+  const handleManualGoogleLogin = () => {
+    console.log("Manual Google login triggered");
     window.location.href = "http://localhost:8000/api/auth/google/";
   };
 
@@ -141,44 +111,13 @@ export default function Signup() {
           </div>
 
           <div className="section-card">
-            <h2 className="card-header text-center">Create Your Account</h2>
-
+            <h2 className="card-header text-center">Welcome Back</h2>
             {error && (
               <div className="mb-6 p-3 bg-red-900/50 border border-red-500 rounded-lg text-red-200">
                 {error}
               </div>
             )}
-
             <form onSubmit={handleSubmit} className="space-y-6">
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-300 mb-1">
-                    First Name
-                  </label>
-                  <input
-                    type="text"
-                    value={firstName}
-                    onChange={(e) => setFirstName(e.target.value)}
-                    placeholder="John"
-                    className="w-full p-3 rounded bg-plek-lightgray border border-gray-700 text-white placeholder-gray-400 focus:outline-none focus:border-plek-purple"
-                    required
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-300 mb-1">
-                    Last Name
-                  </label>
-                  <input
-                    type="text"
-                    value={lastName}
-                    onChange={(e) => setLastName(e.target.value)}
-                    placeholder="Smith"
-                    className="w-full p-3 rounded bg-plek-lightgray border border-gray-700 text-white placeholder-gray-400 focus:outline-none focus:border-plek-purple"
-                    required
-                  />
-                </div>
-              </div>
-
               <div>
                 <label className="block text-sm font-medium text-gray-300 mb-1">
                   Email Address
@@ -194,9 +133,17 @@ export default function Signup() {
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-300 mb-1">
-                  Password
-                </label>
+                <div className="flex justify-between items-center mb-1">
+                  <label className="block text-sm font-medium text-gray-300">
+                    Password
+                  </label>
+                  <Link
+                    to="/forgot-password"
+                    className="text-xs text-plek-purple hover:text-purple-400"
+                  >
+                    Forgot password?
+                  </Link>
+                </div>
                 <input
                   type="password"
                   value={password}
@@ -207,25 +154,11 @@ export default function Signup() {
                 />
               </div>
 
-              <div>
-                <label className="block text-sm font-medium text-gray-300 mb-1">
-                  Confirm Password
-                </label>
-                <input
-                  type="password"
-                  value={confirmPassword}
-                  onChange={(e) => setConfirmPassword(e.target.value)}
-                  placeholder="••••••••"
-                  className="w-full p-3 rounded bg-plek-lightgray border border-gray-700 text-white placeholder-gray-400 focus:outline-none focus:border-plek-purple"
-                  required
-                />
-              </div>
-
               <button
                 type="submit"
                 className="w-full bg-plek-purple hover:bg-purple-700 text-white font-bold py-3 px-4 rounded transition-colors"
               >
-                Create account
+                Sign in
               </button>
             </form>
 
@@ -241,13 +174,13 @@ export default function Signup() {
             </div>
 
             <div
-              id="google-signup-button"
+              id="google-signin-button"
               className="flex justify-center"
             ></div>
             {!googleSdkLoaded && (
               <button
                 type="button"
-                onClick={handleManualGoogleSignup}
+                onClick={handleManualGoogleLogin}
                 className="w-full flex items-center justify-center gap-2 bg-white hover:bg-gray-100 text-gray-800 font-semibold py-3 px-4 rounded transition-colors mt-4"
               >
                 <img
@@ -255,22 +188,23 @@ export default function Signup() {
                   alt="Google"
                   className="w-4 h-4"
                 />
-                Sign up with Google (Fallback)
+                Sign in with Google (Fallback)
               </button>
             )}
+          </div>
 
-            <div className="mt-6 text-center text-sm text-gray-400">
-              Already have an account?{" "}
-              <Link
-                to="/login"
-                className="text-plek-purple hover:text-purple-400 font-medium"
-              >
-                Sign in
-              </Link>
-            </div>
+          <div className="mt-6 text-center text-sm text-gray-400">
+            Don't have an account?{" "}
+            <Link
+              to="/signup"
+              className="text-plek-purple hover:text-purple-400 font-medium"
+            >
+              Sign up
+            </Link>
           </div>
         </div>
       </div>
+
       <Footer />
     </div>
   );

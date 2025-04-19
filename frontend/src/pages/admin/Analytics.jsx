@@ -9,8 +9,8 @@ import {
   BarChart,
   ActivitySquare,
 } from "lucide-react";
-import NavBar from "../components/NavBar";
-import Footer from "../components/Footer";
+import NavBar from "../../components/NavBar";
+import Footer from "../../components/Footer";
 
 function Analytics() {
   const [activeTab, setActiveTab] = useState("totalBookings");
