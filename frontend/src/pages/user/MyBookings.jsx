@@ -293,137 +293,167 @@ function MyBookings() {
           </div>
 
           {/* Scrollable Content */}
-          <div className="scrollable-area">
-            {loading ? (
-              <div className="flex flex-col items-center justify-center py-10">
-                <Loader2
-                  size={40}
-                  className="animate-spin text-purple-500 mb-4"
-                />
-                <p className="text-gray-400">Loading your bookings...</p>
+          {loading ? (
+            <div className="flex flex-col items-center justify-center py-10">
+              <Loader2
+                size={40}
+                className="animate-spin text-purple-500 mb-4"
+              />
+              <p className="text-gray-400">Loading your bookings...</p>
+            </div>
+          ) : error ? (
+            <div className="bg-red-900/20 border border-red-800 text-red-300 p-4 rounded-lg text-center">
+              <p>{error}</p>
+            </div>
+          ) : activeTab === "upcoming" ? (
+            upcomingBookings.length === 0 ? (
+              <div className="text-center py-10 text-gray-400">
+                <p>You don't have any upcoming bookings.</p>
+                <Link
+                  to="/booking"
+                  className="text-purple-400 hover:text-purple-300 mt-2 inline-block"
+                >
+                  Book a room now
+                </Link>
               </div>
-            ) : error ? (
-              <div className="bg-red-900/20 border border-red-800 text-red-300 p-4 rounded-lg text-center">
-                <p>{error}</p>
-              </div>
-            ) : activeTab === "upcoming" ? (
-              upcomingBookings.length === 0 ? (
-                <div className="text-center py-10 text-gray-400">
-                  <p>You don't have any upcoming bookings.</p>
-                  <Link
-                    to="/booking"
-                    className="text-purple-400 hover:text-purple-300 mt-2 inline-block"
-                  >
-                    Book a room now
-                  </Link>
-                </div>
-              ) : (
-                <div className="space-y-4">
-                  {upcomingBookings.map((booking) => (
-                    <div key={booking.id} className="section-card">
-                      <div className="flex justify-between items-start">
-                        <div>
-                          <h3 className="text-lg font-medium mb-2">
-                            {booking.building} - {booking.roomName}
-                          </h3>
-                          <div className="mt-4 space-y-2">
-                            {/* Updated date and time display */}
-                            <div className="flex items-center space-x-2 text-gray-300">
-                              <CalendarDays size={16} />
-                              <span>{booking.date}</span>
-                            </div>
-                            <div className="flex items-center space-x-2 text-gray-300">
-                              <CalendarClock size={16} />
-                              <span>{booking.slot}</span>
-                            </div>
-                            <div className="flex items-center space-x-2 text-gray-300">
-                              <Users size={16} />
-                              <span>Capacity: {booking.capacity}</span>
-                            </div>
-                            <p
-                              className={`flex items-center space-x-2 ${
-                                booking.status.toLowerCase() === "approved"
-                                  ? "text-green-400"
-                                  : booking.status.toLowerCase() === "pending"
-                                  ? "text-yellow-400"
-                                  : "text-red-400"
-                              }`}
-                            >
-                              <span>Status: {booking.status}</span>
-                            </p>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-left">
+                  <thead className="bg-gray-700 text-gray-300">
+                    <tr>
+                      <th className="p-3 rounded-tl-lg">Room</th>
+                      <th className="p-3">Date</th>
+                      <th className="p-3">Time</th>
+                      <th className="p-3">Purpose</th>
+                      <th className="p-3">Attendees</th>
+                      <th className="p-3">Status</th>
+                      <th className="p-3 rounded-tr-lg text-right">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {upcomingBookings.map((booking, index) => (
+                      <tr
+                        key={booking.id}
+                        className={`border-b border-gray-700 ${
+                          index % 2 === 0
+                            ? "bg-plek-dark" // Even rows use plek-dark color
+                            : "bg-[#1E2631]" // using #1E2631 for odd rows
+                        } hover:bg-plek-hover`} // Hover uses plek-hover color
+                      >
+                        <td className="p-3">
+                          <div className="font-medium">{booking.roomName}</div>
+                          <div className="text-xs text-gray-400">
+                            {booking.building}
                           </div>
-                        </div>
-                        <div className="flex space-x-3">
+                        </td>
+                        <td className="p-3">{booking.date}</td>
+                        <td className="p-3">{booking.slot}</td>
+                        <td className="p-3 max-w-[200px] truncate">
+                          {booking.purpose || "N/A"}
+                        </td>
+                        <td className="p-3">
+                          {booking.participants || booking.capacity || 0}
+                        </td>
+                        <td className="p-3">
+                          <span
+                            className={`inline-block px-2 py-1 rounded-full text-xs 
+                  ${
+                    booking.status.toLowerCase() === "approved"
+                      ? "bg-green-900/30 text-green-400"
+                      : booking.status.toLowerCase() === "pending"
+                      ? "bg-yellow-900/30 text-yellow-400"
+                      : "bg-red-900/30 text-red-400"
+                  }`}
+                          >
+                            {booking.status}
+                          </span>
+                        </td>
+                        <td className="p-3 text-right">
                           {booking.status.toLowerCase() !== "rejected" && (
-                            <>
+                            <div className="flex justify-end space-x-2">
                               <button
                                 onClick={() => handleDeleteClick(booking.id)}
-                                className="px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded-lg transition-colors"
+                                className="px-3 py-1 text-xs bg-gray-700 hover:bg-gray-600 rounded transition-colors"
                               >
                                 Cancel
                               </button>
                               <button
                                 onClick={() => handleModify(booking)}
-                                className="px-4 py-2 bg-purple-600 hover:bg-purple-700 rounded-lg transition-colors"
+                                className="px-3 py-1 text-xs bg-purple-600 hover:bg-purple-700 rounded transition-colors"
                               >
                                 Modify
                               </button>
-                            </>
+                            </div>
                           )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )
+          ) : previousBookings.length === 0 ? (
+            <div className="text-center py-10 text-gray-400">
+              <p>No previous bookings found.</p>
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-left">
+                <thead className="bg-gray-700 text-gray-300">
+                  <tr>
+                    <th className="p-3 rounded-tl-lg">Room</th>
+                    <th className="p-3">Date</th>
+                    <th className="p-3">Time</th>
+                    <th className="p-3">Purpose</th>
+                    <th className="p-3">Attendees</th>
+                    <th className="p-3 rounded-tr-lg">Status</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {previousBookings.map((booking, index) => (
+                    <tr
+                      key={booking.id}
+                      className={`border-b border-gray-700 ${
+                        index % 2 === 0
+                          ? "bg-plek-dark" // Even rows use plek-dark color
+                          : "bg-[#1E2631]"
+                      }`}
+                    >
+                      <td className="p-3">
+                        <div className="font-medium">{booking.roomName}</div>
+                        <div className="text-xs text-gray-400">
+                          {booking.building}
                         </div>
-                      </div>
-                    </div>
+                      </td>
+                      <td className="p-3">{booking.date}</td>
+                      <td className="p-3">{booking.slot}</td>
+                      <td className="p-3 max-w-[200px] truncate">
+                        {booking.purpose || "N/A"}
+                      </td>
+                      <td className="p-3">
+                        {booking.participants || booking.capacity || 0}
+                      </td>
+                      <td className="p-3">
+                        <span
+                          className={`inline-block px-2 py-1 rounded-full text-xs 
+                ${
+                  booking.status.toLowerCase() === "completed"
+                    ? "bg-green-900/30 text-green-400"
+                    : booking.status.toLowerCase() === "rejected" ||
+                      booking.status.toLowerCase() === "cancelled"
+                    ? "bg-red-900/30 text-red-400"
+                    : "bg-gray-600/30 text-gray-400"
+                }`}
+                        >
+                          {booking.status}
+                        </span>
+                      </td>
+                    </tr>
                   ))}
-                </div>
-              )
-            ) : previousBookings.length === 0 ? (
-              <div className="text-center py-10 text-gray-400">
-                <p>No previous bookings found.</p>
-              </div>
-            ) : (
-              <div className="space-y-4">
-                {previousBookings.map((booking) => (
-                  <div key={booking.id} className="section-card">
-                    <div className="flex justify-between items-start">
-                      <div>
-                        <h3 className="text-lg font-medium mb-2">
-                          {booking.building} - {booking.roomName}
-                        </h3>
-                        <div className="mt-4 space-y-2">
-                          {/* Updated date and time display */}
-                          <div className="flex items-center space-x-2 text-gray-300">
-                            <CalendarDays size={16} />
-                            <span>{booking.date}</span>
-                          </div>
-                          <div className="flex items-center space-x-2 text-gray-300">
-                            <CalendarClock size={16} />
-                            <span>{booking.slot}</span>
-                          </div>
-                          <div className="flex items-center space-x-2 text-gray-300">
-                            <Users size={16} />
-                            <span>Capacity: {booking.capacity}</span>
-                          </div>
-                          <p
-                            className={`flex items-center space-x-2 ${
-                              booking.status.toLowerCase() === "completed"
-                                ? "text-green-400"
-                                : booking.status.toLowerCase() === "rejected"
-                                ? "text-red-400"
-                                : booking.status.toLowerCase() === "cancelled"
-                                ? "text-red-400"
-                                : "text-gray-400"
-                            }`}
-                          >
-                            <span>Status: {booking.status}</span>
-                          </p>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
+                </tbody>
+              </table>
+            </div>
+          )}
         </div>
       </div>
 

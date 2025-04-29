@@ -567,124 +567,138 @@ function ManageBookings() {
           )}
         </div>
 
-        {/* Booking Cards Grid Layout */}
-        <div className="grid-layout-3 gap-6">
-          {loading ? (
-            <div className="col-span-3 text-center py-10">
-              <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-purple-500 mx-auto"></div>
-              <p className="mt-4 text-gray-300">Loading bookings...</p>
-            </div>
-          ) : error ? (
-            <div className="col-span-3 text-center py-10">
-              <div className="text-red-400 text-xl mb-2">⚠️</div>
-              <p className="text-gray-300">{error}</p>
-            </div>
-          ) : currentData.length === 0 ? (
-            <div className="col-span-3 text-center py-10">
-              <p className="text-gray-300">
-                {activeTab === "requests"
-                  ? "No pending booking requests found."
-                  : "No approved bookings found."}
-              </p>
-            </div>
-          ) : (
-            currentData.map((booking) => (
-              <div key={booking.id} className="section-card">
-                <div className="flex justify-between items-start">
-                  <h3 className="text-xl font-semibold">
-                    {booking.building} - {booking.room}
-                  </h3>
-                  <div className="flex space-x-2">
-                    {activeTab === "requests" ? (
-                      <>
-                        <button
-                          onClick={() => handleApprove(booking.id)}
-                          className="p-2 hover:bg-plek-purple/20 rounded-lg transition-colors"
-                          title="Approve"
-                        >
-                          <Check size={18} className="text-green-400" />
-                        </button>
-                        <button
-                          onClick={() => handleReject(booking.id)}
-                          className="p-2 hover:bg-red-500/20 rounded-lg transition-colors"
-                          title="Reject"
-                        >
-                          <X size={18} className="text-red-400" />
-                        </button>
-                      </>
-                    ) : (
-                      <>
-                        <button
-                          onClick={() => handleModifyClick(booking)}
-                          className="p-2 hover:bg-gray-700 rounded-lg transition-colors"
-                          title="Modify"
-                        >
-                          <Pencil size={18} className="text-gray-400" />
-                        </button>
-                        <button
-                          onClick={() => handleDeleteClick(booking.id)}
-                          className="p-2 hover:bg-red-500/20 rounded-lg transition-colors"
-                          title="Reject"
-                        >
-                          <X size={18} className="text-red-400" />
-                        </button>
-                      </>
-                    )}
-                  </div>
-                </div>
-
-                <div className="mt-3 space-y-2">
-                  <div className="flex items-center">
-                    <Clock className="h-4 w-4 text-gray-400 mr-2" />
-                    <span className="text-sm text-gray-300">
-                      {booking.slot}
-                    </span>
-                  </div>
-                  <div className="flex items-center">
-                    <Calendar className="h-4 w-4 text-gray-400 mr-2" />
-                    <span className="text-sm text-gray-300">
-                      {booking.date}
-                    </span>
-                  </div>
-                  <div className="flex items-center">
-                    <Users className="h-4 w-4 text-purple-400 mr-2" />
-                    <span className="text-sm text-gray-300">
-                      Attendees: {booking.attendees || 0}
-                    </span>
-                  </div>
-                  <div className="flex items-center">
-                    <Building2 className="h-4 w-4 text-gray-400 mr-2" />
-                    <span className="text-sm text-gray-300">
-                      {activeTab === "requests"
-                        ? "Requested by: "
-                        : "Booked by: "}
-                      <span className="font-medium">
-                        {booking.userFirstName ||
-                          booking.user.replace(/User \d+/, "")}
+        {/* Booking Table Layout */}
+        {loading ? (
+          <div className="text-center py-10">
+            <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-purple-500 mx-auto"></div>
+            <p className="mt-4 text-gray-300">Loading bookings...</p>
+          </div>
+        ) : error ? (
+          <div className="text-center py-10">
+            <div className="text-red-400 text-xl mb-2">⚠️</div>
+            <p className="text-gray-300">{error}</p>
+          </div>
+        ) : currentData.length === 0 ? (
+          <div className="text-center py-10">
+            <p className="text-gray-300">
+              {activeTab === "requests"
+                ? "No pending booking requests found."
+                : "No approved bookings found."}
+            </p>
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-left">
+              <thead className="bg-gray-700 text-gray-300">
+                <tr>
+                  <th className="p-4 rounded-tl-lg">Room</th>
+                  <th className="p-4">Date & Time</th>
+                  <th className="p-4">Purpose</th>
+                  <th className="p-4">Requested by</th>
+                  <th className="p-4">Attendees</th>
+                  <th className="p-4">Status</th>
+                  <th className="p-4 rounded-tr-lg text-right">Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {currentData.map((booking, index) => (
+                  <tr
+                    key={booking.id}
+                    className={`border-b border-gray-700 ${
+                      index % 2 === 0 ? "bg-plek-dark" : "bg-[#1E2631]" // Updated to a slightly lighter color
+                    } hover:bg-plek-hover`}
+                  >
+                    <td className="p-4">
+                      <div className="font-medium">{booking.room}</div>
+                      <div className="text-sm text-gray-400">
+                        {booking.building}
+                      </div>
+                    </td>
+                    <td className="p-4">
+                      <div className="flex items-center">
+                        <Calendar className="h-4 w-4 text-gray-400 mr-2" />
+                        <span className="text-sm">{booking.date}</span>
+                      </div>
+                      <div className="flex items-center mt-1">
+                        <Clock className="h-4 w-4 text-gray-400 mr-2" />
+                        <span className="text-sm">{booking.slot}</span>
+                      </div>
+                    </td>
+                    <td className="p-4">
+                      <span className="text-sm">
+                        {booking.purpose || "N/A"}
                       </span>
-                    </span>
-                  </div>
-                </div>
-
-                {booking.purpose && (
-                  <div className="mt-3 border-t border-gray-700 pt-2">
-                    <p className="text-sm text-gray-300">
-                      <span className="text-gray-400">Purpose:</span>{" "}
-                      {booking.purpose}
-                    </p>
-                  </div>
-                )}
-
-                <div className="mt-3">
-                  <span className="inline-block px-2 py-1 bg-green-900/30 text-green-400 text-xs rounded-full">
-                    {/* Dynamic status: show "APPROVED" in the approved bookings tab */}
-                    {activeTab === "bookings" ? "APPROVED" : booking.status}
-                  </span>
-                </div>
-              </div>
-            ))
-          )}
-        </div>
+                    </td>
+                    <td className="p-4">
+                      <span className="text-sm">
+                        {booking.userFirstName || booking.user}
+                      </span>
+                    </td>
+                    <td className="p-4">
+                      <div className="flex items-center">
+                        <Users className="h-4 w-4 text-purple-400 mr-2" />
+                        <span className="text-sm">
+                          {booking.attendees || 0}
+                        </span>
+                      </div>
+                    </td>
+                    <td className="p-4">
+                      <span
+                        className={`inline-block px-2 py-1 rounded-full text-xs 
+                ${
+                  activeTab === "bookings"
+                    ? "bg-green-900/30 text-green-400"
+                    : booking.status.toLowerCase() === "pending"
+                    ? "bg-yellow-900/30 text-yellow-400"
+                    : "bg-red-900/30 text-red-400"
+                }`}
+                      >
+                        {activeTab === "bookings" ? "APPROVED" : booking.status}
+                      </span>
+                    </td>
+                    <td className="p-4 text-right">
+                      {activeTab === "requests" ? (
+                        <div className="flex justify-end space-x-2">
+                          <button
+                            onClick={() => handleApprove(booking.id)}
+                            className="p-2 hover:bg-plek-purple/20 rounded-lg transition-colors"
+                            title="Approve"
+                          >
+                            <Check size={18} className="text-green-400" />
+                          </button>
+                          <button
+                            onClick={() => handleReject(booking.id)}
+                            className="p-2 hover:bg-red-500/20 rounded-lg transition-colors"
+                            title="Reject"
+                          >
+                            <X size={18} className="text-red-400" />
+                          </button>
+                        </div>
+                      ) : (
+                        <div className="flex justify-end space-x-2">
+                          <button
+                            onClick={() => handleModifyClick(booking)}
+                            className="p-2 hover:bg-gray-700 rounded-lg transition-colors"
+                            title="Modify"
+                          >
+                            <Pencil size={18} className="text-gray-400" />
+                          </button>
+                          <button
+                            onClick={() => handleDeleteClick(booking.id)}
+                            className="p-2 hover:bg-red-500/20 rounded-lg transition-colors"
+                            title="Reject"
+                          >
+                            <X size={18} className="text-red-400" />
+                          </button>
+                        </div>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
 
       <Footer />

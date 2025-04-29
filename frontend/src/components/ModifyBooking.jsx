@@ -14,14 +14,16 @@ import { DateTime } from "luxon";
 import Toast from "../components/AlertToast";
 
 const ModifyBookingModal = ({ booking, onClose, onCancel }) => {
-  const [purpose, setPurpose] = useState(booking.purpose || "Team Meeting");
-  const [attendees, setAttendees] = useState(booking.attendees || "6");
-  const [notes, setNotes] = useState(
-    booking.notes || "Need whiteboard markers"
+  const [purpose, setPurpose] = useState(booking.purpose || "");
+  // Use nullish coalescing to keep numeric 0 values
+  const [attendees, setAttendees] = useState(
+    booking.attendees ?? booking.participants ?? ""
   );
+  const [notes, setNotes] = useState(booking.notes || "");
   const [selectedTimeSlots, setSelectedTimeSlots] = useState(
     booking.slot ? [booking.slot] : []
   );
+  const [originalTimeSlot, setOriginalTimeSlot] = useState(booking.slot || "");
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [alert, setAlert] = useState({
     show: false,
@@ -61,7 +63,6 @@ const ModifyBookingModal = ({ booking, onClose, onCancel }) => {
     return dates;
   };
 
-  // Helper function to convert time strings to minutes since midnight
   const timeToMinutes = (timeStr) => {
     const [hours, minutesPart] = timeStr.split(":");
     const minutes = minutesPart.split(" ")[0];
@@ -82,9 +83,7 @@ const ModifyBookingModal = ({ booking, onClose, onCancel }) => {
       setTimeSlotError(null);
       const isInitialLoad = selectedTimeSlots.length === 0;
 
-      // Don't clear selection when it's the same date
       if (!isInitialLoad && selectedDate !== date) {
-        // Only clear non-current booking slots when date changes
         setSelectedTimeSlots([]);
       }
 
@@ -141,9 +140,8 @@ const ModifyBookingModal = ({ booking, onClose, onCancel }) => {
 
       const bookings = response.data.bookings || [];
       console.log("Retrieved bookings:", bookings);
-      console.log("Current booking ID:", booking.id); // Debug log the current booking ID
+      console.log("Current booking ID:", booking.id);
 
-      // Handle case where backend might not return full booking data
       const processedBookings = bookings.map((bookingItem) => {
         return {
           id: bookingItem.id || 0,
@@ -157,55 +155,35 @@ const ModifyBookingModal = ({ booking, onClose, onCancel }) => {
         };
       });
 
-      // Explicitly log what we're looking for versus what we found
-      console.log("Current booking ID we're looking for:", booking.id);
-      console.log("All booking IDs available:", bookings.map(b => b.id));
-      
-      // Log the current booking details after processing
-      const currentBookingData = processedBookings.find(b => parseInt(b.id) === parseInt(booking.id));
-      console.log("Current booking data found:", currentBookingData);
+      const currentBookingData = processedBookings.find(
+        (b) => parseInt(b.id) === parseInt(booking.id)
+      );
 
-      // Ensure we're strictly comparing IDs as numbers to avoid type mismatch
       const currentBookingId = parseInt(booking.id);
-      console.log("Current booking ID for comparison:", currentBookingId);
 
-      // Explicitly filter out the current booking and rejected bookings when creating same user bookings
       const sameUserBookingsData = bookings.filter((b) => {
         const isCurrentBooking = parseInt(b.id) === currentBookingId;
         const isSameUser = b.user === currentUserId;
         const isRejected = b.status && b.status.toUpperCase() === "REJECTED";
-        
-        console.log(
-          `Booking ${b.id}: ${isSameUser ? "Same user" : "Different user"}, ` +
-          `${isCurrentBooking ? "Current booking" : "Not current booking"}, ` +
-          `Status: ${b.status}`
-        );
-        
-        // Only include if:
-        // 1. Same user AND
-        // 2. NOT current booking AND
-        // 3. NOT rejected
+
         return isSameUser && !isCurrentBooking && !isRejected;
       });
-      
-      // Filter other user bookings to exclude rejected ones
+
       const otherUserBookingsData = bookings.filter((b) => {
         const isRejected = b.status && b.status.toUpperCase() === "REJECTED";
         return b.user !== currentUserId && !isRejected;
       });
-      
-      console.log("Same user bookings (filtered):", sameUserBookingsData);
-      console.log("Other user bookings:", otherUserBookingsData);
-      
+
       setSameUserBookings(sameUserBookingsData);
       setOtherUserBookings(otherUserBookingsData);
 
-      // Also update the ranges used for time slot calculations
       const sameUserRanges = processedBookings.filter((r) => {
         const isRejected = r.status && r.status.toUpperCase() === "REJECTED";
-        return r.userId === currentUserId && 
-               parseInt(r.id) !== currentBookingId &&
-               !isRejected;
+        return (
+          r.userId === currentUserId &&
+          parseInt(r.id) !== currentBookingId &&
+          !isRejected
+        );
       });
 
       const otherUserRanges = processedBookings.filter((r) => {
@@ -218,25 +196,20 @@ const ModifyBookingModal = ({ booking, onClose, onCancel }) => {
         const slotStartMinutes = timeToMinutes(startStr);
         const slotEndMinutes = timeToMinutes(endStr);
 
-        // More clear identification of current booking time slot
         let isCurrentBooking = false;
-        
+
         if (currentBookingData) {
-          const bookingStartMinutes = 
-            currentBookingData.startTime.hour * 60 + currentBookingData.startTime.minute;
-          const bookingEndMinutes = 
-            currentBookingData.endTime.hour * 60 + currentBookingData.endTime.minute;
-          
-          // Consider hourly slots that overlap with current booking
+          const bookingStartMinutes =
+            currentBookingData.startTime.hour * 60 +
+            currentBookingData.startTime.minute;
+          const bookingEndMinutes =
+            currentBookingData.endTime.hour * 60 +
+            currentBookingData.endTime.minute;
+
           isCurrentBooking = !(
-            slotEndMinutes <= bookingStartMinutes || 
+            slotEndMinutes <= bookingStartMinutes ||
             slotStartMinutes >= bookingEndMinutes
           );
-          
-          // Log when a slot is identified as part of the current booking
-          if (isCurrentBooking) {
-            console.log(`Slot ${timeSlot} identified as current booking`);
-          }
         }
 
         const overlapsWithSameUser = sameUserRanges.some(
@@ -272,7 +245,7 @@ const ModifyBookingModal = ({ booking, onClose, onCancel }) => {
           isSameUserBooking: overlapsWithSameUser,
           isOtherUserBooking: overlapsWithOthers,
           isBooked:
-            (overlapsWithSameUser || overlapsWithOthers) && !isCurrentBooking, // Don't mark current booking as booked
+            (overlapsWithSameUser || overlapsWithOthers) && !isCurrentBooking,
           bookedBy: overlappingBooking ? overlappingBooking.userEmail : null,
           bookingId: overlappingBooking ? overlappingBooking.id : null,
           userId: overlappingBooking ? overlappingBooking.userId : null,
@@ -281,17 +254,13 @@ const ModifyBookingModal = ({ booking, onClose, onCancel }) => {
 
       setAvailableTimeSlots(slotsWithStatus);
 
-      // Pre-select ALL time slots that belong to the current booking
       if (currentBookingData) {
         const currentSlots = slotsWithStatus
-          .filter(slot => slot.isCurrentBooking)
-          .map(slot => slot.time);
-        
+          .filter((slot) => slot.isCurrentBooking)
+          .map((slot) => slot.time);
+
         if (currentSlots.length > 0) {
-          console.log("Pre-selecting current booking slots:", currentSlots);
           setSelectedTimeSlots(currentSlots);
-        } else {
-          console.warn("No current booking slots found to pre-select!");
         }
       }
     } catch (error) {
@@ -303,7 +272,6 @@ const ModifyBookingModal = ({ booking, onClose, onCancel }) => {
   };
 
   useEffect(() => {
-    // Only clear selections when date changes and not on initial mount
     if (date) {
       fetchAvailableTimeSlots(date);
     }
@@ -313,30 +281,22 @@ const ModifyBookingModal = ({ booking, onClose, onCancel }) => {
     setShowDatePicker(!showDatePicker);
   };
 
-  // Completely rewrite the handleTimeSlotClick function to ensure toggle works properly
   const handleTimeSlotClick = (slot) => {
-    // Prevent clicking on other users' bookings that aren't our current booking
-    if ((slot.isOtherUserBooking || slot.isSameUserBooking) && !slot.isCurrentBooking) {
-      return; // Only prevent clicking if it's someone else's booking and not the current one
+    if (
+      (slot.isOtherUserBooking || slot.isSameUserBooking) &&
+      !slot.isCurrentBooking
+    ) {
+      return;
     }
 
-    // Explicitly log what's happening for debugging
-    console.log(`Clicked on ${slot.time}, isCurrentBooking: ${slot.isCurrentBooking}`);
-    console.log(`Current selectedTimeSlots:`, selectedTimeSlots);
-    
-    // Force create a new array using spread to ensure React sees the change
     if (selectedTimeSlots.includes(slot.time)) {
-      // Deselect: Remove this time from selection
-      console.log(`Removing ${slot.time} from selection`);
-      const newSelection = selectedTimeSlots.filter(time => time !== slot.time);
-      console.log(`New selection will be:`, newSelection);
-      setSelectedTimeSlots([...newSelection]); // Force new array with spread
+      const newSelection = selectedTimeSlots.filter(
+        (time) => time !== slot.time
+      );
+      setSelectedTimeSlots([...newSelection]);
     } else {
-      // Select: Add this time to selection
-      console.log(`Adding ${slot.time} to selection`);
       const newSelection = [...selectedTimeSlots, slot.time];
-      console.log(`New selection will be:`, newSelection);
-      setSelectedTimeSlots([...newSelection]); // Force new array with spread
+      setSelectedTimeSlots([...newSelection]);
     }
   };
 
@@ -463,6 +423,8 @@ const ModifyBookingModal = ({ booking, onClose, onCancel }) => {
         throw new Error("Could not identify the room for this booking");
       }
 
+      const timeHasChanged = combinedTimeSlot !== originalTimeSlot;
+
       const bookingUpdate = {
         room: roomId,
         start_time: timeValues.start_time,
@@ -470,7 +432,7 @@ const ModifyBookingModal = ({ booking, onClose, onCancel }) => {
         purpose: purpose,
         participants: attendees.toString(),
         notes: notes,
-        status: "PENDING",
+        ...(timeHasChanged && { status: "PENDING" }),
       };
 
       const response = await api.patch(
@@ -482,8 +444,9 @@ const ModifyBookingModal = ({ booking, onClose, onCancel }) => {
         setAlert({
           show: true,
           type: "success",
-          message:
-            "Booking updated successfully! Your booking will require re-approval.",
+          message: timeHasChanged
+            ? "Booking updated successfully! Your booking will require re-approval."
+            : "Booking details updated successfully!",
         });
 
         setTimeout(() => {
@@ -736,8 +699,8 @@ const ModifyBookingModal = ({ booking, onClose, onCancel }) => {
                       ${
                         slot.isCurrentBooking
                           ? (selectedTimeSlots.includes(slot.time)
-                              ? "bg-green-600" // Selected current booking
-                              : "bg-plek-purple") + " cursor-pointer" // Unselected current booking (changed from gray-500 to plek-purple)
+                              ? "bg-green-600"
+                              : "bg-plek-purple") + " cursor-pointer"
                           : slot.isSameUserBooking
                           ? "bg-orange-500 cursor-not-allowed"
                           : slot.isOtherUserBooking
@@ -760,7 +723,6 @@ const ModifyBookingModal = ({ booking, onClose, onCancel }) => {
                         : "Available"
                     }
                   >
-                    {/* The yellow corner indicator should show even when deselected */}
                     {slot.isCurrentBooking && (
                       <div className="absolute top-0 right-0 w-0 h-0 border-t-8 border-r-8 border-t-transparent border-r-yellow-500"></div>
                     )}
@@ -875,7 +837,7 @@ const ModifyBookingModal = ({ booking, onClose, onCancel }) => {
               value={purpose}
               onChange={(e) => setPurpose(e.target.value)}
               className="w-full bg-plek-background rounded-lg p-3 focus:outline-none focus:ring-2 focus:ring-plek-purple"
-              placeholder="e.g., Team Meeting, Workshop, Training"
+              placeholder="Enter purpose of booking"
               required
             />
           </div>
@@ -903,7 +865,7 @@ const ModifyBookingModal = ({ booking, onClose, onCancel }) => {
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
               className="w-full bg-plek-background rounded-lg p-3 focus:outline-none focus:ring-2 focus:ring-plek-purple h-32"
-              placeholder="Any special requirements or notes"
+              placeholder="Any special requirements or notes (optional)"
             />
           </div>
 
@@ -941,7 +903,7 @@ const ModifyBookingModal = ({ booking, onClose, onCancel }) => {
             <button
               type="submit"
               className="flex-1 py-3 bg-plek-purple hover:bg-purple-700 rounded-lg transition-colors"
-              disabled={loadingTimeSlots} // Only disable when loading
+              disabled={loadingTimeSlots}
             >
               Save Changes
             </button>

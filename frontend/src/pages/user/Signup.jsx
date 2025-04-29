@@ -96,15 +96,15 @@ export default function Signup() {
       navigate("/dashboard");
     } catch (err) {
       console.error("Signup error:", err.response?.data || err.message);
-      
+
       // Enhanced error handling to check for password1 errors
-      const errorMsg = 
+      const errorMsg =
         // Check for password-specific errors first
-        err.response?.data?.password1?.[0] || 
+        err.response?.data?.password1?.[0] ||
         err.response?.data?.email?.[0] ||
         err.response?.data?.non_field_errors?.[0] ||
         "Signup failed. Please try again.";
-      
+
       setError(errorMsg);
     }
   };
@@ -208,14 +208,14 @@ export default function Signup() {
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder="••••••••"
                   className={`w-full p-3 rounded bg-plek-lightgray border ${
-                    error?.includes("password") ? "border-red-500" : "border-gray-700"
+                    error?.includes("password")
+                      ? "border-red-500"
+                      : "border-gray-700"
                   } text-white placeholder-gray-400 focus:outline-none focus:border-plek-purple`}
                   required
                 />
                 {error?.includes("password") && (
-                  <p className="mt-1 text-xs text-red-400">
-                    {error}
-                  </p>
+                  <p className="mt-1 text-xs text-red-400">{error}</p>
                 )}
               </div>
 
