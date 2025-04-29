@@ -47,9 +47,8 @@ const BookingModal = ({ room, onClose }) => {
   const [purpose, setPurpose] = useState("");
   const [attendees, setAttendees] = useState("");
   const [notes, setNotes] = useState("");
-  const [timeSlot, setTimeSlot] = useState("");
+  const [selectedTimeSlots, setSelectedTimeSlots] = useState([]);
   const [showDatePicker, setShowDatePicker] = useState(false);
-  const [showTimePicker, setShowTimePicker] = useState(false);
 
   // New states for handling time slot availability
   const [availableTimeSlots, setAvailableTimeSlots] = useState([]);
@@ -95,7 +94,7 @@ const BookingModal = ({ room, onClose }) => {
     try {
       setLoadingTimeSlots(true);
       setTimeSlotError(null);
-      setTimeSlot(""); // Reset selected time slot
+      setSelectedTimeSlots([]); // Reset selected time slots
 
       // Define all possible time slots
       const allTimeSlots = [
@@ -123,32 +122,89 @@ const BookingModal = ({ room, onClose }) => {
       const bookings = response.data.bookings || [];
       console.log("Received bookings:", bookings);
 
-      // Extract booked time slots from bookings data
-      const bookedTimeSlots = bookings.map((booking) => {
-        // Convert the ISO string to DateTime objects in IST timezone
+      // Filter to only include APPROVED bookings - this is the key fix
+      const approvedBookings = bookings.filter(
+        (booking) =>
+          booking.status === "APPROVED" || booking.status === "approved"
+      );
+      console.log("Approved bookings:", approvedBookings);
+
+      // Extract time ranges from APPROVED bookings data for more reliable comparison
+      const bookedTimeRanges = approvedBookings.map((booking) => {
+        // Convert ISO strings to DateTime objects in IST timezone
         const start = DateTime.fromISO(booking.start_time).setZone(
           "Asia/Kolkata"
         );
         const end = DateTime.fromISO(booking.end_time).setZone("Asia/Kolkata");
 
-        // Format hours for 12-hour display with AM/PM
-        const startFormatted = start.toFormat("h:mm a");
-        const endFormatted = end.toFormat("h:mm a");
-
-        return `${startFormatted} - ${endFormatted}`;
+        // Format to 24-hour format for easier comparison
+        return {
+          startHour: start.hour,
+          endHour: end.hour,
+          startMinute: start.minute,
+          endMinute: end.minute,
+        };
       });
 
-      console.log("Booked time slots:", bookedTimeSlots);
+      console.log("Booked time ranges:", bookedTimeRanges);
 
       // Create array with both available and booked slots
       const slotsWithStatus = allTimeSlots.map((time) => {
-        // More robust time slot comparison using normalization
-        const normalizedTime = time.replace(/\s+/g, " ").toUpperCase();
+        // Parse the time slot string to get start and end times in 24h format
+        const parseTimeSlot = (timeSlot) => {
+          const [startStr, endStr] = timeSlot.split(" - ");
 
-        const isBooked = bookedTimeSlots.some((slot) => {
-          const normalizedSlot = slot.replace(/\s+/g, " ").toUpperCase();
-          // Exact comparison to check if time slot is booked
-          return normalizedSlot === normalizedTime;
+          // Parse hours and AM/PM
+          const startMatch = startStr.match(/(\d+):(\d+)\s*(AM|PM)/i);
+          const endMatch = endStr.match(/(\d+):(\d+)\s*(AM|PM)/i);
+
+          if (!startMatch || !endMatch) return null;
+
+          let startHour = parseInt(startMatch[1]);
+          const startMinute = parseInt(startMatch[2]);
+          const startPeriod = startMatch[3].toUpperCase();
+
+          let endHour = parseInt(endMatch[1]);
+          const endMinute = parseInt(endMatch[2]);
+          const endPeriod = endMatch[3].toUpperCase();
+
+          // Convert to 24-hour format
+          if (startPeriod === "PM" && startHour !== 12) startHour += 12;
+          if (startPeriod === "AM" && startHour === 12) startHour = 0;
+
+          if (endPeriod === "PM" && endHour !== 12) endHour += 12;
+          if (endPeriod === "AM" && endHour === 12) endHour = 0;
+
+          return {
+            startHour,
+            startMinute,
+            endHour,
+            endMinute,
+          };
+        };
+
+        const timeRange = parseTimeSlot(time);
+        if (!timeRange) return { time, isBooked: false };
+
+        // Check if this time slot overlaps with any booked time range
+        const isBooked = bookedTimeRanges.some((bookedRange) => {
+          // Check for overlap:
+          // Not (end1 <= start2 or end2 <= start1)
+          const slot1Start = timeRange.startHour * 60 + timeRange.startMinute;
+          const slot1End = timeRange.endHour * 60 + timeRange.endMinute;
+          const slot2Start =
+            bookedRange.startHour * 60 + bookedRange.startMinute;
+          const slot2End = bookedRange.endHour * 60 + bookedRange.endMinute;
+
+          // Debug logging to find any problems
+          const overlaps = !(slot1End <= slot2Start || slot2End <= slot1Start);
+          if (overlaps) {
+            console.log(
+              `Overlap detected: ${time} overlaps with booked slot ${bookedRange.startHour}:${bookedRange.startMinute}-${bookedRange.endHour}:${bookedRange.endMinute}`
+            );
+          }
+
+          return overlaps;
         });
 
         return {
@@ -158,12 +214,6 @@ const BookingModal = ({ room, onClose }) => {
       });
 
       setAvailableTimeSlots(slotsWithStatus);
-
-      // If we have available slots, select the first available one by default
-      const firstAvailable = slotsWithStatus.find((slot) => !slot.isBooked);
-      if (firstAvailable) {
-        setTimeSlot(firstAvailable.time);
-      }
     } catch (error) {
       console.error("Error fetching time slots:", error);
       // Fallback to default time slots in case of error
@@ -182,9 +232,6 @@ const BookingModal = ({ room, onClose }) => {
       ].map((time) => ({ time, isBooked: false }));
 
       setAvailableTimeSlots(defaultSlots);
-      if (defaultSlots.length > 0) {
-        setTimeSlot(defaultSlots[0].time);
-      }
     } finally {
       setLoadingTimeSlots(false);
     }
@@ -195,10 +242,100 @@ const BookingModal = ({ room, onClose }) => {
     fetchAvailableTimeSlots(date);
   }, [date, room.id]);
 
+  const handleTimeSlotClick = (slot) => {
+    if (slot.isBooked) return; // Don't allow selecting booked slots
+
+    // Toggle selection
+    if (selectedTimeSlots.includes(slot.time)) {
+      // Remove slot if already selected
+      setSelectedTimeSlots(
+        selectedTimeSlots.filter((time) => time !== slot.time)
+      );
+    } else {
+      // Add slot if not selected
+      setSelectedTimeSlots([...selectedTimeSlots, slot.time]);
+    }
+  };
+
+  // Reset selected time slots when date changes
+  useEffect(() => {
+    setSelectedTimeSlots([]);
+  }, [date]);
+
   const handleSubmit = async (e) => {
     e.preventDefault();
 
-    // Parse the time slot to get start and end times
+    if (selectedTimeSlots.length === 0) {
+      setAlert({
+        show: true,
+        type: "warning",
+        message: "Please select at least one time slot.",
+      });
+      return;
+    }
+
+    // Get the time ranges from selected slots
+    const timeRanges = selectedTimeSlots.map((slot) => {
+      const [startStr, endStr] = slot.split(" - ");
+
+      // Parse the time string to get 24-hour format values for comparison
+      const parseTimeStr = (timeStr) => {
+        const match = timeStr.match(/(\d+):(\d+)\s*(AM|PM)/i);
+        if (!match) return null;
+
+        let [, hours, minutes, period] = match;
+        hours = parseInt(hours);
+        minutes = parseInt(minutes);
+
+        // Convert to 24-hour format
+        if (period.toUpperCase() === "PM" && hours !== 12) hours += 12;
+        if (period.toUpperCase() === "AM" && hours === 12) hours = 0;
+
+        return { hours, minutes, totalMinutes: hours * 60 + minutes };
+      };
+
+      const startTime = parseTimeStr(startStr);
+      const endTime = parseTimeStr(endStr);
+
+      return {
+        start: startStr,
+        end: endStr,
+        startObj: startTime,
+        endObj: endTime,
+      };
+    });
+
+    // Sort by start time
+    timeRanges.sort(
+      (a, b) => a.startObj.totalMinutes - b.startObj.totalMinutes
+    );
+
+    // Check if selected time slots are continuous
+    const isContinuous = timeRanges.every((slot, index) => {
+      if (index === 0) return true; // First slot is always OK
+      const prevSlot = timeRanges[index - 1];
+      // Check if this slot's start time is the same as previous slot's end time
+      return slot.startObj.totalMinutes === prevSlot.endObj.totalMinutes;
+    });
+
+    if (!isContinuous) {
+      setAlert({
+        show: true,
+        type: "danger",
+        message:
+          "Please select continuous time slots only. Discontinuous slots cannot be booked together.",
+      });
+      return;
+    }
+
+    // Get first start time and last end time for continuous slots
+    const firstStart = timeRanges[0].start;
+    const lastEnd = timeRanges[timeRanges.length - 1].end;
+
+    // Create a combined time slot
+    const combinedTimeSlot = `${firstStart} - ${lastEnd}`;
+
+    // Parse the combined time slot
     const parseTimeSlot = (timeSlot, dateStr) => {
       const [startStr, endStr] = timeSlot.split(" - ");
 
@@ -254,8 +391,7 @@ const BookingModal = ({ room, onClose }) => {
       };
     };
 
-    // Get time values from the selected time slot
-    const timeValues = parseTimeSlot(timeSlot, date);
+    const timeValues = parseTimeSlot(combinedTimeSlot, date);
 
     // Create booking details object that matches the backend model
     const bookingDetails = {
@@ -295,10 +431,52 @@ const BookingModal = ({ room, onClose }) => {
       }
     } catch (error) {
       console.error("Error submitting booking:", error);
+
+      // Extract error message from response if available
+      let errorMessage = "An error occurred while booking the room.";
+
+      if (error.response && error.response.data) {
+        // Check for backdated booking error specifically
+        if (
+          error.response.data.start_time &&
+          error.response.data.start_time.includes(
+            "Backdated bookings are not allowed"
+          )
+        ) {
+          errorMessage =
+            "Backdated bookings are not allowed. Please select a future time slot.";
+        }
+        // Check for other validation errors
+        else if (error.response.data.time) {
+          errorMessage = error.response.data.time;
+        }
+        // Check for room conflicts
+        else if (error.response.data.room) {
+          errorMessage = error.response.data.room;
+        }
+        // Check for general errors
+        else if (error.response.data.detail) {
+          errorMessage = error.response.data.detail;
+        }
+        // If there are other error formats, try to extract them
+        else if (typeof error.response.data === "object") {
+          // Try to get the first error message from any field
+          const firstErrorField = Object.keys(error.response.data)[0];
+          if (firstErrorField && error.response.data[firstErrorField]) {
+            const fieldErrors = error.response.data[firstErrorField];
+            if (Array.isArray(fieldErrors) && fieldErrors.length > 0) {
+              errorMessage = `${firstErrorField}: ${fieldErrors[0]}`;
+            } else if (typeof fieldErrors === "string") {
+              errorMessage = `${firstErrorField}: ${fieldErrors}`;
+            }
+          }
+        }
+      }
+
       setAlert({
         show: true,
         type: "danger",
-        message: "An error occurred while booking the room.",
+        message: errorMessage,
       });
     }
   };
@@ -308,158 +486,8 @@ const BookingModal = ({ room, onClose }) => {
     setAlert((prev) => ({ ...prev, show: false }));
   };
 
-  // Handle opening dropdowns and closing others
   const toggleDatePicker = () => {
     setShowDatePicker(!showDatePicker);
-    if (!showDatePicker) {
-      setShowTimePicker(false); // Close time picker when opening date picker
-    }
-  };
-
-  const toggleTimePicker = () => {
-    setShowTimePicker(!showTimePicker);
-    if (!showTimePicker) {
-      setShowDatePicker(false); // Close date picker when opening time picker
-    }
-  };
-
-  // Handle date selection with API call
-  const handleDateSelect = (selectedDate) => {
-    setDate(selectedDate);
-    setShowDatePicker(false);
-    // Fetch time slots is handled by useEffect
-  };
-
-  // Utility function to determine if a date is in the past
-  const isDateInPast = (dateStr) => {
-    const today = DateTime.now().setZone("Asia/Kolkata").startOf("day");
-    const checkDate = DateTime.fromISO(dateStr).startOf("day");
-    return checkDate < today;
-  };
-
-  // Utility function to determine if a time slot is in the past
-  const isTimeSlotInPast = (slot, date) => {
-    const now = DateTime.now().setZone("Asia/Kolkata");
-    const [startTime] = slot.split(" - ");
-
-    // Convert string time like "9 AM" to proper DateTime
-    const slotTime = DateTime.fromFormat(startTime, "h a", {
-      zone: "Asia/Kolkata",
-    });
-
-    // Combine selected date with slot time
-    const slotDateTime = DateTime.fromISO(date).set({
-      hour: slotTime.hour,
-      minute: slotTime.minute,
-    });
-
-    return slotDateTime < now;
-  };
-
-  // Find the next available day (either today if slots are available or tomorrow)
-  const findNextAvailableDay = () => {
-    const now = DateTime.now().setZone("Asia/Kolkata");
-    const today = now.toISODate();
-
-    // Check if current time is past the last slot of the day (e.g., after 5 PM)
-    const lastSlotTime = DateTime.fromFormat("5 PM", "h a", {
-      zone: "Asia/Kolkata",
-    });
-    const lastSlotToday = DateTime.fromISO(today).set({
-      hour: lastSlotTime.hour,
-      minute: lastSlotTime.minute,
-    });
-
-    // If current time is past the last slot, return tomorrow's date
-    if (now > lastSlotToday) {
-      return now.plus({ days: 1 }).toISODate();
-    }
-
-    return today;
-  };
-
-  // Update selectedDate to next available day on component mount
-  useEffect(() => {
-    setDate(findNextAvailableDay());
-  }, []);
-
-  // Fetch available time slots for the selected date
-  useEffect(() => {
-    // ...existing code for fetching time slots...
-
-    // After fetching the slots, filter out past slots if it's today
-    const today = DateTime.now().setZone("Asia/Kolkata").toISODate();
-
-    if (date === today) {
-      // Filter out past time slots for today
-      const availableSlots = availableTimeSlots.filter(
-        (slot) => !isTimeSlotInPast(slot.time, date)
-      );
-
-      // If no slots available today, automatically advance to tomorrow
-      if (availableSlots.length === 0 && availableTimeSlots.length > 0) {
-        const tomorrow = DateTime.now()
-          .setZone("Asia/Kolkata")
-          .plus({ days: 1 })
-          .toISODate();
-        setDate(tomorrow);
-      } else {
-        // Update timeSlots with available ones
-        setAvailableTimeSlots(availableSlots);
-      }
-    }
-  }, [date]);
-
-  // Handle date change
-  const handleDateChange = (offset) => {
-    const currentDate = DateTime.fromISO(date);
-    const newDate = currentDate.plus({ days: offset }).toISODate();
-
-    // Don't allow selecting dates in the past
-    if (!isDateInPast(newDate)) {
-      setDate(newDate);
-      setTimeSlot(null); // Reset selected time slot when changing date
-    }
-  };
-
-  // Time slot selection component
-  const renderTimeSlots = () => {
-    if (availableTimeSlots.length === 0) {
-      return (
-        <p className="text-gray-400 text-center">
-          No available slots for this date
-        </p>
-      );
-    }
-
-    return (
-      <div className="grid grid-cols-3 gap-3">
-        {availableTimeSlots.map((slot, index) => {
-          const isPastSlot = isTimeSlotInPast(slot.time, date);
-
-          return (
-            <button
-              key={index}
-              className={`p-3 rounded-lg text-center ${
-                timeSlot === slot.time
-                  ? "bg-plek-purple text-white"
-                  : isPastSlot
-                  ? "bg-gray-600 text-gray-400 cursor-not-allowed" // Grayed out for past slots
-                  : "bg-gray-700 hover:bg-gray-600 text-white"
-              }`}
-              onClick={() => {
-                if (!isPastSlot) {
-                  setTimeSlot(slot.time);
-                }
-              }}
-              disabled={isPastSlot} // Disable past slots
-            >
-              {slot.time}
-            </button>
-          );
-        })}
-      </div>
-    );
   };
 
   return (
@@ -479,7 +507,7 @@ const BookingModal = ({ room, onClose }) => {
           </p>
         </div>
 
-        <div className="grid grid-cols-2 gap-6 mb-8">
+        <div className="grid grid-cols-2 gap-6 mb-6">
           <div className="space-y-4">
             {/* Room information */}
             <div className="flex items-center space-x-3 text-gray-300">
@@ -494,7 +522,6 @@ const BookingModal = ({ room, onClose }) => {
 
             {/* Date picker */}
             <div className="bg-plek-lightgray rounded-lg relative">
-              {/* Date picker trigger */}
               <div
                 className="flex items-center justify-between text-gray-300 cursor-pointer p-2 hover:bg-plek-background rounded-lg border border-gray-600 transition-colors"
                 onClick={toggleDatePicker}
@@ -537,7 +564,7 @@ const BookingModal = ({ room, onClose }) => {
                             ? "bg-plek-purple text-white"
                             : "hover:bg-plek-lightgray active:bg-plek-background"
                         }`}
-                        onClick={() => handleDateSelect(d.value)}
+                        onClick={() => setDate(d.value)}
                       >
                         <span>{d.label}</span>
                         {d.value === date ? (
@@ -579,128 +606,6 @@ const BookingModal = ({ room, onClose }) => {
           </div>
 
           <div className="space-y-4">
-            {/* Time slot picker */}
-            <div className="bg-plek-lightgray rounded-lg relative">
-              {/* Time slot picker trigger */}
-              <div
-                className={`flex items-center justify-between text-gray-300 cursor-pointer p-2 hover:bg-plek-background rounded-lg border border-gray-600 transition-colors ${
-                  loadingTimeSlots ? "opacity-75" : ""
-                }`}
-                onClick={toggleTimePicker}
-              >
-                <div className="flex items-center space-x-3">
-                  <CalendarClock size={20} />
-                  <div>
-                    <p className="text-sm text-gray-400">Time Slot</p>
-                    <p>
-                      {loadingTimeSlots
-                        ? "Loading..."
-                        : timeSlot || "Select a time"}
-                    </p>
-                  </div>
-                </div>
-                {loadingTimeSlots ? (
-                  <Loader2 size={16} className="animate-spin" />
-                ) : (
-                  <svg
-                    xmlns="http://www.w3.org/2000/svg"
-                    width="16"
-                    height="16"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="2"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    className={`transition-transform ${
-                      showTimePicker ? "rotate-180" : ""
-                    }`}
-                  >
-                    <polyline points="6 9 12 15 18 9"></polyline>
-                  </svg>
-                )}
-              </div>
-              {showTimePicker && !loadingTimeSlots && (
-                <div className="absolute top-full left-0 mt-2 bg-plek-background rounded-lg shadow-lg p-3 z-10 w-full border border-gray-600">
-                  <div className="space-y-1 max-h-48 overflow-y-auto custom-scrollbar">
-                    {timeSlotError ? (
-                      <div className="p-2 text-red-400 text-center">
-                        {timeSlotError}
-                      </div>
-                    ) : availableTimeSlots.length === 0 ? (
-                      <div className="p-2 text-yellow-400 text-center">
-                        No available time slots for this date
-                      </div>
-                    ) : (
-                      availableTimeSlots.map((slot, index) => (
-                        <div
-                          key={index}
-                          className={`p-2 rounded-lg flex justify-between items-center transition-all ${
-                            slot.isBooked
-                              ? "bg-plek-dark text-gray-500 cursor-not-allowed"
-                              : slot.time === timeSlot
-                              ? "bg-plek-purple text-white cursor-pointer"
-                              : "hover:bg-plek-lightgray active:bg-plek-background cursor-pointer"
-                          }`}
-                          onClick={() => {
-                            if (!slot.isBooked) {
-                              setTimeSlot(slot.time);
-                              setShowTimePicker(false);
-                            }
-                          }}
-                        >
-                          <div className="flex items-center">
-                            {slot.isBooked && (
-                              <svg
-                                xmlns="http://www.w3.org/2000/svg"
-                                width="16"
-                                height="16"
-                                viewBox="0 0 24 24"
-                                fill="none"
-                                stroke="currentColor"
-                                strokeWidth="2"
-                                strokeLinecap="round"
-                                strokeLinejoin="round"
-                                className="mr-2 text-gray-500"
-                              >
-                                <rect
-                                  x="3"
-                                  y="4"
-                                  width="18"
-                                  height="18"
-                                  rx="2"
-                                  ry="2"
-                                ></rect>
-                                <line x1="16" y1="2" x2="16" y2="6"></line>
-                                <line x1="8" y1="2" x2="8" y2="6"></line>
-                                <line x1="3" y1="10" x2="21" y2="10"></line>
-                              </svg>
-                            )}
-                            <span>{slot.time}</span>
-                          </div>
-                          {!slot.isBooked && slot.time === timeSlot && (
-                            <svg
-                              xmlns="http://www.w3.org/2000/svg"
-                              width="16"
-                              height="16"
-                              viewBox="0 0 24 24"
-                              fill="none"
-                              stroke="currentColor"
-                              strokeWidth="2"
-                              strokeLinecap="round"
-                              strokeLinejoin="round"
-                            >
-                              <polyline points="20 6 9 17 4 12"></polyline>
-                            </svg>
-                          )}
-                        </div>
-                      ))
-                    )}
-                  </div>
-                </div>
-              )}
-            </div>
-
             {/* Capacity information */}
             <div className="flex items-center space-x-3 text-gray-300">
               <Users size={20} />
@@ -709,7 +614,135 @@ const BookingModal = ({ room, onClose }) => {
                 <p>{room.capacity} people</p>
               </div>
             </div>
+
+            {/* Selected Time Slots Summary */}
+            {selectedTimeSlots.length > 0 && (
+              <div className="flex items-center space-x-3 text-gray-300">
+                <CalendarClock size={20} />
+                <div>
+                  <p className="text-sm text-gray-400">Selected Time Slots</p>
+                  <div className="font-medium text-white">
+                    {selectedTimeSlots.length === 1 ? (
+                      <p>{selectedTimeSlots[0]}</p>
+                    ) : (
+                      <p>{selectedTimeSlots.length} slots selected</p>
+                    )}
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
+        </div>
+
+        {/* New visual time slot selector with multi-select */}
+        <div className="mb-6">
+          <h3 className="text-lg font-medium mb-4 flex items-center">
+            <Clock className="mr-2 text-purple-400" size={20} />
+            Select Time Slots
+            <span className="ml-2 text-sm text-gray-400">
+              (Click multiple slots to book consecutive hours)
+            </span>
+          </h3>
+
+          {loadingTimeSlots ? (
+            <div className="flex justify-center items-center py-8">
+              <Loader2 size={30} className="animate-spin text-purple-500" />
+              <span className="ml-2 text-gray-300">
+                Loading available slots...
+              </span>
+            </div>
+          ) : timeSlotError ? (
+            <div className="p-4 bg-red-900/20 border border-red-700/30 rounded-lg text-center text-red-300">
+              {timeSlotError}
+            </div>
+          ) : availableTimeSlots.length === 0 ? (
+            <div className="p-4 bg-yellow-900/20 border border-yellow-700/30 rounded-lg text-center text-yellow-300">
+              No available time slots for this date
+            </div>
+          ) : (
+            <div>
+              <div className="flex justify-between items-center mb-4">
+                <div className="flex items-center space-x-4">
+                  <div className="flex items-center">
+                    <div className="w-4 h-4 rounded bg-plek-purple mr-1.5"></div>
+                    <span className="text-sm text-gray-300">Available</span>
+                  </div>
+                  <div className="flex items-center">
+                    <div className="w-4 h-4 rounded bg-gray-600 mr-1.5"></div>
+                    <span className="text-sm text-gray-300">Booked</span>
+                  </div>
+                  <div className="flex items-center">
+                    <div className="w-4 h-4 rounded bg-green-600 mr-1.5"></div>
+                    <span className="text-sm text-gray-300">Selected</span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-8 gap-2 bg-plek-lightgray p-4 rounded-lg">
+                {availableTimeSlots.map((slot, index) => (
+                  <div
+                    key={index}
+                    className={`
+                      relative rounded-lg transition-all overflow-hidden
+                      ${
+                        slot.isBooked
+                          ? "bg-gray-600 cursor-not-allowed"
+                          : selectedTimeSlots.includes(slot.time)
+                          ? "bg-green-600 hover:bg-green-700 cursor-pointer"
+                          : "bg-plek-purple hover:bg-purple-600 cursor-pointer"
+                      }
+                    `}
+                    onClick={() => handleTimeSlotClick(slot)}
+                  >
+                    <div className="p-2 text-center h-full flex flex-col justify-center">
+                      <p
+                        className={`text-xs font-medium ${
+                          slot.isBooked ? "text-gray-400" : "text-white"
+                        }`}
+                      >
+                        {slot.time.split(" - ")[0]}
+                      </p>
+                      <p
+                        className={`text-xs ${
+                          slot.isBooked ? "text-gray-400" : "text-gray-200"
+                        }`}
+                      >
+                        {slot.time.split(" - ")[1]}
+                      </p>
+                    </div>
+
+                    {/* Selection indicator */}
+                    {selectedTimeSlots.includes(slot.time) &&
+                      !slot.isBooked && (
+                        <div className="absolute bottom-1 right-1">
+                          <svg
+                            xmlns="http://www.w3.org/2000/svg"
+                            width="10"
+                            height="10"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            strokeWidth="2"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            className="text-white"
+                          >
+                            <polyline points="20 6 9 17 4 12"></polyline>
+                          </svg>
+                        </div>
+                      )}
+
+                    {/* Booked indicator */}
+                    {slot.isBooked && (
+                      <div className="absolute inset-0 bg-black bg-opacity-10 flex items-center justify-center">
+                        <X size={12} className="text-gray-400" />
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Amenities section */}
@@ -789,7 +822,7 @@ const BookingModal = ({ room, onClose }) => {
             <button
               type="submit"
               className="flex-1 py-3 bg-plek-purple hover:bg-purple-700 rounded-lg transition-colors"
-              disabled={!timeSlot || loadingTimeSlots}
+              disabled={selectedTimeSlots.length === 0 || loadingTimeSlots}
             >
               Request Booking
             </button>

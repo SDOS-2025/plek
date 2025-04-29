@@ -7,46 +7,41 @@ import {
   Users,
   Loader2,
   Trash2,
+  Clock,
 } from "lucide-react";
 import api from "../api";
 import { DateTime } from "luxon";
 import Toast from "../components/AlertToast";
 
 const ModifyBookingModal = ({ booking, onClose, onCancel }) => {
-  // Pre-populate fields from the booking
   const [purpose, setPurpose] = useState(booking.purpose || "Team Meeting");
   const [attendees, setAttendees] = useState(booking.attendees || "6");
   const [notes, setNotes] = useState(
     booking.notes || "Need whiteboard markers"
   );
-  const [timeSlot, setTimeSlot] = useState(booking.slot);
+  const [selectedTimeSlots, setSelectedTimeSlots] = useState(
+    booking.slot ? [booking.slot] : []
+  );
   const [showDatePicker, setShowDatePicker] = useState(false);
-  const [showTimePicker, setShowTimePicker] = useState(false);
-
-  // Add alert state
   const [alert, setAlert] = useState({
     show: false,
     type: "success",
     message: "",
   });
-
-  // Convert incoming date to proper ISO format or use today's date as fallback
   const [date, setDate] = useState(() => {
     try {
-      // Try to parse the incoming booking date
       return DateTime.fromFormat(booking.date, "LLLL d, yyyy").toISODate();
     } catch (e) {
-      // Fallback to today's date if parsing fails
       return DateTime.now().toISODate();
     }
   });
-
-  // States for handling time slot availability
   const [availableTimeSlots, setAvailableTimeSlots] = useState([]);
   const [loadingTimeSlots, setLoadingTimeSlots] = useState(false);
   const [timeSlotError, setTimeSlotError] = useState(null);
+  const [otherUserBookings, setOtherUserBookings] = useState([]);
+  const [sameUserBookings, setSameUserBookings] = useState([]);
+  const [currentUserId, setCurrentUserId] = useState(null);
 
-  // Generate dates for the next 14 days
   const generateDates = () => {
     const dates = [];
     const today = DateTime.now().setZone("Asia/Kolkata");
@@ -66,15 +61,33 @@ const ModifyBookingModal = ({ booking, onClose, onCancel }) => {
     return dates;
   };
 
+  // Helper function to convert time strings to minutes since midnight
+  const timeToMinutes = (timeStr) => {
+    const [hours, minutesPart] = timeStr.split(":");
+    const minutes = minutesPart.split(" ")[0];
+    const period = minutesPart.split(" ")[1];
+
+    let hour = parseInt(hours);
+    if (period === "PM" && hour !== 12) hour += 12;
+    if (period === "AM" && hour === 12) hour = 0;
+
+    return hour * 60 + parseInt(minutes);
+  };
+
   const availableDates = generateDates();
 
-  // Fetch available time slots when date changes
   const fetchAvailableTimeSlots = async (selectedDate) => {
     try {
       setLoadingTimeSlots(true);
       setTimeSlotError(null);
+      const isInitialLoad = selectedTimeSlots.length === 0;
 
-      // Define all possible time slots
+      // Don't clear selection when it's the same date
+      if (!isInitialLoad && selectedDate !== date) {
+        // Only clear non-current booking slots when date changes
+        setSelectedTimeSlots([]);
+      }
+
       const allTimeSlots = [
         "9:00 AM - 10:00 AM",
         "10:00 AM - 11:00 AM",
@@ -86,37 +99,21 @@ const ModifyBookingModal = ({ booking, onClose, onCancel }) => {
         "4:00 PM - 5:00 PM",
       ];
 
-      // Format date properly for API
       const formattedDate = DateTime.fromISO(selectedDate).toISODate();
-
-      // Extract room ID more carefully
       let roomId = null;
 
-      // Try different properties to find room ID
       if (booking.originalBooking && booking.originalBooking.room) {
-        // Case 1: Room object in originalBooking
         if (typeof booking.originalBooking.room === "object") {
           roomId = booking.originalBooking.room.id;
         } else {
-          // Case 2: Room ID directly in originalBooking.room
           roomId = booking.originalBooking.room;
         }
       } else if (booking.roomId) {
-        // Case 3: Direct roomId property
         roomId = booking.roomId;
       } else if (booking.room) {
-        // Case 4: Room property directly on booking
         roomId =
           typeof booking.room === "object" ? booking.room.id : booking.room;
       }
-
-      console.log("Room ID extraction details:", {
-        originalBookingRoom: booking.originalBooking?.room,
-        bookingRoomId: booking.roomId,
-        bookingRoom: booking.room,
-        extractedRoomId: roomId,
-        booking: booking,
-      });
 
       if (!roomId) {
         setTimeSlotError("Could not identify the room for this booking");
@@ -124,64 +121,180 @@ const ModifyBookingModal = ({ booking, onClose, onCancel }) => {
         return;
       }
 
-      // API call to get bookings for this room on the selected date
-      console.log(
-        `Making API call to: /rooms/${roomId}/?date=${formattedDate}`
-      );
-      const response = await api.get(`/rooms/${roomId}/?date=${formattedDate}`);
-      console.log("API response:", response);
+      let currentUserId = null;
+      try {
+        const userProfileResponse = await api.get("/api/accounts/profile/");
+        if (userProfileResponse.status === 200) {
+          currentUserId = userProfileResponse.data.id;
+          setCurrentUserId(currentUserId);
+          console.log("Current user ID:", currentUserId);
+        }
+      } catch (error) {
+        console.error("Failed to fetch user profile:", error);
+      }
 
-      // Check if the response structure is as expected
-      if (!response.data) {
+      const response = await api.get(`/rooms/${roomId}/?date=${formattedDate}`);
+
+      if (!response.data || !response.data.bookings) {
         throw new Error("Invalid response format from API");
       }
 
-      // Get bookings from API response
       const bookings = response.data.bookings || [];
-      console.log("Bookings for this date:", bookings);
+      console.log("Retrieved bookings:", bookings);
+      console.log("Current booking ID:", booking.id); // Debug log the current booking ID
 
-      // Process booked slots - extract the ID from each booking to exclude current booking
-      const bookedSlots = bookings
-        .filter((b) => b.id !== booking.id) // Exclude current booking if present
-        .map((b) => {
-          const start = DateTime.fromISO(b.start_time).toFormat("h:mm a");
-          const end = DateTime.fromISO(b.end_time).toFormat("h:mm a");
-          return `${start} - ${end}`;
-        });
-
-      // Create array marking which slots are available
-      const slotsWithStatus = allTimeSlots.map((time) => {
-        // Normalize time format for comparison (remove extra spaces, uppercase AM/PM)
-        const normalizedTime = time.toUpperCase().replace(/\s+/g, " ");
-
-        const isBooked = bookedSlots.some((slot) => {
-          const normalizedSlot = slot.toUpperCase().replace(/\s+/g, " ");
-          return normalizedSlot === normalizedTime;
-        });
-
+      // Handle case where backend might not return full booking data
+      const processedBookings = bookings.map((bookingItem) => {
         return {
-          time,
-          isBooked,
+          id: bookingItem.id || 0,
+          userId: bookingItem.user || null,
+          userEmail: bookingItem.user_email || "Unknown user",
+          userFirstName: bookingItem.user_first_name || null,
+          startTime: DateTime.fromISO(bookingItem.start_time),
+          endTime: DateTime.fromISO(bookingItem.end_time),
+          status: bookingItem.status || "APPROVED",
+          isCurrentBooking: parseInt(bookingItem.id) === parseInt(booking.id),
         };
       });
 
-      console.log("Final available time slots:", slotsWithStatus);
+      // Explicitly log what we're looking for versus what we found
+      console.log("Current booking ID we're looking for:", booking.id);
+      console.log("All booking IDs available:", bookings.map(b => b.id));
+      
+      // Log the current booking details after processing
+      const currentBookingData = processedBookings.find(b => parseInt(b.id) === parseInt(booking.id));
+      console.log("Current booking data found:", currentBookingData);
+
+      // Ensure we're strictly comparing IDs as numbers to avoid type mismatch
+      const currentBookingId = parseInt(booking.id);
+      console.log("Current booking ID for comparison:", currentBookingId);
+
+      // Explicitly filter out the current booking and rejected bookings when creating same user bookings
+      const sameUserBookingsData = bookings.filter((b) => {
+        const isCurrentBooking = parseInt(b.id) === currentBookingId;
+        const isSameUser = b.user === currentUserId;
+        const isRejected = b.status && b.status.toUpperCase() === "REJECTED";
+        
+        console.log(
+          `Booking ${b.id}: ${isSameUser ? "Same user" : "Different user"}, ` +
+          `${isCurrentBooking ? "Current booking" : "Not current booking"}, ` +
+          `Status: ${b.status}`
+        );
+        
+        // Only include if:
+        // 1. Same user AND
+        // 2. NOT current booking AND
+        // 3. NOT rejected
+        return isSameUser && !isCurrentBooking && !isRejected;
+      });
+      
+      // Filter other user bookings to exclude rejected ones
+      const otherUserBookingsData = bookings.filter((b) => {
+        const isRejected = b.status && b.status.toUpperCase() === "REJECTED";
+        return b.user !== currentUserId && !isRejected;
+      });
+      
+      console.log("Same user bookings (filtered):", sameUserBookingsData);
+      console.log("Other user bookings:", otherUserBookingsData);
+      
+      setSameUserBookings(sameUserBookingsData);
+      setOtherUserBookings(otherUserBookingsData);
+
+      // Also update the ranges used for time slot calculations
+      const sameUserRanges = processedBookings.filter((r) => {
+        const isRejected = r.status && r.status.toUpperCase() === "REJECTED";
+        return r.userId === currentUserId && 
+               parseInt(r.id) !== currentBookingId &&
+               !isRejected;
+      });
+
+      const otherUserRanges = processedBookings.filter((r) => {
+        const isRejected = r.status && r.status.toUpperCase() === "REJECTED";
+        return r.userId !== currentUserId && !isRejected;
+      });
+
+      const slotsWithStatus = allTimeSlots.map((timeSlot) => {
+        const [startStr, endStr] = timeSlot.split(" - ");
+        const slotStartMinutes = timeToMinutes(startStr);
+        const slotEndMinutes = timeToMinutes(endStr);
+
+        // More clear identification of current booking time slot
+        let isCurrentBooking = false;
+        
+        if (currentBookingData) {
+          const bookingStartMinutes = 
+            currentBookingData.startTime.hour * 60 + currentBookingData.startTime.minute;
+          const bookingEndMinutes = 
+            currentBookingData.endTime.hour * 60 + currentBookingData.endTime.minute;
+          
+          // Consider hourly slots that overlap with current booking
+          isCurrentBooking = !(
+            slotEndMinutes <= bookingStartMinutes || 
+            slotStartMinutes >= bookingEndMinutes
+          );
+          
+          // Log when a slot is identified as part of the current booking
+          if (isCurrentBooking) {
+            console.log(`Slot ${timeSlot} identified as current booking`);
+          }
+        }
+
+        const overlapsWithSameUser = sameUserRanges.some(
+          (range) =>
+            !(
+              slotEndMinutes <=
+                range.startTime.hour * 60 + range.startTime.minute ||
+              slotStartMinutes >= range.endTime.hour * 60 + range.endTime.minute
+            )
+        );
+
+        const overlapsWithOthers = otherUserRanges.some(
+          (range) =>
+            !(
+              slotEndMinutes <=
+                range.startTime.hour * 60 + range.startTime.minute ||
+              slotStartMinutes >= range.endTime.hour * 60 + range.endTime.minute
+            )
+        );
+
+        const overlappingBooking = [...otherUserRanges, ...sameUserRanges].find(
+          (range) =>
+            !(
+              slotEndMinutes <=
+                range.startTime.hour * 60 + range.startTime.minute ||
+              slotStartMinutes >= range.endTime.hour * 60 + range.endTime.minute
+            )
+        );
+
+        return {
+          time: timeSlot,
+          isCurrentBooking,
+          isSameUserBooking: overlapsWithSameUser,
+          isOtherUserBooking: overlapsWithOthers,
+          isBooked:
+            (overlapsWithSameUser || overlapsWithOthers) && !isCurrentBooking, // Don't mark current booking as booked
+          bookedBy: overlappingBooking ? overlappingBooking.userEmail : null,
+          bookingId: overlappingBooking ? overlappingBooking.id : null,
+          userId: overlappingBooking ? overlappingBooking.userId : null,
+        };
+      });
+
       setAvailableTimeSlots(slotsWithStatus);
 
-      // If current time slot is not available, reset it
-      const currentSlotAvailable = !slotsWithStatus.find(
-        (slot) => slot.time === timeSlot
-      )?.isBooked;
-
-      if (timeSlot && !currentSlotAvailable) {
-        // Find first available slot
-        const firstAvailable = slotsWithStatus.find((slot) => !slot.isBooked);
-        if (firstAvailable) {
-          setTimeSlot(firstAvailable.time);
+      // Pre-select ALL time slots that belong to the current booking
+      if (currentBookingData) {
+        const currentSlots = slotsWithStatus
+          .filter(slot => slot.isCurrentBooking)
+          .map(slot => slot.time);
+        
+        if (currentSlots.length > 0) {
+          console.log("Pre-selecting current booking slots:", currentSlots);
+          setSelectedTimeSlots(currentSlots);
+        } else {
+          console.warn("No current booking slots found to pre-select!");
         }
       }
     } catch (error) {
-      console.error("Error details:", error);
       setTimeSlotError(`Failed to load available time slots: ${error.message}`);
       setAvailableTimeSlots([]);
     } finally {
@@ -189,41 +302,56 @@ const ModifyBookingModal = ({ booking, onClose, onCancel }) => {
     }
   };
 
-  // Fetch available slots when date changes
   useEffect(() => {
-    fetchAvailableTimeSlots(date);
+    // Only clear selections when date changes and not on initial mount
+    if (date) {
+      fetchAvailableTimeSlots(date);
+    }
   }, [date, booking.id]);
 
-  // Handle opening dropdowns and closing others
   const toggleDatePicker = () => {
     setShowDatePicker(!showDatePicker);
-    if (!showDatePicker) setShowTimePicker(false);
   };
 
-  const toggleTimePicker = () => {
-    setShowTimePicker(!showTimePicker);
-    if (!showTimePicker) setShowDatePicker(false);
+  // Completely rewrite the handleTimeSlotClick function to ensure toggle works properly
+  const handleTimeSlotClick = (slot) => {
+    // Prevent clicking on other users' bookings that aren't our current booking
+    if ((slot.isOtherUserBooking || slot.isSameUserBooking) && !slot.isCurrentBooking) {
+      return; // Only prevent clicking if it's someone else's booking and not the current one
+    }
+
+    // Explicitly log what's happening for debugging
+    console.log(`Clicked on ${slot.time}, isCurrentBooking: ${slot.isCurrentBooking}`);
+    console.log(`Current selectedTimeSlots:`, selectedTimeSlots);
+    
+    // Force create a new array using spread to ensure React sees the change
+    if (selectedTimeSlots.includes(slot.time)) {
+      // Deselect: Remove this time from selection
+      console.log(`Removing ${slot.time} from selection`);
+      const newSelection = selectedTimeSlots.filter(time => time !== slot.time);
+      console.log(`New selection will be:`, newSelection);
+      setSelectedTimeSlots([...newSelection]); // Force new array with spread
+    } else {
+      // Select: Add this time to selection
+      console.log(`Adding ${slot.time} to selection`);
+      const newSelection = [...selectedTimeSlots, slot.time];
+      console.log(`New selection will be:`, newSelection);
+      setSelectedTimeSlots([...newSelection]); // Force new array with spread
+    }
   };
 
-  // Handle date selection
   const handleDateSelect = (selectedDate) => {
     setDate(selectedDate);
     setShowDatePicker(false);
   };
 
-  // Parse time slot to ISO format for API
   const parseTimeSlot = (timeSlot, dateStr) => {
     const [startStr, endStr] = timeSlot.split(" - ");
-
-    // Create a DateTime object in local timezone
     const baseDate = DateTime.fromISO(dateStr);
-
-    // Parse hours and minutes from the time strings
     const startMatch = startStr.match(/(\d+):(\d+)\s*(AM|PM)/i);
     const endMatch = endStr.match(/(\d+):(\d+)\s*(AM|PM)/i);
 
     if (!startMatch || !endMatch) {
-      console.error("Invalid time format:", timeSlot);
       return { start_time: "", end_time: "" };
     }
 
@@ -235,7 +363,6 @@ const ModifyBookingModal = ({ booking, onClose, onCancel }) => {
     endHours = parseInt(endHours);
     endMinutes = parseInt(endMinutes);
 
-    // Adjust for 12-hour clock
     if (startPeriod.toUpperCase() === "PM" && startHours !== 12)
       startHours += 12;
     if (startPeriod.toUpperCase() === "AM" && startHours === 12) startHours = 0;
@@ -243,12 +370,9 @@ const ModifyBookingModal = ({ booking, onClose, onCancel }) => {
     if (endPeriod.toUpperCase() === "PM" && endHours !== 12) endHours += 12;
     if (endPeriod.toUpperCase() === "AM" && endHours === 12) endHours = 0;
 
-    // Set hours and minutes using DateTime
     const startTime = baseDate.set({ hour: startHours, minute: startMinutes });
     const endTime = baseDate.set({ hour: endHours, minute: endMinutes });
 
-    // Format in the exact format Django expects: YYYY-MM-DDThh:mm:ssZ
-    // Use toISO which gives the proper ISO 8601 format with timezone information
     return {
       start_time: startTime.toISO(),
       end_time: endTime.toISO(),
@@ -258,25 +382,79 @@ const ModifyBookingModal = ({ booking, onClose, onCancel }) => {
   const handleSubmit = async (e) => {
     e.preventDefault();
 
-    try {
-      // Get time values from the selected time slot
-      const timeValues = parseTimeSlot(timeSlot, date);
+    if (selectedTimeSlots.length === 0) {
+      setAlert({
+        show: true,
+        type: "warning",
+        message: "Please select at least one time slot to book.",
+      });
+      return;
+    }
 
-      // Extract room ID using the same logic from fetchAvailableTimeSlots
+    const timeRanges = selectedTimeSlots.map((slot) => {
+      const [startStr, endStr] = slot.split(" - ");
+
+      const parseTimeStr = (timeStr) => {
+        const match = timeStr.match(/(\d+):(\d+)\s*(AM|PM)/i);
+        if (!match) return null;
+
+        let [, hours, minutes, period] = match;
+        hours = parseInt(hours);
+        minutes = parseInt(minutes);
+
+        if (period.toUpperCase() === "PM" && hours !== 12) hours += 12;
+        if (period.toUpperCase() === "AM" && hours === 12) hours = 0;
+
+        return { hours, minutes, totalMinutes: hours * 60 + minutes };
+      };
+
+      const startTime = parseTimeStr(startStr);
+      const endTime = parseTimeStr(endStr);
+
+      return {
+        start: startStr,
+        end: endStr,
+        startObj: startTime,
+        endObj: endTime,
+      };
+    });
+
+    timeRanges.sort(
+      (a, b) => a.startObj.totalMinutes - b.startObj.totalMinutes
+    );
+
+    const isContinuous = timeRanges.every((slot, index) => {
+      if (index === 0) return true;
+      const prevSlot = timeRanges[index - 1];
+      return slot.startObj.totalMinutes === prevSlot.endObj.totalMinutes;
+    });
+
+    if (!isContinuous) {
+      setAlert({
+        show: true,
+        type: "danger",
+        message:
+          "Please select continuous time slots only. Discontinuous slots cannot be booked together.",
+      });
+      return;
+    }
+
+    const firstStart = timeRanges[0].start;
+    const lastEnd = timeRanges[timeRanges.length - 1].end;
+    const combinedTimeSlot = `${firstStart} - ${lastEnd}`;
+
+    try {
+      const timeValues = parseTimeSlot(combinedTimeSlot, date);
       let roomId = null;
       if (booking.originalBooking && booking.originalBooking.room) {
-        // Case 1: Room object in originalBooking
         if (typeof booking.originalBooking.room === "object") {
           roomId = booking.originalBooking.room.id;
         } else {
-          // Case 2: Room ID directly in originalBooking.room
           roomId = booking.originalBooking.room;
         }
       } else if (booking.roomId) {
-        // Case 3: Direct roomId property
         roomId = booking.roomId;
       } else if (booking.room) {
-        // Case 4: Room property directly on booking
         roomId =
           typeof booking.room === "object" ? booking.room.id : booking.room;
       }
@@ -285,25 +463,22 @@ const ModifyBookingModal = ({ booking, onClose, onCancel }) => {
         throw new Error("Could not identify the room for this booking");
       }
 
-      // Create booking update object - include status change to PENDING for re-approval
       const bookingUpdate = {
-        room: roomId, // Include the room ID in the update
+        room: roomId,
         start_time: timeValues.start_time,
         end_time: timeValues.end_time,
         purpose: purpose,
         participants: attendees.toString(),
         notes: notes,
-        status: "PENDING", // Reset status to PENDING for re-approval
+        status: "PENDING",
       };
 
-      console.log("Updating booking:", bookingUpdate);
       const response = await api.patch(
         `/bookings/${booking.id}/`,
         bookingUpdate
       );
 
       if (response.status === 200) {
-        // Replace alert with custom alert
         setAlert({
           show: true,
           type: "success",
@@ -311,13 +486,11 @@ const ModifyBookingModal = ({ booking, onClose, onCancel }) => {
             "Booking updated successfully! Your booking will require re-approval.",
         });
 
-        // Close modal and refresh page after a short delay
         setTimeout(() => {
           onClose();
           window.location.reload();
         }, 2000);
       } else {
-        console.error("Update failed:", response.data);
         setAlert({
           show: true,
           type: "danger",
@@ -325,7 +498,6 @@ const ModifyBookingModal = ({ booking, onClose, onCancel }) => {
         });
       }
     } catch (error) {
-      console.error("Error updating booking:", error);
       setAlert({
         show: true,
         type: "danger",
@@ -335,7 +507,6 @@ const ModifyBookingModal = ({ booking, onClose, onCancel }) => {
     }
   };
 
-  // Add function to hide alert
   const hideAlert = () => {
     setAlert((prev) => ({ ...prev, show: false }));
   };
@@ -359,7 +530,6 @@ const ModifyBookingModal = ({ booking, onClose, onCancel }) => {
 
         <div className="grid grid-cols-2 gap-6 mb-8">
           <div className="space-y-4">
-            {/* Room information - READ ONLY */}
             <div className="flex items-center space-x-3 text-gray-300">
               <Building2 size={20} />
               <div>
@@ -370,9 +540,7 @@ const ModifyBookingModal = ({ booking, onClose, onCancel }) => {
               </div>
             </div>
 
-            {/* Date picker */}
             <div className="bg-plek-lightgray rounded-lg relative">
-              {/* Date picker trigger */}
               <div
                 className="flex items-center justify-between text-gray-300 cursor-pointer p-2 hover:bg-plek-background rounded-lg border border-gray-600 transition-colors"
                 onClick={toggleDatePicker}
@@ -457,129 +625,6 @@ const ModifyBookingModal = ({ booking, onClose, onCancel }) => {
           </div>
 
           <div className="space-y-4">
-            {/* Time slot picker */}
-            <div className="bg-plek-lightgray rounded-lg relative">
-              {/* Time slot picker trigger */}
-              <div
-                className={`flex items-center justify-between text-gray-300 cursor-pointer p-2 hover:bg-plek-background rounded-lg border border-gray-600 transition-colors ${
-                  loadingTimeSlots ? "opacity-75" : ""
-                }`}
-                onClick={toggleTimePicker}
-              >
-                <div className="flex items-center space-x-3">
-                  <CalendarClock size={20} />
-                  <div>
-                    <p className="text-sm text-gray-400">Time Slot</p>
-                    <p>
-                      {loadingTimeSlots
-                        ? "Loading..."
-                        : timeSlot || "Select a time"}
-                    </p>
-                  </div>
-                </div>
-                {loadingTimeSlots ? (
-                  <Loader2 size={16} className="animate-spin" />
-                ) : (
-                  <svg
-                    xmlns="http://www.w3.org/2000/svg"
-                    width="16"
-                    height="16"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="2"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    className={`transition-transform ${
-                      showTimePicker ? "rotate-180" : ""
-                    }`}
-                  >
-                    <polyline points="6 9 12 15 18 9"></polyline>
-                  </svg>
-                )}
-              </div>
-              {showTimePicker && !loadingTimeSlots && (
-                <div className="absolute top-full left-0 mt-2 bg-plek-background rounded-lg shadow-lg p-3 z-10 w-full border border-gray-600">
-                  <div className="space-y-1 max-h-48 overflow-y-auto">
-                    {timeSlotError ? (
-                      <div className="p-2 text-red-400 text-center">
-                        {timeSlotError}
-                      </div>
-                    ) : availableTimeSlots.length === 0 ? (
-                      <div className="p-2 text-yellow-400 text-center">
-                        No available time slots for this date
-                      </div>
-                    ) : (
-                      availableTimeSlots.map((slot, index) => (
-                        <div
-                          key={index}
-                          className={`p-2 rounded-lg flex justify-between items-center transition-all ${
-                            slot.isBooked
-                              ? "bg-plek-dark text-gray-500 cursor-not-allowed"
-                              : slot.time === timeSlot
-                              ? "bg-plek-purple text-white cursor-pointer"
-                              : "hover:bg-plek-lightgray active:bg-plek-background cursor-pointer"
-                          }`}
-                          onClick={() => {
-                            if (!slot.isBooked) {
-                              setTimeSlot(slot.time);
-                              setShowTimePicker(false);
-                            }
-                          }}
-                        >
-                          <div className="flex items-center">
-                            {slot.isBooked && (
-                              <svg
-                                xmlns="http://www.w3.org/2000/svg"
-                                width="16"
-                                height="16"
-                                viewBox="0 0 24 24"
-                                fill="none"
-                                stroke="currentColor"
-                                strokeWidth="2"
-                                strokeLinecap="round"
-                                strokeLinejoin="round"
-                                className="mr-2 text-gray-500"
-                              >
-                                <rect
-                                  x="3"
-                                  y="4"
-                                  width="18"
-                                  height="18"
-                                  rx="2"
-                                  ry="2"
-                                ></rect>
-                                <line x1="16" y1="2" x2="16" y2="6"></line>
-                                <line x1="8" y1="2" x2="8" y2="6"></line>
-                                <line x1="3" y1="10" x2="21" y2="10"></line>
-                              </svg>
-                            )}
-                            <span>{slot.time}</span>
-                          </div>
-                          {!slot.isBooked && slot.time === timeSlot && (
-                            <svg
-                              xmlns="http://www.w3.org/2000/svg"
-                              width="16"
-                              height="16"
-                              viewBox="0 0 24 24"
-                              fill="none"
-                              stroke="currentColor"
-                              strokeWidth="2"
-                              strokeLinecap="round"
-                              strokeLinejoin="round"
-                            >
-                              <polyline points="20 6 9 17 4 12"></polyline>
-                            </svg>
-                          )}
-                        </div>
-                      ))
-                    )}
-                  </div>
-                </div>
-              )}
-            </div>
-
-            {/* Capacity information - READ ONLY */}
             <div className="flex items-center space-x-3 text-gray-300">
               <Users size={20} />
               <div>
@@ -587,10 +632,198 @@ const ModifyBookingModal = ({ booking, onClose, onCancel }) => {
                 <p>{booking.capacity} people</p>
               </div>
             </div>
+
+            {selectedTimeSlots.length > 0 && (
+              <div className="flex items-center space-x-3 text-gray-300">
+                <CalendarClock size={20} />
+                <div>
+                  <p className="text-sm text-gray-400">Selected Time Slots</p>
+                  <div className="font-medium text-white">
+                    {selectedTimeSlots.length === 1 ? (
+                      <p>{selectedTimeSlots[0]}</p>
+                    ) : (
+                      <p>{selectedTimeSlots.length} slots selected</p>
+                    )}
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         </div>
 
-        {/* Amenities section */}
+        <div className="mb-6">
+          <h3 className="text-lg font-medium mb-4 flex items-center">
+            <Clock className="mr-2 text-purple-400" size={20} />
+            Select Time Slots
+            <span className="ml-2 text-sm text-gray-400">
+              (Click multiple slots to book consecutive hours)
+            </span>
+          </h3>
+
+          {loadingTimeSlots ? (
+            <div className="flex justify-center items-center py-8">
+              <Loader2 size={30} className="animate-spin text-purple-500" />
+              <span className="ml-2 text-gray-300">
+                Loading available slots...
+              </span>
+            </div>
+          ) : timeSlotError ? (
+            <div className="p-4 bg-red-900/20 border border-red-700/30 rounded-lg text-center text-red-300">
+              {timeSlotError}
+            </div>
+          ) : availableTimeSlots.length === 0 ? (
+            <div className="p-4 bg-yellow-900/20 border border-yellow-700/30 rounded-lg text-center text-yellow-300">
+              No available time slots for this date
+            </div>
+          ) : (
+            <div>
+              <div className="flex justify-between items-center mb-4">
+                <div className="flex flex-wrap items-center gap-3">
+                  <div className="flex items-center">
+                    <div className="w-4 h-4 rounded bg-plek-purple mr-1.5"></div>
+                    <span className="text-sm text-gray-300">Available</span>
+                  </div>
+                  <div className="flex items-center">
+                    <div className="w-4 h-4 rounded bg-gray-600 mr-1.5"></div>
+                    <span className="text-sm text-gray-300">
+                      Booked by Others
+                    </span>
+                  </div>
+                  <div className="flex items-center">
+                    <div className="w-4 h-4 rounded bg-orange-500 mr-1.5"></div>
+                    <span className="text-sm text-gray-300">
+                      Your Other Bookings
+                    </span>
+                  </div>
+                  <div className="flex items-center">
+                    <div className="w-4 h-4 rounded bg-green-600 mr-1.5"></div>
+                    <span className="text-sm text-gray-300">Selected</span>
+                  </div>
+                </div>
+              </div>
+
+              {sameUserBookings.length > 0 && (
+                <div className="mb-3 bg-plek-background/50 p-2 rounded text-sm">
+                  <div>
+                    <p className="text-gray-300 font-medium mb-1">
+                      Your other bookings on this date:
+                    </p>
+                    <ul className="space-y-1 text-gray-400">
+                      {sameUserBookings.map((b, index) => {
+                        const start = DateTime.fromISO(b.start_time).toFormat(
+                          "h:mm a"
+                        );
+                        const end = DateTime.fromISO(b.end_time).toFormat(
+                          "h:mm a"
+                        );
+                        return (
+                          <li key={`same-${index}`}>
+                            • {start} - {end}
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  </div>
+                </div>
+              )}
+
+              <div className="grid grid-cols-8 gap-2 bg-plek-lightgray p-4 rounded-lg">
+                {availableTimeSlots.map((slot, index) => (
+                  <div
+                    key={index}
+                    className={`
+                      relative rounded-lg transition-all overflow-hidden
+                      ${
+                        slot.isCurrentBooking
+                          ? (selectedTimeSlots.includes(slot.time)
+                              ? "bg-green-600" // Selected current booking
+                              : "bg-plek-purple") + " cursor-pointer" // Unselected current booking (changed from gray-500 to plek-purple)
+                          : slot.isSameUserBooking
+                          ? "bg-orange-500 cursor-not-allowed"
+                          : slot.isOtherUserBooking
+                          ? "bg-gray-600 cursor-not-allowed"
+                          : selectedTimeSlots.includes(slot.time)
+                          ? "bg-green-600 hover:bg-green-700 cursor-pointer"
+                          : "bg-plek-purple hover:bg-purple-600 cursor-pointer"
+                      }
+                    `}
+                    onClick={() => handleTimeSlotClick(slot)}
+                    title={
+                      slot.isCurrentBooking
+                        ? selectedTimeSlots.includes(slot.time)
+                          ? "Your current booking time - click to deselect"
+                          : "Your current booking time - click to select again"
+                        : slot.isSameUserBooking
+                        ? "Your other booking"
+                        : slot.isOtherUserBooking
+                        ? `Booked by: ${slot.bookedBy || "another user"}`
+                        : "Available"
+                    }
+                  >
+                    {/* The yellow corner indicator should show even when deselected */}
+                    {slot.isCurrentBooking && (
+                      <div className="absolute top-0 right-0 w-0 h-0 border-t-8 border-r-8 border-t-transparent border-r-yellow-500"></div>
+                    )}
+
+                    <div className="p-2 text-center h-full flex flex-col justify-center">
+                      <p
+                        className={`text-xs font-medium ${
+                          slot.isOtherUserBooking && !slot.isCurrentBooking
+                            ? "text-gray-400"
+                            : "text-white"
+                        }`}
+                      >
+                        {slot.time.split(" - ")[0]}
+                      </p>
+                      <p
+                        className={`text-xs ${
+                          slot.isOtherUserBooking && !slot.isCurrentBooking
+                            ? "text-gray-400"
+                            : "text-gray-200"
+                        }`}
+                      >
+                        {slot.time.split(" - ")[1]}
+                      </p>
+                    </div>
+
+                    {selectedTimeSlots.includes(slot.time) &&
+                      !slot.isOtherUserBooking && (
+                        <div className="absolute bottom-1 right-1">
+                          <svg
+                            xmlns="http://www.w3.org/2000/svg"
+                            width="10"
+                            height="10"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            strokeWidth="2"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            className="text-white"
+                          >
+                            <polyline points="20 6 9 17 4 12"></polyline>
+                          </svg>
+                        </div>
+                      )}
+
+                    {slot.isOtherUserBooking && !slot.isCurrentBooking && (
+                      <div className="absolute inset-0 bg-black bg-opacity-10 flex items-center justify-center">
+                        <X size={12} className="text-gray-400" />
+                      </div>
+                    )}
+
+                    {slot.isSameUserBooking && !slot.isCurrentBooking && (
+                      <div className="absolute inset-0 bg-black bg-opacity-10 flex items-center justify-center">
+                        <X size={12} className="text-gray-400" />
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+
         {booking.amenities && booking.amenities.length > 0 && (
           <div className="bg-plek-lightgray rounded-lg p-4 mb-6">
             <div className="flex items-center space-x-3 text-gray-300">
@@ -683,7 +916,6 @@ const ModifyBookingModal = ({ booking, onClose, onCancel }) => {
                   type: "warning",
                   message: "Are you sure you want to cancel this booking?",
                 });
-                // Use setTimeout to give the user time to read the alert before proceeding
                 setTimeout(() => {
                   if (
                     window.confirm(
@@ -709,7 +941,7 @@ const ModifyBookingModal = ({ booking, onClose, onCancel }) => {
             <button
               type="submit"
               className="flex-1 py-3 bg-plek-purple hover:bg-purple-700 rounded-lg transition-colors"
-              disabled={!timeSlot || loadingTimeSlots}
+              disabled={loadingTimeSlots} // Only disable when loading
             >
               Save Changes
             </button>
@@ -717,7 +949,6 @@ const ModifyBookingModal = ({ booking, onClose, onCancel }) => {
         </form>
       </div>
 
-      {/* Add Toast component */}
       {alert.show && (
         <Toast
           type={alert.type}

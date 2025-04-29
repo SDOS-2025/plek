@@ -108,60 +108,58 @@ function ManageBookings() {
         }
       }
 
-      // Get user name and details from nested object structure if available
+      // Enhanced user information fetching
       let userName = "Unknown User";
       let firstName = "";
       let lastName = "";
       let userEmail = "";
 
       if (booking.user) {
-        if (typeof booking.user === "object") {
+        // If user is already an object with needed properties
+        if (typeof booking.user === "object" && booking.user.first_name) {
           firstName = booking.user.first_name || "";
           lastName = booking.user.last_name || "";
           userEmail = booking.user.email || "";
-
-          // Create a formatted user display name
-          if (firstName && lastName) {
-            userName = `${firstName} ${lastName}`;
-          } else if (firstName) {
-            userName = firstName;
-          } else if (userEmail) {
-            userName = userEmail;
-          }
+          userName =
+            firstName ||
+            (lastName
+              ? `${firstName} ${lastName}`
+              : userEmail || "Unknown User");
         } else {
-          // If we only have user ID, try to fetch full user data from the accounts API
+          // Fetch user details from API
           try {
             const userId =
-              typeof booking.user === "string"
-                ? parseInt(booking.user)
-                : booking.user;
+              typeof booking.user === "object" ? booking.user.id : booking.user;
 
-            // Use the accounts/users endpoint as defined in accounts/urls.py
-            const userResponse = await api.get(`/users/${userId}/`);
+            // Make sure we have a valid user ID
+            if (userId) {
+              // Make API call to get user details
+              const userResponse = await api.get(
+                `/api/accounts/users/${userId}/`
+              );
 
-            if (userResponse && userResponse.data) {
-              firstName = userResponse.data.first_name || "";
-              lastName = userResponse.data.last_name || "";
-              userEmail = userResponse.data.email || "";
+              if (userResponse.data) {
+                firstName = userResponse.data.first_name || "";
+                lastName = userResponse.data.last_name || "";
+                userEmail = userResponse.data.email || "";
 
-              if (firstName && lastName) {
-                userName = `${firstName} ${lastName}`;
-              } else if (firstName) {
-                userName = firstName;
-              } else if (userEmail) {
-                userName = userEmail;
-              } else {
-                userName = `User ${userId}`;
+                // Set user display name prioritizing first name
+                userName =
+                  firstName ||
+                  (lastName
+                    ? `${firstName} ${lastName}`
+                    : userEmail || `User ${userId}`);
               }
-
-              console.log(`Fetched user data for ID ${userId}: ${userName}`);
             }
           } catch (err) {
             console.error(
               `Failed to fetch user details for ID: ${booking.user}`,
               err
             );
-            userName = `User ${booking.user}`;
+            // Keep the fallback "User X" format if API call fails
+            const userId =
+              typeof booking.user === "object" ? booking.user.id : booking.user;
+            userName = `User ${userId}`;
           }
         }
       }
@@ -185,6 +183,8 @@ function ManageBookings() {
         userFirstName: firstName,
         userLastName: lastName,
         userEmail: userEmail,
+        userId:
+          typeof booking.user === "object" ? booking.user.id : booking.user,
         original: booking, // Keep original data in case we need it
       });
     }
@@ -658,7 +658,10 @@ function ManageBookings() {
                       {activeTab === "requests"
                         ? "Requested by: "
                         : "Booked by: "}
-                      <span className="font-medium">{booking.user}</span>
+                      <span className="font-medium">
+                        {booking.userFirstName ||
+                          booking.user.replace(/User \d+/, "")}
+                      </span>
                     </span>
                   </div>
                 </div>
@@ -672,13 +675,12 @@ function ManageBookings() {
                   </div>
                 )}
 
-                {booking.status && (
-                  <div className="mt-3">
-                    <span className="inline-block px-2 py-1 bg-green-900/30 text-green-400 text-xs rounded-full">
-                      {booking.status}
-                    </span>
-                  </div>
-                )}
+                <div className="mt-3">
+                  <span className="inline-block px-2 py-1 bg-green-900/30 text-green-400 text-xs rounded-full">
+                    {/* Dynamic status: show "APPROVED" in the approved bookings tab */}
+                    {activeTab === "bookings" ? "APPROVED" : booking.status}
+                  </span>
+                </div>
               </div>
             ))
           )}

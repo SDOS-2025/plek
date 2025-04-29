@@ -107,15 +107,28 @@ class RoomManageView(APIView):
                             date_obj.date(), datetime.max.time()
                         )
 
-                        # Get all bookings for this room on the specified date
+                        # Get all bookings for this room on the specified date with more user data
                         bookings = Booking.objects.filter(
                             room_id=room_id,
                             start_time__date=date_obj.date(),
-                            status=Booking.APPROVED,
-                        ).values("start_time", "end_time")
+                        ).select_related('user', 'approved_by')
+                        
+                        # Format bookings with more information
+                        bookings_data = []
+                        for booking in bookings:
+                            bookings_data.append({
+                                'id': booking.id,
+                                'start_time': booking.start_time,
+                                'end_time': booking.end_time,
+                                'status': booking.status,
+                                'user': booking.user.id,
+                                'user_email': booking.user.email,
+                                'purpose': booking.purpose,
+                                'participants': booking.participants,
+                            })
 
                         # Add bookings to response
-                        room_data["bookings"] = list(bookings)
+                        room_data["bookings"] = bookings_data
                     except ValueError:
                         return Response(
                             {"detail": "Invalid date format"},
