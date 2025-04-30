@@ -132,12 +132,88 @@ class FloorDeptBookingView(APIView):
     permission_classes = [CanViewFloorDeptBookings]
 
     def get(self, request):
-        bookings = Booking.objects.filter(
-            Q(room__floor__in=request.user.managed_floors.all())
-            | Q(room__department__in=request.user.managed_departments.all())
-        ).distinct()
-        serializer = BookingSerializer(bookings, many=True)
-        return Response(serializer.data, status=status.HTTP_200_OK)
+        # Get the user's managed resources
+        managed_buildings = request.user.managed_buildings.all()
+        managed_floors = request.user.managed_floors.all().select_related('building')
+        managed_departments = request.user.managed_departments.all()
+        
+        # Get bookings from managed buildings, floors and departments
+        building_bookings = Booking.objects.filter(
+            room__building__in=managed_buildings
+        ).select_related('room', 'user', 'approved_by', 'room__floor', 'room__building')
+        
+        floor_bookings = Booking.objects.filter(
+            room__floor__in=managed_floors
+        ).select_related('room', 'user', 'approved_by', 'room__floor', 'room__building')
+        
+        dept_bookings = Booking.objects.filter(
+            room__departments__in=managed_departments
+        ).select_related('room', 'user', 'approved_by', 'room__floor', 'room__building')
+        
+        # Combine the queries using OR logic
+        bookings = (building_bookings | floor_bookings | dept_bookings).distinct()
+        
+        # Create enhanced booking data with user information
+        enhanced_bookings = []
+        for booking in bookings:
+            booking_data = {
+                'id': booking.id,
+                'room': booking.room.id,
+                'room_name': booking.room.name,
+                'building_name': booking.room.building.name if booking.room.building else '',
+                'user': booking.user.id,
+                'user_email': booking.user.email,
+                'user_first_name': booking.user.first_name,
+                'user_last_name': booking.user.last_name,
+                'approved_by': booking.approved_by.id if booking.approved_by else None,
+                'approved_by_email': booking.approved_by.email if booking.approved_by else None,
+                'start_time': booking.start_time,
+                'end_time': booking.end_time,
+                'status': booking.status,
+                'purpose': booking.purpose,
+                'participants': booking.participants,
+                'cancellation_reason': booking.cancellation_reason,
+                'created_at': booking.created_at,
+                'updated_at': booking.updated_at,
+            }
+            enhanced_bookings.append(booking_data)
+        
+        # Prepare minimal building data
+        minimal_buildings = []
+        if managed_buildings:
+            minimal_buildings = [
+                {"id": building.id, "name": building.name} 
+                for building in managed_buildings
+            ]
+        
+        # Prepare minimal floor data  
+        minimal_floors = []
+        if managed_floors:
+            minimal_floors = [
+                {
+                    "id": floor.id,
+                    "number": floor.number,
+                    "name": floor.name,
+                    "building_id": floor.building.id if floor.building else None,
+                    "building_name": floor.building.name if floor.building else None
+                }
+                for floor in managed_floors
+            ]
+        
+        # Return only the essential information
+        return Response({
+            "bookings": enhanced_bookings,
+            "managed_buildings": minimal_buildings,
+            "managed_floors": minimal_floors,
+            "managed_departments": [
+                {
+                    "id": dept.id,
+                    "name": dept.name,
+                    "code": getattr(dept, 'code', None)
+                }
+                for dept in managed_departments
+            ]
+        }, status=status.HTTP_200_OK)
 
 
 class BookingApprovalView(APIView):
@@ -199,9 +275,34 @@ class AllBookingsView(APIView):
     permission_classes = [CanViewAllBookings]
 
     def get(self, request):
-        bookings = Booking.objects.all()
-        serializer = BookingSerializer(bookings, many=True)
-        return Response(serializer.data, status=status.HTTP_200_OK)
+        bookings = Booking.objects.all().select_related('room', 'user', 'approved_by', 'room__building')
+        
+        # Create enhanced booking data with user information
+        enhanced_bookings = []
+        for booking in bookings:
+            booking_data = {
+                'id': booking.id,
+                'room': booking.room.id,
+                'room_name': booking.room.name,
+                'building_name': booking.room.building.name if booking.room.building else '',
+                'user': booking.user.id,
+                'user_email': booking.user.email,
+                'user_first_name': booking.user.first_name,
+                'user_last_name': booking.user.last_name,
+                'approved_by': booking.approved_by.id if booking.approved_by else None,
+                'approved_by_email': booking.approved_by.email if booking.approved_by else None,
+                'start_time': booking.start_time,
+                'end_time': booking.end_time,
+                'status': booking.status,
+                'purpose': booking.purpose,
+                'participants': booking.participants,
+                'cancellation_reason': booking.cancellation_reason,
+                'created_at': booking.created_at,
+                'updated_at': booking.updated_at,
+            }
+            enhanced_bookings.append(booking_data)
+            
+        return Response(enhanced_bookings, status=status.HTTP_200_OK)
 
 
 class OverrideBookingView(APIView):

@@ -125,7 +125,8 @@ class CanViewAllBookings(permissions.BasePermission):
 class CanViewRooms(permissions.BasePermission):
     def has_permission(self, request, view):
         try:
-            return request.user.is_authenticated and request.user.has_perm("rooms.view_rooms")
+            # Allow any authenticated user to view rooms
+            return request.user.is_authenticated
         except Exception as e:
             logger.error(f"Permission check failed for user {request.user.email}: {str(e)}")
             return False

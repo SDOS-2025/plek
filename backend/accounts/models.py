@@ -3,6 +3,7 @@ from django.contrib.auth.models import (
     AbstractBaseUser,
     BaseUserManager,
     PermissionsMixin,
+    Group,
 )
 from django.db import models
 
@@ -20,7 +21,9 @@ class CustomUserManager(BaseUserManager):
     def create_superuser(self, email, password=None, **extra_fields):
         extra_fields.setdefault("is_staff", True)
         extra_fields.setdefault("is_superuser", True)
-        return self.create_user(email, password, **extra_fields)
+        user = self.create_user(email, password, **extra_fields)
+        user.groups.add(Group.objects.get(name="SuperAdmin"))
+        return user
 
 
 class CustomUser(AbstractBaseUser, PermissionsMixin):
@@ -29,6 +32,8 @@ class CustomUser(AbstractBaseUser, PermissionsMixin):
     last_name = models.CharField(max_length=100)
     is_active = models.BooleanField(default=True)
     is_staff = models.BooleanField(default=False)
+    is_superuser = models.BooleanField(default=False)
+    managed_buildings = models.ManyToManyField("rooms.Building", blank=True, related_name="managers")
     managed_floors = models.ManyToManyField("rooms.Floor", blank=True)
     managed_departments = models.ManyToManyField("rooms.Department", blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
@@ -58,7 +63,10 @@ class CustomUser(AbstractBaseUser, PermissionsMixin):
         if self.groups.filter(name__in=["Admin", "SuperAdmin"]).exists():
             return True
         if self.groups.filter(name="Coordinator").exists():
-            return room.floor in self.managed_floors.all() or (
-                room.department and room.department in self.managed_departments.all()
+            # Check if user manages the room's floor, building, or department
+            return (
+                room.floor in self.managed_floors.all() or 
+                room.building in self.managed_buildings.all() or
+                any(dept in self.managed_departments.all() for dept in room.departments.all())
             )
         return False

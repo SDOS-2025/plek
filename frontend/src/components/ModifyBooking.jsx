@@ -14,16 +14,51 @@ import { DateTime } from "luxon";
 import Toast from "../components/AlertToast";
 
 const ModifyBookingModal = ({ booking, onClose, onCancel }) => {
-  const [purpose, setPurpose] = useState(booking.purpose || "");
+  // Pre-process the booking data to ensure capacity is set correctly
+  const processedBooking = {
+    ...booking,
+    // Ensure capacity is properly set from the room data
+    capacity: booking.capacity
+      ? parseInt(booking.capacity)
+      : booking.original &&
+        booking.original.room &&
+        booking.original.room.capacity
+      ? parseInt(booking.original.room.capacity)
+      : 100,
+  };
+
+  const [purpose, setPurpose] = useState(processedBooking.purpose || "");
   // Use nullish coalescing to keep numeric 0 values
   const [attendees, setAttendees] = useState(
-    booking.attendees ?? booking.participants ?? ""
+    processedBooking.attendees ?? processedBooking.participants ?? ""
   );
-  const [notes, setNotes] = useState(booking.notes || "");
+  const [notes, setNotes] = useState(processedBooking.notes || "");
+
+  // Process the booking time slot from UTC to local time
+  const getFormattedSlot = () => {
+    // Check if we have the raw start/end times in the booking object
+    if (processedBooking.start_time && processedBooking.end_time) {
+      const startTime = DateTime.fromISO(processedBooking.start_time, {
+        zone: "Asia/Kolkata",
+      });
+      const endTime = DateTime.fromISO(processedBooking.end_time, {
+        zone: "Asia/Kolkata",
+      });
+      return `${startTime.toFormat("h:mm a")} - ${endTime.toFormat("h:mm a")}`;
+    }
+    // Otherwise, fall back to the slot field if available
+    return processedBooking.slot || "";
+  };
+
+  // Set the initial time slot using proper timezone conversion
+  const formattedTimeSlot = getFormattedSlot();
+
   const [selectedTimeSlots, setSelectedTimeSlots] = useState(
-    booking.slot ? [booking.slot] : []
+    formattedTimeSlot ? [formattedTimeSlot] : []
   );
-  const [originalTimeSlot, setOriginalTimeSlot] = useState(booking.slot || "");
+  const [originalTimeSlot, setOriginalTimeSlot] = useState(
+    formattedTimeSlot || ""
+  );
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [alert, setAlert] = useState({
     show: false,
@@ -133,6 +168,30 @@ const ModifyBookingModal = ({ booking, onClose, onCancel }) => {
       }
 
       const response = await api.get(`/rooms/${roomId}/?date=${formattedDate}`);
+      console.log("Room data response:", response.data);
+
+      // Update the room information from the API response
+      if (response.data) {
+        // Update room capacity
+        if (response.data.capacity) {
+          booking.capacity = response.data.capacity;
+        }
+
+        // Update room name and building information
+        if (response.data.name) {
+          booking.roomName = response.data.name;
+        }
+
+        if (response.data.building_name) {
+          booking.building = response.data.building_name;
+        }
+
+        console.log("Updated room info:", {
+          name: booking.roomName,
+          building: booking.building,
+          capacity: booking.capacity,
+        });
+      }
 
       if (!response.data || !response.data.bookings) {
         throw new Error("Invalid response format from API");
@@ -148,8 +207,12 @@ const ModifyBookingModal = ({ booking, onClose, onCancel }) => {
           userId: bookingItem.user || null,
           userEmail: bookingItem.user_email || "Unknown user",
           userFirstName: bookingItem.user_first_name || null,
-          startTime: DateTime.fromISO(bookingItem.start_time),
-          endTime: DateTime.fromISO(bookingItem.end_time),
+          startTime: DateTime.fromISO(bookingItem.start_time, {
+            zone: "Asia/Kolkata",
+          }),
+          endTime: DateTime.fromISO(bookingItem.end_time, {
+            zone: "Asia/Kolkata",
+          }),
           status: bookingItem.status || "APPROVED",
           isCurrentBooking: parseInt(bookingItem.id) === parseInt(booking.id),
         };
@@ -307,7 +370,10 @@ const ModifyBookingModal = ({ booking, onClose, onCancel }) => {
 
   const parseTimeSlot = (timeSlot, dateStr) => {
     const [startStr, endStr] = timeSlot.split(" - ");
-    const baseDate = DateTime.fromISO(dateStr);
+
+    // Ensure we're working with the correct date in IST timezone
+    const baseDate = DateTime.fromISO(dateStr).setZone("Asia/Kolkata");
+
     const startMatch = startStr.match(/(\d+):(\d+)\s*(AM|PM)/i);
     const endMatch = endStr.match(/(\d+):(\d+)\s*(AM|PM)/i);
 
@@ -330,9 +396,22 @@ const ModifyBookingModal = ({ booking, onClose, onCancel }) => {
     if (endPeriod.toUpperCase() === "PM" && endHours !== 12) endHours += 12;
     if (endPeriod.toUpperCase() === "AM" && endHours === 12) endHours = 0;
 
-    const startTime = baseDate.set({ hour: startHours, minute: startMinutes });
-    const endTime = baseDate.set({ hour: endHours, minute: endMinutes });
+    // Set hours and minutes using DateTime, maintaining IST timezone
+    const startTime = baseDate.set({
+      hour: startHours,
+      minute: startMinutes,
+      second: 0,
+      millisecond: 0,
+    });
 
+    const endTime = baseDate.set({
+      hour: endHours,
+      minute: endMinutes,
+      second: 0,
+      millisecond: 0,
+    });
+
+    // Format in ISO 8601 format with timezone information
     return {
       start_time: startTime.toISO(),
       end_time: endTime.toISO(),
@@ -351,6 +430,7 @@ const ModifyBookingModal = ({ booking, onClose, onCancel }) => {
       return;
     }
 
+    // Sort time slots and check if they're continuous
     const timeRanges = selectedTimeSlots.map((slot) => {
       const [startStr, endStr] = slot.split(" - ");
 
@@ -379,10 +459,12 @@ const ModifyBookingModal = ({ booking, onClose, onCancel }) => {
       };
     });
 
+    // Ensure time slots are sorted in chronological order
     timeRanges.sort(
       (a, b) => a.startObj.totalMinutes - b.startObj.totalMinutes
     );
 
+    // Verify that all selected time slots are continuous
     const isContinuous = timeRanges.every((slot, index) => {
       if (index === 0) return true;
       const prevSlot = timeRanges[index - 1];
@@ -399,12 +481,16 @@ const ModifyBookingModal = ({ booking, onClose, onCancel }) => {
       return;
     }
 
+    // Create a combined time slot from the first start time to the last end time
     const firstStart = timeRanges[0].start;
     const lastEnd = timeRanges[timeRanges.length - 1].end;
     const combinedTimeSlot = `${firstStart} - ${lastEnd}`;
 
     try {
+      // Convert to ISO format with proper timezone
       const timeValues = parseTimeSlot(combinedTimeSlot, date);
+
+      // Determine the room ID - handle different data structures
       let roomId = null;
       if (booking.originalBooking && booking.originalBooking.room) {
         if (typeof booking.originalBooking.room === "object") {
@@ -423,20 +509,37 @@ const ModifyBookingModal = ({ booking, onClose, onCancel }) => {
         throw new Error("Could not identify the room for this booking");
       }
 
+      // Check if the time slot has changed, which requires re-approval
       const timeHasChanged = combinedTimeSlot !== originalTimeSlot;
 
+      // Get the proper booking ID (ensure it's a number)
+      let bookingId = parseInt(booking.id);
+
+      // Log the booking ID and data being sent to help diagnose issues
+      console.log("Booking ID being used for update:", bookingId);
+      console.log("Booking object:", booking);
+
+      // Prepare the booking update payload
       const bookingUpdate = {
         room: roomId,
         start_time: timeValues.start_time,
         end_time: timeValues.end_time,
-        purpose: purpose,
+        purpose: purpose.trim(),
         participants: attendees.toString(),
         notes: notes,
-        ...(timeHasChanged && { status: "PENDING" }),
+        ...(timeHasChanged && { status: "PENDING" }), // Reset status to PENDING if time changed
       };
 
+      console.log("Updating booking with data:", bookingUpdate);
+
+      // Send the update request - ensure the bookingId is valid
+      if (!bookingId || isNaN(bookingId)) {
+        throw new Error("Invalid booking ID");
+      }
+
+      // Send the update request
       const response = await api.patch(
-        `/bookings/${booking.id}/`,
+        `/bookings/${bookingId}/`,
         bookingUpdate
       );
 
@@ -449,6 +552,7 @@ const ModifyBookingModal = ({ booking, onClose, onCancel }) => {
             : "Booking details updated successfully!",
         });
 
+        // Close modal and refresh the page after a short delay
         setTimeout(() => {
           onClose();
           window.location.reload();
@@ -461,11 +565,34 @@ const ModifyBookingModal = ({ booking, onClose, onCancel }) => {
         });
       }
     } catch (error) {
+      console.error("Error updating booking:", error);
+
+      // Extract error message from response if available
+      let errorMessage = "An error occurred while updating the booking.";
+
+      if (error.response && error.response.data) {
+        // Check for specific validation errors
+        if (
+          error.response.data.start_time &&
+          error.response.data.start_time.includes("Backdated")
+        ) {
+          errorMessage =
+            "Backdated bookings are not allowed. Please select a future time slot.";
+        } else if (error.response.data.time) {
+          errorMessage = error.response.data.time;
+        } else if (error.response.data.room) {
+          errorMessage = error.response.data.room;
+        } else if (error.response.data.detail) {
+          errorMessage = error.response.data.detail;
+        } else if (typeof error.response.data === "string") {
+          errorMessage = error.response.data;
+        }
+      }
+
       setAlert({
         show: true,
         type: "danger",
-        message:
-          error.message || "An error occurred while updating the booking.",
+        message: errorMessage,
       });
     }
   };
@@ -839,6 +966,7 @@ const ModifyBookingModal = ({ booking, onClose, onCancel }) => {
               className="w-full bg-plek-background rounded-lg p-3 focus:outline-none focus:ring-2 focus:ring-plek-purple"
               placeholder="Enter purpose of booking"
               required
+              maxLength={200}
             />
           </div>
 
@@ -849,8 +977,19 @@ const ModifyBookingModal = ({ booking, onClose, onCancel }) => {
             <input
               type="number"
               value={attendees}
-              onChange={(e) => setAttendees(e.target.value)}
-              max={booking.capacity}
+              onChange={(e) => {
+                // Ensure valid number input with max capacity limit
+                const value = parseInt(e.target.value);
+                const maxCapacity = booking.capacity || 1000;
+
+                if (!isNaN(value) && value >= 0) {
+                  setAttendees(Math.min(value, maxCapacity));
+                } else if (e.target.value === "") {
+                  setAttendees("");
+                }
+              }}
+              min="1"
+              max={booking.capacity || 1000}
               className="w-full bg-plek-background rounded-lg p-3 focus:outline-none focus:ring-2 focus:ring-plek-purple"
               placeholder="Enter number of attendees"
               required

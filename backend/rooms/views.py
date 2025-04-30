@@ -3,6 +3,7 @@ import logging
 from datetime import datetime
 
 from rest_framework import status
+from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
@@ -84,7 +85,13 @@ class RoomListView(APIView):
 
 
 class RoomManageView(APIView):
-    permission_classes = [CanManageRooms]
+    # Different permissions for different methods
+    def get_permissions(self):
+        # Allow any authenticated user to GET room details
+        if self.request.method == 'GET':
+            return [IsAuthenticated()]
+        # Require CanManageRooms for all other methods (POST, PATCH, DELETE)
+        return [CanManageRooms()]
 
     def get(self, request, room_id=None):
         # Handle GET request for a specific room
@@ -183,7 +190,13 @@ class RoomManageView(APIView):
 
 
 class BuildingManageView(APIView):
-    permission_classes = [CanManageBuildings]
+    # Different permissions for different methods
+    def get_permissions(self):
+        # Allow any authenticated user to GET building details
+        if self.request.method == 'GET':
+            return [IsAuthenticated()]
+        # Require CanManageBuildings for all other methods (POST, PATCH, DELETE)
+        return [CanManageBuildings()]
 
     def get(self, request, building_id=None):
         if building_id:
@@ -239,7 +252,13 @@ class BuildingManageView(APIView):
 
 
 class AmenityManageView(APIView):
-    permission_classes = [CanManageAmenities]
+    # Different permissions for different methods
+    def get_permissions(self):
+        # Allow any authenticated user to GET amenities
+        if self.request.method == 'GET':
+            return [IsAuthenticated()]
+        # Require CanManageAmenities for all other methods (POST, PATCH, DELETE)
+        return [CanManageAmenities()]
 
     def get(self, request, amenity_id=None):
         if amenity_id:
@@ -295,9 +314,26 @@ class AmenityManageView(APIView):
 
 
 class FloorManageView(APIView):
-    permission_classes = [CanManageBuildings]  # Reusing building management permission
+    # Different permissions for different methods
+    def get_permissions(self):
+        # Allow any authenticated user to GET floor details
+        if self.request.method == 'GET':
+            return [IsAuthenticated()]
+        # Require CanManageBuildings for all other methods (POST, PATCH, DELETE)
+        return [CanManageBuildings()]
 
     def get(self, request, building_id=None, floor_id=None):
+        # If specific floor_id is provided
+        if floor_id:
+            try:
+                floor = Floor.objects.get(id=floor_id)
+                serializer = FloorSerializer(floor)
+                return Response(serializer.data, status=status.HTTP_200_OK)
+            except Floor.DoesNotExist:
+                return Response(
+                    {"detail": "Floor not found"}, status=status.HTTP_404_NOT_FOUND
+                )
+        
         # If building_id is provided in URL path, use it to filter floors
         if building_id:
             try:
@@ -306,17 +342,18 @@ class FloorManageView(APIView):
                 return Response(
                     {"detail": "Building not found"}, status=status.HTTP_404_NOT_FOUND
                 )
-            floors = Floor.objects.filter(building_id=building_id)
+            floors = Floor.objects.filter(building_id=building_id).order_by('number')
+            serializer = FloorSerializer(floors, many=True)
+            return Response(serializer.data, status=status.HTTP_200_OK)
         else:
             # Otherwise, check if it's in query parameters
             query_building_id = request.query_params.get("building_id")
             floors = Floor.objects.all()
             if query_building_id:
-                floors = floors.filter(building_id=query_building_id)
-
-        # Floors are ordered by number by default due to the Meta ordering we added
-        serializer = FloorSerializer(floors, many=True)
-        return Response(serializer.data, status=status.HTTP_200_OK)
+                floors = floors.filter(building_id=query_building_id).order_by('number')
+            
+            serializer = FloorSerializer(floors, many=True)
+            return Response(serializer.data, status=status.HTTP_200_OK)
 
     def post(self, request):
         serializer = FloorSerializer(data=request.data)
@@ -369,7 +406,13 @@ class FloorManageView(APIView):
 
 
 class DepartmentManageView(APIView):
-    permission_classes = [CanManageBuildings]  # Reusing building permissions for now
+    # Different permissions for different methods
+    def get_permissions(self):
+        # Allow any authenticated user to GET department details
+        if self.request.method == 'GET':
+            return [IsAuthenticated()]
+        # Require CanManageBuildings for all other methods (POST, PATCH, DELETE)
+        return [CanManageBuildings()]
 
     def get(self, request):
         is_active = request.query_params.get("is_active")

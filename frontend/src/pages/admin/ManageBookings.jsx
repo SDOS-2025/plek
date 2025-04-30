@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useContext, useMemo } from "react";
 import {
   Search,
   Calendar,
@@ -19,8 +19,10 @@ import ModifyBookingModal from "../../components/ModifyBooking";
 import NavBar from "../../components/NavBar";
 import Footer from "../../components/Footer";
 import Toast, { DeleteConfirmation } from "../../components/AlertToast";
+import { AuthContext } from "../../context/AuthProvider";
 
 function ManageBookings() {
+  const { user } = useContext(AuthContext);
   const [activeTab, setActiveTab] = useState("requests");
   const [searchQuery, setSearchQuery] = useState("");
   const [showModifyModal, setShowModifyModal] = useState(false);
@@ -37,6 +39,12 @@ function ManageBookings() {
   });
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [bookingToDelete, setBookingToDelete] = useState(null);
+  const [userRole, setUserRole] = useState(null); // Initialize as null instead of "admin"
+  const [coordinatorResources, setCoordinatorResources] = useState({
+    buildings: [],
+    floors: [],
+    departments: [],
+  }); // State to store coordinator's managed resources
 
   // Filter states
   const [selectedBuilding, setSelectedBuilding] = useState("all");
@@ -52,6 +60,196 @@ function ManageBookings() {
   const hideAlert = () => {
     setAlert((prev) => ({ ...prev, show: false }));
   };
+
+  // Fetch user profile to determine role
+  useEffect(() => {
+    const fetchUserProfile = async () => {
+      try {
+        // Fetch the user profile to get accurate role information
+        const profileResponse = await api.get("/api/accounts/profile/");
+        const userProfile = profileResponse.data;
+        console.log("User profile:", userProfile);
+
+        // Determine role from groups in the profile
+        const groups = userProfile.groups || [];
+        const groupNames = groups.map((group) =>
+          typeof group === "string"
+            ? group.toLowerCase()
+            : group.name.toLowerCase()
+        );
+
+        if (userProfile.is_superuser || groupNames.includes("superadmin")) {
+          setUserRole("superadmin");
+          console.log("User role: superadmin");
+        } else if (groupNames.includes("admin")) {
+          setUserRole("admin");
+          console.log("User role: admin");
+        } else if (groupNames.includes("coordinator")) {
+          setUserRole("coordinator");
+          console.log("User role: coordinator");
+
+          // For coordinators, immediately fetch their assigned floors/departments data
+          // to ensure we always have the proper data displayed
+          try {
+            const coordResponse = await api.get("/bookings/floor-dept/");
+            console.log(
+              "Coordinator resources fetched directly:",
+              coordResponse.data
+            );
+
+            // Extract managed resources from the response
+            const managedBuildingsData =
+              coordResponse.data.managed_buildings || [];
+            const managedFloorsData = coordResponse.data.managed_floors || [];
+            const managedDepartmentsData =
+              coordResponse.data.managed_departments || [];
+            const bookingsData = coordResponse.data.bookings || [];
+
+            // Set coordinator resources from API response - this is the most reliable source
+            setCoordinatorResources({
+              buildings: managedBuildingsData,
+              floors: managedFloorsData,
+              departments: managedDepartmentsData,
+            });
+
+            // Process bookings directly
+            const processedBookings = await processBookings(bookingsData);
+
+            // Split bookings into pending requests and approved bookings
+            const requests = processedBookings.filter(
+              (booking) => booking.status.toLowerCase() === "pending"
+            );
+            const approved = processedBookings.filter(
+              (booking) => booking.status.toLowerCase() === "approved"
+            );
+
+            setBookingRequests(requests);
+            setApprovedBookings(approved);
+            setError(null);
+            setLoading(false);
+          } catch (coordError) {
+            console.error("Error fetching coordinator data:", coordError);
+            // If there's an error, we'll fall back to the regular fetchBookings
+          }
+        } else {
+          setUserRole("user");
+          console.log("User role: regular user");
+        }
+      } catch (error) {
+        console.error("Error fetching user profile:", error);
+        // Fallback to a safe default
+        setUserRole("user");
+      }
+    };
+
+    if (user) {
+      fetchUserProfile();
+    }
+  }, [user]);
+
+  // Fetch bookings data - modified to skip coordinator fetching since we handle it directly above
+  useEffect(() => {
+    const fetchBookings = async () => {
+      // Don't fetch again if we're a coordinator - handled in fetchUserProfile
+      if (userRole === "coordinator") {
+        return;
+      }
+
+      try {
+        setLoading(true);
+        let bookingsData = [];
+
+        // For admins and superadmins, fetch all bookings
+        const response = await api.get("/bookings/all/");
+        console.log("Fetched all bookings:", response.data);
+        bookingsData = response.data;
+
+        const allBookings = await processBookings(bookingsData || []);
+
+        // Split bookings into pending requests and approved bookings
+        const requests = allBookings.filter(
+          (booking) => booking.status.toLowerCase() === "pending"
+        );
+        const approved = allBookings.filter(
+          (booking) => booking.status.toLowerCase() === "approved"
+        );
+
+        setBookingRequests(requests);
+        setApprovedBookings(approved);
+        setError(null);
+      } catch (err) {
+        console.error("Error fetching bookings:", err);
+        setError("Failed to load bookings");
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    // Only fetch for admin/superadmin users or when we need to refresh data
+    if (userRole === "admin" || userRole === "superadmin") {
+      fetchBookings();
+
+      // Set up auto-refresh for admin/superadmin
+      const intervalId = setInterval(() => {
+        fetchBookings();
+      }, 120000);
+
+      return () => clearInterval(intervalId);
+    }
+  }, [userRole]);
+
+  // Add a separate effect for refreshing coordinator data
+  useEffect(() => {
+    // Function to refresh coordinator data
+    const refreshCoordinatorData = async () => {
+      if (userRole !== "coordinator") {
+        return;
+      }
+
+      try {
+        const response = await api.get("/bookings/floor-dept/");
+
+        // Extract data from response
+        const managedBuildingsData = response.data.managed_buildings || [];
+        const managedFloorsData = response.data.managed_floors || [];
+        const managedDepartmentsData = response.data.managed_departments || [];
+        const bookingsData = response.data.bookings || [];
+
+        // Update coordinator resources
+        setCoordinatorResources({
+          buildings: managedBuildingsData,
+          floors: managedFloorsData,
+          departments: managedDepartmentsData,
+        });
+
+        // Process and update bookings
+        const processedBookings = await processBookings(bookingsData);
+
+        // Split and update
+        const requests = processedBookings.filter(
+          (booking) => booking.status.toLowerCase() === "pending"
+        );
+        const approved = processedBookings.filter(
+          (booking) => booking.status.toLowerCase() === "approved"
+        );
+
+        setBookingRequests(requests);
+        setApprovedBookings(approved);
+      } catch (error) {
+        console.error("Error refreshing coordinator data:", error);
+      }
+    };
+
+    // Only set up refresh interval for coordinators
+    if (userRole === "coordinator") {
+      // Set up auto-refresh every 2 minutes
+      const intervalId = setInterval(() => {
+        refreshCoordinatorData();
+      }, 120000);
+
+      return () => clearInterval(intervalId);
+    }
+  }, [userRole]);
 
   // Process bookings to match expected format
   const processBookings = async (bookings) => {
@@ -75,162 +273,47 @@ function ManageBookings() {
         "h a"
       )} - ${endTime.toFormat("h a")}`;
 
-      // Extract room information
-      let roomName = "Unknown Room";
-      let buildingName = "";
-      let roomCapacity = 0;
+      // Extract room information - use room_name from enhanced API response if available
+      let roomName = booking.room_name || "Unknown Room";
+      let buildingName = booking.building_name || "";
+      let roomCapacity = booking.capacity || 0;
 
-      // Handle different possible room data structures
-      if (booking.room) {
-        if (typeof booking.room === "object") {
-          roomName = booking.room.name || "Unknown Room";
-          buildingName = booking.room.building_name || "";
-          roomCapacity = booking.room.capacity || 0;
-        } else {
-          // If room is just an ID, fetch the room details
-          try {
-            const roomId =
-              typeof booking.room === "string"
-                ? parseInt(booking.room)
-                : booking.room;
-            const roomResponse = await api.get(`/rooms/${roomId}/`);
-            if (roomResponse.data) {
-              roomName = roomResponse.data.name || "Unknown Room";
-              buildingName = roomResponse.data.building_name || "";
-              roomCapacity = roomResponse.data.capacity || 0;
-            }
-          } catch (err) {
-            console.error(
-              `Failed to fetch room details for room ID: ${booking.room}`,
-              err
-            );
-          }
-        }
-      }
-
-      // Enhanced user information fetching
-      let userName = "Unknown User";
-      let firstName = "";
-      let lastName = "";
-      let userEmail = "";
-
-      if (booking.user) {
-        // If user is already an object with needed properties
-        if (typeof booking.user === "object" && booking.user.first_name) {
-          firstName = booking.user.first_name || "";
-          lastName = booking.user.last_name || "";
-          userEmail = booking.user.email || "";
-          userName =
-            firstName ||
-            (lastName
-              ? `${firstName} ${lastName}`
-              : userEmail || "Unknown User");
-        } else {
-          // Fetch user details from API
-          try {
-            const userId =
-              typeof booking.user === "object" ? booking.user.id : booking.user;
-
-            // Make sure we have a valid user ID
-            if (userId) {
-              // Make API call to get user details
-              const userResponse = await api.get(
-                `/api/accounts/users/${userId}/`
-              );
-
-              if (userResponse.data) {
-                firstName = userResponse.data.first_name || "";
-                lastName = userResponse.data.last_name || "";
-                userEmail = userResponse.data.email || "";
-
-                // Set user display name prioritizing first name
-                userName =
-                  firstName ||
-                  (lastName
-                    ? `${firstName} ${lastName}`
-                    : userEmail || `User ${userId}`);
-              }
-            }
-          } catch (err) {
-            console.error(
-              `Failed to fetch user details for ID: ${booking.user}`,
-              err
-            );
-            // Keep the fallback "User X" format if API call fails
-            const userId =
-              typeof booking.user === "object" ? booking.user.id : booking.user;
-            userName = `User ${userId}`;
-          }
-        }
-      }
+      // Get user information from enhanced booking data if available
+      const userName =
+        booking.user_first_name || booking.user_last_name
+          ? `${booking.user_first_name || ""} ${
+              booking.user_last_name || ""
+            }`.trim()
+          : booking.user_email || `User ${booking.user}`;
 
       // Create processed booking with correct structure
       processedBookings.push({
         id: booking.id,
         room: roomName,
-        roomId: booking.room_id || booking.room || "",
-        building: buildingName || booking.building || "",
-        capacity: roomCapacity || booking.capacity || 0,
+        roomId: booking.room,
+        building: buildingName,
+        capacity: roomCapacity,
         date: formattedDate,
         slot: formattedTimeSlot,
-        start_time: originalStartTime, // Add original ISO format start time
-        end_time: originalEndTime, // Add original ISO format end time
+        start_time: originalStartTime,
+        end_time: originalEndTime,
         status: booking.status,
         purpose: booking.purpose || "",
-        participants: booking.participants || 0, // Ensure participants field is available
-        attendees: booking.participants || 0, // Add a clear field name for attendees
+        participants: booking.participants || 0,
+        attendees: booking.participants || 0,
         user: userName,
-        userFirstName: firstName,
-        userLastName: lastName,
-        userEmail: userEmail,
-        userId:
-          typeof booking.user === "object" ? booking.user.id : booking.user,
+        userFirstName: booking.user_first_name || "",
+        userLastName: booking.user_last_name || "",
+        userEmail: booking.user_email || "",
+        userId: booking.user,
+        floorId: booking.room_floor_id,
+        departmentIds: booking.room_department_ids,
         original: booking, // Keep original data in case we need it
       });
     }
 
     return processedBookings;
   };
-
-  // Fetch bookings data
-  useEffect(() => {
-    const fetchBookings = async () => {
-      try {
-        setLoading(true);
-
-        // Get all bookings from a single endpoint
-        const response = await api.get("/bookings/?all=true");
-
-        const allBookings = await processBookings(response.data || []);
-
-        // Split bookings into pending requests and approved bookings
-        const requests = allBookings.filter(
-          (booking) => booking.status.toLowerCase() === "pending"
-        );
-        const approved = allBookings.filter(
-          (booking) => booking.status.toLowerCase() === "approved"
-        );
-
-        setBookingRequests(requests);
-        setApprovedBookings(approved);
-        setError(null);
-      } catch (err) {
-        console.error("Error fetching bookings:", err);
-        setError("Failed to load bookings");
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchBookings();
-
-    // Refresh data every 2 minutes
-    const intervalId = setInterval(() => {
-      fetchBookings();
-    }, 120000);
-
-    return () => clearInterval(intervalId);
-  }, []);
 
   const handleModifyClick = (booking) => {
     setSelectedBooking(booking);
@@ -373,13 +456,40 @@ function ManageBookings() {
   };
 
   // Extract unique buildings for filter dropdown
-  const buildings = [
-    "all",
-    ...new Set([
-      ...bookingRequests.map((booking) => booking.building),
-      ...approvedBookings.map((booking) => booking.building),
-    ]),
-  ];
+  const buildings = useMemo(() => {
+    // Start with "all" option
+    let buildingOptions = ["all"];
+
+    // If user is a coordinator, only show their managed buildings
+    if (userRole === "coordinator") {
+      // Extract building names from coordinator resources
+      const managedBuildingNames = coordinatorResources.buildings.map(
+        (building) => (typeof building === "object" ? building.name : building)
+      );
+
+      // Add unique buildings from bookings that match managed buildings
+      const availableBuildings = new Set(
+        [
+          ...bookingRequests.map((booking) => booking.building),
+          ...approvedBookings.map((booking) => booking.building),
+        ].filter((building) =>
+          // Only include buildings that match a managed building name
+          managedBuildingNames.includes(building)
+        )
+      );
+
+      return [...buildingOptions, ...availableBuildings];
+    } else {
+      // For admins and superadmins, show all unique buildings
+      return [
+        ...buildingOptions,
+        ...new Set([
+          ...bookingRequests.map((booking) => booking.building),
+          ...approvedBookings.map((booking) => booking.building),
+        ]),
+      ].filter(Boolean); // Remove any undefined or empty values
+    }
+  }, [bookingRequests, approvedBookings, userRole, coordinatorResources]);
 
   // Date range options for filter
   const dateRanges = [
@@ -414,13 +524,52 @@ function ManageBookings() {
 
       const searchTermLower = searchQuery.toLowerCase();
 
+      // Basic search matching
       const matchesSearch =
         roomText.includes(searchTermLower) ||
         buildingText.includes(searchTermLower) ||
         userText.includes(searchTermLower);
 
+      // Building filter
       const matchesBuilding =
         selectedBuilding === "all" || booking.building === selectedBuilding;
+
+      // For coordinators, only show bookings for their managed resources
+      let matchesCoordinatorResources = true;
+      if (userRole === "coordinator") {
+        // Get lists of managed building names, floor IDs, and department IDs
+        const managedBuildingNames = coordinatorResources.buildings.map(
+          (building) =>
+            typeof building === "object" ? building.name : building
+        );
+        const managedFloorIds = coordinatorResources.floors.map((floor) =>
+          typeof floor === "object" ? floor.id : floor
+        );
+        const managedDepartmentIds = coordinatorResources.departments.map(
+          (dept) => (typeof dept === "object" ? dept.id : dept)
+        );
+
+        // A booking matches if it belongs to a managed building, floor, or department
+        const bookingBuilding = booking.building;
+        const bookingFloorId = booking.original?.room?.floor || booking.floorId;
+        const bookingDepartmentIds =
+          booking.original?.room?.departments || booking.departmentIds || [];
+
+        const matchesManagedBuilding =
+          managedBuildingNames.includes(bookingBuilding);
+        const matchesManagedFloor =
+          bookingFloorId && managedFloorIds.includes(bookingFloorId);
+        const matchesManagedDepartment =
+          Array.isArray(bookingDepartmentIds) &&
+          bookingDepartmentIds.some((deptId) =>
+            managedDepartmentIds.includes(deptId)
+          );
+
+        matchesCoordinatorResources =
+          matchesManagedBuilding ||
+          matchesManagedFloor ||
+          matchesManagedDepartment;
+      }
 
       // Date filtering
       let matchesDate = true;
@@ -444,7 +593,13 @@ function ManageBookings() {
         selectedStatus === "all" ||
         booking.status?.toLowerCase() === selectedStatus;
 
-      return matchesSearch && matchesBuilding && matchesDate && matchesStatus;
+      return (
+        matchesSearch &&
+        matchesBuilding &&
+        matchesDate &&
+        matchesStatus &&
+        matchesCoordinatorResources
+      );
     });
   };
 
@@ -486,6 +641,106 @@ function ManageBookings() {
             </button>
           </div>
         </div>
+
+        {/* Coordinator info banner */}
+        {userRole === "coordinator" && (
+          <div className="mb-6 p-4 bg-blue-900/30 border border-blue-700 rounded-lg">
+            <div className="flex items-start text-blue-200">
+              <AlertCircle className="h-5 w-5 mr-2 mt-0.5 flex-shrink-0" />
+              <div>
+                <p className="font-medium">Coordinator View</p>
+                <p className="text-sm">
+                  You're viewing bookings for your assigned floors and
+                  departments only.
+                </p>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-x-4 gap-y-1 mt-2 text-sm">
+                  <div>
+                    <span className="font-medium">Managed Buildings:</span>{" "}
+                    {coordinatorResources.buildings &&
+                    coordinatorResources.buildings.length > 0
+                      ? coordinatorResources.buildings
+                          .filter(
+                            (b) => b && (typeof b === "object" ? b.name : b)
+                          )
+                          .map((b) => {
+                            if (typeof b === "object") {
+                              return b.name || `Building ${b.id}`;
+                            } else if (typeof b === "number") {
+                              // If it's just a number ID, try to find the corresponding building object
+                              const buildingObj = coordinatorResources.floors
+                                .filter(
+                                  (f) =>
+                                    f &&
+                                    typeof f === "object" &&
+                                    f.building_id === b
+                                )
+                                .map((f) => f.building_name)[0];
+                              return buildingObj || `Building ${b}`;
+                            }
+                            return String(b);
+                          })
+                          .filter(Boolean) // Remove any undefined/null values
+                          .join(", ")
+                      : "None"}
+                  </div>
+                  <div>
+                    <span className="font-medium">Managed Floors:</span>{" "}
+                    {/* Only show specifically managed floors with proper names */}
+                    {coordinatorResources.floors &&
+                    coordinatorResources.floors.length > 0
+                      ? [
+                          ...new Set(
+                            coordinatorResources.floors
+                              .filter(
+                                (f) =>
+                                  f &&
+                                  (typeof f === "object"
+                                    ? f.id || f.number || f.name
+                                    : f)
+                              )
+                              .map((f) => {
+                                if (typeof f === "object") {
+                                  // Format floor as "Floor X" or use the floor name if available
+                                  const floorName = f.name
+                                    ? f.name
+                                    : `Floor ${f.number}`;
+                                  return floorName;
+                                }
+                                return f;
+                              })
+                          ),
+                        ]
+                          .sort()
+                          .join(", ")
+                      : "None"}
+                  </div>
+                  <div className="md:col-span-2">
+                    <span className="font-medium">Managed Departments:</span>{" "}
+                    {/* Show department names and codes instead of IDs */}
+                    {coordinatorResources.departments &&
+                    coordinatorResources.departments.length > 0
+                      ? coordinatorResources.departments
+                          .filter((d) => d && typeof d === "object")
+                          .map((d) => {
+                            if (typeof d === "object") {
+                              // Return department name with code if available
+                              return (
+                                d.name ||
+                                (d.code
+                                  ? `${d.code} Department`
+                                  : `Department ${d.id}`)
+                              );
+                            }
+                            return `Department ${d}`; // Fallback for non-object values
+                          })
+                          .join(", ")
+                      : "None"}
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Search and Filters */}
         <div className="space-y-4 mb-8">

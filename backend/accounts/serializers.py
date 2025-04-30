@@ -7,7 +7,7 @@ from django.contrib.auth import authenticate
 from django.contrib.auth.models import Group
 from rest_framework import serializers
 
-from rooms.models import Department, Floor
+from rooms.models import Department, Floor, Building
 
 from .models import CustomUser
 
@@ -20,6 +20,11 @@ class GroupSerializer(serializers.ModelSerializer):
 
 class CustomUserSerializer(serializers.ModelSerializer):
     groups = GroupSerializer(many=True, read_only=True)
+    managed_buildings = serializers.PrimaryKeyRelatedField(
+        many=True,
+        queryset=Building.objects.all(),
+        required=False,
+    )
     managed_floors = serializers.PrimaryKeyRelatedField(
         many=True,
         queryset=Floor.objects.all(),
@@ -40,6 +45,7 @@ class CustomUserSerializer(serializers.ModelSerializer):
             "last_name",
             "is_active",
             "is_staff",
+            "managed_buildings",
             "managed_floors",
             "managed_departments",
             "groups",

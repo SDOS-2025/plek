@@ -14,10 +14,10 @@ logger = logging.getLogger(__name__)
 @receiver(post_save, sender=CustomUser)
 def assign_default_group(sender, instance, created, **kwargs):
     """
-    Assign newly created users to the 'User' group automatically.
-    This ensures all users have basic permissions from the start.
+    Assign newly created users to the 'User' group automatically,
+    unless they are superusers (who should be in the 'SuperAdmin' group).
     """
-    if created:
+    if created and not instance.is_superuser:
         try:
             user_group = Group.objects.get(name="User")
             instance.groups.add(user_group)

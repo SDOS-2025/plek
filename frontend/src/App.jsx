@@ -15,6 +15,7 @@ import AdminLogin from "./pages/admin/AdminLogin";
 import DashboardAdmin from "./pages/admin/DashboardAdmin";
 import ManageBookings from "./pages/admin/ManageBookings";
 import ManageRooms from "./pages/admin/ManageRooms";
+import ManageUsers from "./pages/admin/ManageUsers";
 import Analytics from "./pages/admin/Analytics";
 import AdminManageConfig from "./pages/admin/AdminManageConfig";
 
@@ -38,6 +39,7 @@ function App() {
         <Route path="/admin/dashboard" element={<DashboardAdmin />} />
         <Route path="/admin/manage-bookings" element={<ManageBookings />} />
         <Route path="/admin/manage-rooms" element={<ManageRooms />} />
+        <Route path="/admin/manage-users" element={<ManageUsers />} />
         <Route path="/admin/manage-config" element={<AdminManageConfig />} />
         <Route path="/admin/analytics" element={<Analytics />} />
       </Route>

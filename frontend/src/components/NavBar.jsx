@@ -84,6 +84,11 @@ const NavBar = ({ activePage }) => {
     },
     { name: "Manage Rooms", path: "/admin/manage-rooms", id: "manage-rooms" },
     {
+      name: "Manage Users",
+      path: "/admin/manage-users",
+      id: "manage-users",
+    },
+    {
       name: "Configuration",
       path: "/admin/manage-config",
       id: "manage-config",
