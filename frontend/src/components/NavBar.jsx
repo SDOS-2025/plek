@@ -3,6 +3,7 @@ import { Link, useNavigate, useLocation } from "react-router-dom";
 import { AuthContext } from "../context/AuthProvider";
 import { Menu, X, Shield } from "lucide-react";
 import ProfileMenu from "./ProfileMenu";
+import api from "../api"; // Import the API module
 
 const NavBar = ({ activePage }) => {
   const { user } = useContext(AuthContext);
@@ -13,6 +14,8 @@ const NavBar = ({ activePage }) => {
     "User";
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
+  const [userRole, setUserRole] = useState(null); // State to store user role details
+  const [isCoordinator, setIsCoordinator] = useState(false); // State to track if user is a coordinator
   const location = useLocation();
   const path = location.pathname;
 
@@ -21,6 +24,34 @@ const NavBar = ({ activePage }) => {
 
   // Set active page from prop or derive from path
   const currentPage = activePage || currentPageFromPath || "";
+
+  // Fetch user profile for role detection
+  useEffect(() => {
+    const fetchUserProfile = async () => {
+      if (!user) return;
+      
+      try {
+        const response = await api.get("/api/accounts/profile/");
+        const profileData = response.data;
+        setUserRole(profileData);
+        
+        // Determine if user is a coordinator based on profile data
+        const groups = profileData.groups || [];
+        const isCoordinatorRole = groups.some(group => 
+          typeof group === 'string' 
+            ? group.toLowerCase() === 'coordinator'
+            : group.name?.toLowerCase() === 'coordinator'
+        );
+        
+        setIsCoordinator(isCoordinatorRole);
+        console.log("Profile data fetched:", profileData, "Is Coordinator:", isCoordinatorRole);
+      } catch (err) {
+        console.error("Error fetching user profile:", err);
+      }
+    };
+    
+    fetchUserProfile();
+  }, [user]);
 
   // Check if the user is an admin - improved detection with multiple approaches
   console.log("User object in NavBar:", user);
@@ -39,12 +70,14 @@ const NavBar = ({ activePage }) => {
 
   // Use either method to determine admin status
   const isAdmin = isAdminByProps || isAdminByPath || false;
-
+  
   console.log(
     "Admin detection - By props:",
     isAdminByProps,
     "By path:",
     isAdminByPath,
+    "Is Coordinator from profile:",
+    isCoordinator,
     "Final decision:",
     isAdmin
   );
@@ -82,22 +115,32 @@ const NavBar = ({ activePage }) => {
       path: "/admin/manage-bookings",
       id: "manage-bookings",
     },
-    { name: "Manage Rooms", path: "/admin/manage-rooms", id: "manage-rooms" },
+    { name: "Manage Rooms", path: "/admin/manage-rooms", id: "manage-rooms", showFor: ["admin", "superadmin"] },
     {
       name: "Manage Users",
       path: "/admin/manage-users",
       id: "manage-users",
+      showFor: ["admin", "superadmin"],
     },
     {
       name: "Configuration",
       path: "/admin/manage-config",
       id: "manage-config",
+      showFor: ["admin", "superadmin"],
     },
     { name: "Analytics", path: "/admin/analytics", id: "analytics" },
   ];
 
   // Select the appropriate navigation links based on user role
-  const navLinks = isAdmin ? adminNavLinks : userNavLinks;
+  let navLinks = isAdmin ? adminNavLinks : userNavLinks;
+  
+  // Filter admin links for coordinators - using the state from profile data
+  if (isAdmin && isCoordinator) {
+    navLinks = adminNavLinks.filter(link => 
+      !link.showFor || // If showFor is not defined, show to everyone
+      link.showFor.includes('coordinator') // If showFor includes coordinator, show it
+    );
+  }
 
   // Determine the dashboard link based on user role
   const dashboardLink = isAdmin ? "/admin/dashboard" : "/dashboard";

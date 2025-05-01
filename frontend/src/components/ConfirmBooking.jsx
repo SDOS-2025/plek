@@ -113,6 +113,10 @@ const BookingModal = ({ room, onClose }) => {
         .setZone("Asia/Kolkata")
         .toISODate();
 
+      // Get current date and time in IST
+      const now = DateTime.now().setZone("Asia/Kolkata");
+      const isToday = now.toISODate() === formattedDate;
+
       // API call to get bookings for this room on the selected date
       const response = await api.get(
         `/rooms/${room.id}/?date=${formattedDate}`
@@ -122,7 +126,7 @@ const BookingModal = ({ room, onClose }) => {
       const bookings = response.data.bookings || [];
       console.log("Received bookings:", bookings);
 
-      // Filter to only include APPROVED bookings - this is the key fix
+      // Filter to only include APPROVED bookings
       const approvedBookings = bookings.filter(
         (booking) =>
           booking.status === "APPROVED" || booking.status === "approved"
@@ -184,7 +188,7 @@ const BookingModal = ({ room, onClose }) => {
         };
 
         const timeRange = parseTimeSlot(time);
-        if (!timeRange) return { time, isBooked: false };
+        if (!timeRange) return { time, isBooked: false, isPast: false };
 
         // Check if this time slot overlaps with any booked time range
         const isBooked = bookedTimeRanges.some((bookedRange) => {
@@ -207,11 +211,43 @@ const BookingModal = ({ room, onClose }) => {
           return overlaps;
         });
 
+        // Check if time slot is in the past (only for today)
+        let isPast = false;
+        if (isToday) {
+          const slotStartTime = now.set({
+            hour: timeRange.startHour,
+            minute: timeRange.startMinute,
+          });
+          isPast = slotStartTime <= now;
+        }
+
         return {
           time,
           isBooked,
+          isPast,
         };
       });
+
+      // Check if all slots for today are either booked or in the past
+      const allSlotsUnavailable = slotsWithStatus.every(
+        (slot) => slot.isBooked || slot.isPast
+      );
+
+      if (isToday && allSlotsUnavailable) {
+        // Find the next available date
+        const nextAvailableDate = findNextAvailableDate(selectedDate);
+        if (nextAvailableDate) {
+          setDate(nextAvailableDate);
+          // Show message that we're showing the next available day
+          setAlert({
+            show: true,
+            type: "info",
+            message: "No available slots for today. Showing the next available day.",
+          });
+          // fetchAvailableTimeSlots will be called again due to the date change effect
+          return;
+        }
+      }
 
       setAvailableTimeSlots(slotsWithStatus);
     } catch (error) {
@@ -229,12 +265,21 @@ const BookingModal = ({ room, onClose }) => {
         "2:00 PM - 3:00 PM",
         "3:00 PM - 4:00 PM",
         "4:00 PM - 5:00 PM",
-      ].map((time) => ({ time, isBooked: false }));
+      ].map((time) => ({ time, isBooked: false, isPast: false }));
 
       setAvailableTimeSlots(defaultSlots);
     } finally {
       setLoadingTimeSlots(false);
     }
+  };
+
+  // Function to find the next available date 
+  const findNextAvailableDate = (currentDate) => {
+    const now = DateTime.now().setZone("Asia/Kolkata");
+    const currentDateTime = DateTime.fromISO(currentDate).setZone("Asia/Kolkata");
+    
+    // Return the next day
+    return currentDateTime.plus({ days: 1 }).toISODate();
   };
 
   // Fetch available slots when component mounts and when date changes

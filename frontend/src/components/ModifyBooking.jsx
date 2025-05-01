@@ -78,6 +78,7 @@ const ModifyBookingModal = ({ booking, onClose, onCancel }) => {
   const [otherUserBookings, setOtherUserBookings] = useState([]);
   const [sameUserBookings, setSameUserBookings] = useState([]);
   const [currentUserId, setCurrentUserId] = useState(null);
+  const [userRole, setUserRole] = useState(null); // State to track the user's role
 
   const generateDates = () => {
     const dates = [];
@@ -122,6 +123,7 @@ const ModifyBookingModal = ({ booking, onClose, onCancel }) => {
         setSelectedTimeSlots([]);
       }
 
+      // Standard list of all possible time slots
       const allTimeSlots = [
         "9:00 AM - 10:00 AM",
         "10:00 AM - 11:00 AM",
@@ -132,6 +134,10 @@ const ModifyBookingModal = ({ booking, onClose, onCancel }) => {
         "3:00 PM - 4:00 PM",
         "4:00 PM - 5:00 PM",
       ];
+
+      // Get current date and time in IST
+      const now = DateTime.now().setZone("Asia/Kolkata");
+      const isToday = now.toISODate() === selectedDate;
 
       const formattedDate = DateTime.fromISO(selectedDate).toISODate();
       let roomId = null;
@@ -302,11 +308,27 @@ const ModifyBookingModal = ({ booking, onClose, onCancel }) => {
             )
         );
 
+        // Check if time slot is in the past (only for today)
+        let isPast = false;
+        if (isToday) {
+          // Parse start time of the slot to compare with current time
+          const parsedTime = parseTimeStr(startStr);
+          if (parsedTime) {
+            const slotDateTime = now.set({ 
+              hour: parsedTime.hours, 
+              minute: parsedTime.minutes, 
+              second: 0 
+            });
+            isPast = slotDateTime <= now;
+          }
+        }
+
         return {
           time: timeSlot,
           isCurrentBooking,
           isSameUserBooking: overlapsWithSameUser,
           isOtherUserBooking: overlapsWithOthers,
+          isPast,
           isBooked:
             (overlapsWithSameUser || overlapsWithOthers) && !isCurrentBooking,
           bookedBy: overlappingBooking ? overlappingBooking.userEmail : null,
@@ -314,6 +336,27 @@ const ModifyBookingModal = ({ booking, onClose, onCancel }) => {
           userId: overlappingBooking ? overlappingBooking.userId : null,
         };
       });
+
+      // Check if all slots for today are either booked, part of another booking, or in the past
+      const allSlotsUnavailable = slotsWithStatus.every(
+        (slot) => slot.isBooked || slot.isPast || (slot.isCurrentBooking && !selectedTimeSlots.includes(slot.time))
+      );
+
+      if (isToday && allSlotsUnavailable) {
+        // Find the next available date
+        const nextAvailableDate = findNextAvailableDate(selectedDate);
+        if (nextAvailableDate) {
+          setDate(nextAvailableDate);
+          // Show message that we're showing the next available day
+          setAlert({
+            show: true,
+            type: "info",
+            message: "No available slots for today. Showing the next available day.",
+          });
+          // fetchAvailableTimeSlots will be called again due to the date change effect
+          return;
+        }
+      }
 
       setAvailableTimeSlots(slotsWithStatus);
 
@@ -334,11 +377,74 @@ const ModifyBookingModal = ({ booking, onClose, onCancel }) => {
     }
   };
 
+  // Helper function to parse time string like "9:00 AM" into hours and minutes
+  const parseTimeStr = (timeStr) => {
+    const match = timeStr.match(/(\d+):(\d+)\s*(AM|PM)/i);
+    if (!match) return null;
+    
+    let hours = parseInt(match[1]);
+    const minutes = parseInt(match[2]);
+    const period = match[3].toUpperCase();
+    
+    // Convert to 24-hour format
+    if (period === "PM" && hours !== 12) hours += 12;
+    if (period === "AM" && hours === 12) hours = 0;
+    
+    return { hours, minutes };
+  };
+  
+  // Function to find the next available date
+  const findNextAvailableDate = (currentDate) => {
+    const currentDateTime = DateTime.fromISO(currentDate).setZone("Asia/Kolkata");
+    // Return the next day
+    return currentDateTime.plus({ days: 1 }).toISODate();
+  };
+
   useEffect(() => {
     if (date) {
       fetchAvailableTimeSlots(date);
     }
   }, [date, booking.id]);
+
+  // Fetch user role to determine if booking edits should be auto-approved
+  useEffect(() => {
+    const fetchUserRole = async () => {
+      try {
+        const response = await api.get("/api/accounts/profile/");
+        if (response.status === 200) {
+          const profileData = response.data;
+          
+          // Check if user is admin, superadmin, or coordinator
+          const groups = profileData.groups || [];
+          const groupNames = groups.map(group => 
+            typeof group === 'string' ? group.toLowerCase() : group.name?.toLowerCase()
+          );
+          
+          const isAdmin = profileData.is_superuser || 
+            groupNames.includes('superadmin') || 
+            groupNames.includes('admin') ||
+            groupNames.includes('coordinator');
+            
+          setUserRole({ 
+            isAdmin,
+            isCoordinator: groupNames.includes('coordinator'),
+            isSuperAdmin: profileData.is_superuser || groupNames.includes('superadmin'),
+            groupNames
+          });
+          
+          console.log("User role fetched:", { 
+            isAdmin, 
+            groups: groupNames,
+            isSuperUser: profileData.is_superuser
+          });
+        }
+      } catch (error) {
+        console.error("Error fetching user role:", error);
+      }
+    };
+    
+    fetchUserRole();
+  }, []);
 
   const toggleDatePicker = () => {
     setShowDatePicker(!showDatePicker);
@@ -509,8 +615,24 @@ const ModifyBookingModal = ({ booking, onClose, onCancel }) => {
         throw new Error("Could not identify the room for this booking");
       }
 
-      // Check if the time slot has changed, which requires re-approval
+      // Check if the time slot has changed, which requires re-approval for normal users
       const timeHasChanged = combinedTimeSlot !== originalTimeSlot;
+      
+      // Check if the user is an admin/coordinator (can auto-approve)
+      const isPrivilegedUser = userRole?.isCoordinator || 
+                              userRole?.isSuperAdmin || 
+                              (userRole?.groupNames || []).includes('admin');
+      
+      // For coordinators, admins, or superadmins, we keep status as APPROVED
+      // For regular users, booking needs re-approval if time changes
+      const needsReapproval = timeHasChanged && !isPrivilegedUser;
+      
+      console.log("Booking modification:", {
+        timeHasChanged,
+        isPrivilegedUser,
+        needsReapproval,
+        userRole
+      });
 
       // Get the proper booking ID (ensure it's a number)
       let bookingId = parseInt(booking.id);
@@ -527,8 +649,15 @@ const ModifyBookingModal = ({ booking, onClose, onCancel }) => {
         purpose: purpose.trim(),
         participants: attendees.toString(),
         notes: notes,
-        ...(timeHasChanged && { status: "PENDING" }), // Reset status to PENDING if time changed
       };
+      
+      // Only add status=PENDING if the user is not privileged and time has changed
+      if (needsReapproval) {
+        bookingUpdate.status = "PENDING";
+      } else if (isPrivilegedUser) {
+        // Explicitly set to APPROVED for privileged users
+        bookingUpdate.status = "APPROVED";
+      }
 
       console.log("Updating booking with data:", bookingUpdate);
 
@@ -547,15 +676,14 @@ const ModifyBookingModal = ({ booking, onClose, onCancel }) => {
         setAlert({
           show: true,
           type: "success",
-          message: timeHasChanged
+          message: needsReapproval
             ? "Booking updated successfully! Your booking will require re-approval."
             : "Booking details updated successfully!",
         });
 
-        // Close modal and refresh the page after a short delay
+        // Close modal after a short delay without page reload
         setTimeout(() => {
-          onClose();
-          window.location.reload();
+          onClose(response.data); // Pass the updated booking data to parent component
         }, 2000);
       } else {
         setAlert({

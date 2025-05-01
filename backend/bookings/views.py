@@ -63,12 +63,21 @@ class BookingManageView(APIView):
         ):
             is_significant_change = True
 
+        # Check if the user is a coordinator, admin, or superadmin (privileged user)
+        user_groups = [group.name.lower() for group in request.user.groups.all()]
+        is_privileged_user = (
+            request.user.is_superuser
+            or "admin" in user_groups
+            or "superadmin" in user_groups
+            or "coordinator" in user_groups
+        )
+
         serializer = BookingSerializer(booking, data=request.data, partial=True)
         if serializer.is_valid():
             updated_booking = serializer.save()
 
-            # Reset status to PENDING if it was a significant change and not already cancelled/rejected
-            if is_significant_change and updated_booking.status not in [
+            # Only reset to PENDING if user is not privileged and made significant changes
+            if is_significant_change and not is_privileged_user and updated_booking.status not in [
                 Booking.CANCELLED,
                 Booking.REJECTED,
             ]:
@@ -79,6 +88,13 @@ class BookingManageView(APIView):
                     f"Booking {booking_id} modified by user {request.user.email} - Status reset to PENDING"
                 )
             else:
+                # For privileged users or non-significant changes, respect the status from the request
+                if "status" in request.data and is_privileged_user:
+                    # If status was explicitly included in the request and user is privileged
+                    logger.info(
+                        f"Booking {booking_id} modified by privileged user {request.user.email} - Status kept as {updated_booking.status}"
+                    )
+                
                 # Log details about modified purpose and participants if they were updated
                 update_details = []
                 if "purpose" in request.data:

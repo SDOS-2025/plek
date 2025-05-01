@@ -610,6 +610,99 @@ function ManageBookings() {
   const currentData =
     activeTab === "requests" ? filteredRequests : filteredBookings;
 
+  const fetchBookingsForTab = async (tab) => {
+    setLoading(true);
+    try {
+      if (userRole === "coordinator") {
+        // For coordinators, fetch their specific bookings
+        const response = await api.get("/bookings/floor-dept/");
+        const bookingsData = response.data.bookings || [];
+        const processedBookings = await processBookings(bookingsData);
+        
+        // Current date for comparing to find past bookings
+        const now = DateTime.now();
+        
+        // Filter bookings based on the selected tab
+        if (tab === "requests") {
+          const requests = processedBookings.filter(
+            booking => booking.status.toLowerCase() === "pending"
+          );
+          setBookingRequests(requests);
+        } else if (tab === "bookings") {
+          // Get current approved bookings
+          const approved = processedBookings.filter(booking => {
+            const bookingDateTime = DateTime.fromISO(booking.end_time);
+            return booking.status.toLowerCase() === "approved" && bookingDateTime > now;
+          });
+          setApprovedBookings(approved);
+        } else if (tab === "past") {
+          // Get past bookings (completed, rejected, or cancelled)
+          const pastBookings = processedBookings.filter(booking => {
+            const bookingDateTime = DateTime.fromISO(booking.end_time);
+            return bookingDateTime < now || 
+                   booking.status.toLowerCase() === "rejected" || 
+                   booking.status.toLowerCase() === "cancelled";
+          });
+          
+          // Sort past bookings by date (most recent first)
+          pastBookings.sort((a, b) => {
+            const dateA = DateTime.fromISO(a.end_time);
+            const dateB = DateTime.fromISO(b.end_time);
+            return dateB - dateA;
+          });
+          
+          setApprovedBookings(pastBookings);
+        }
+      } else {
+        // For admins and superadmins, fetch all bookings
+        const response = await api.get("/bookings/all/");
+        const bookingsData = response.data || [];
+        const processedBookings = await processBookings(bookingsData);
+        
+        // Current date for comparing to find past bookings
+        const now = DateTime.now();
+        
+        // Filter bookings based on the selected tab
+        if (tab === "requests") {
+          const requests = processedBookings.filter(
+            booking => booking.status.toLowerCase() === "pending"
+          );
+          setBookingRequests(requests);
+        } else if (tab === "bookings") {
+          // Get current approved bookings
+          const approved = processedBookings.filter(booking => {
+            const bookingDateTime = DateTime.fromISO(booking.end_time);
+            return booking.status.toLowerCase() === "approved" && bookingDateTime > now;
+          });
+          setApprovedBookings(approved);
+        } else if (tab === "past") {
+          // Get past bookings (completed, rejected, or cancelled)
+          const pastBookings = processedBookings.filter(booking => {
+            const bookingDateTime = DateTime.fromISO(booking.end_time);
+            return bookingDateTime < now || 
+                   booking.status.toLowerCase() === "rejected" || 
+                   booking.status.toLowerCase() === "cancelled";
+          });
+          
+          // Sort past bookings by date (most recent first)
+          pastBookings.sort((a, b) => {
+            const dateA = DateTime.fromISO(a.end_time);
+            const dateB = DateTime.fromISO(b.end_time);
+            return dateB - dateA;
+          });
+          
+          setApprovedBookings(pastBookings);
+        }
+      }
+      setError(null);
+    } catch (error) {
+      console.error(`Error fetching ${tab} bookings:`, error);
+      setError(`Failed to load ${tab} bookings. Please try again.`);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <div className="page-container">
       <NavBar activePage="manage-bookings" />
@@ -625,7 +718,10 @@ function ManageBookings() {
                   ? "bg-plek-purple text-white"
                   : "bg-gray-700 text-gray-300 hover:bg-gray-600"
               }`}
-              onClick={() => setActiveTab("requests")}
+              onClick={() => {
+                setActiveTab("requests");
+                fetchBookingsForTab("requests");
+              }}
             >
               Pending Requests
             </button>
@@ -635,9 +731,25 @@ function ManageBookings() {
                   ? "bg-plek-purple text-white"
                   : "bg-gray-700 text-gray-300 hover:bg-gray-600"
               }`}
-              onClick={() => setActiveTab("bookings")}
+              onClick={() => {
+                setActiveTab("bookings");
+                fetchBookingsForTab("bookings");
+              }}
             >
               Approved Bookings
+            </button>
+            <button
+              className={`px-4 py-2 rounded-lg transition-colors ${
+                activeTab === "past"
+                  ? "bg-plek-purple text-white"
+                  : "bg-gray-700 text-gray-300 hover:bg-gray-600"
+              }`}
+              onClick={() => {
+                setActiveTab("past");
+                fetchBookingsForTab("past");
+              }}
+            >
+              Past Bookings
             </button>
           </div>
         </div>

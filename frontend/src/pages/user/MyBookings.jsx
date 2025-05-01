@@ -36,146 +36,147 @@ function MyBookings() {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [bookingToDelete, setBookingToDelete] = useState(null);
 
-  // Fetch bookings when component mounts
-  useEffect(() => {
-    const fetchBookings = async () => {
-      try {
-        setLoading(true);
+  // Fetch bookings function to be called when tabs are clicked
+  const fetchBookings = async (tabName) => {
+    try {
+      setLoading(true);
 
-        // Make API call to get user's bookings
-        const response = await api.get("bookings/?all=false");
+      // Make API call to get user's bookings
+      const response = await api.get("bookings/?all=false");
 
-        // Process the response data
-        const bookings = response.data;
-        const now = DateTime.now().toJSDate(); // Use local time
+      // Process the response data
+      const bookings = response.data;
+      const now = DateTime.now().toJSDate(); // Use local time
 
-        // Split bookings into upcoming and previous
-        const upcoming = [];
-        const previous = [];
+      // Split bookings into upcoming and previous
+      const upcoming = [];
+      const previous = [];
 
-        for (const booking of bookings) {
-          console.log("Booking:", booking);
+      for (const booking of bookings) {
+        console.log("Booking:", booking);
 
-          // Parse the start_time from the API response - use local time
-          const startTime = DateTime.fromISO(booking.start_time);
-          const endTime = DateTime.fromISO(booking.end_time);
+        // Parse the start_time from the API response - use local time
+        const startTime = DateTime.fromISO(booking.start_time);
+        const endTime = DateTime.fromISO(booking.end_time);
 
-          // Format date and time for display
-          const formattedDate = startTime.toFormat("LLLL d, yyyy");
-          const formattedTimeSlot = `${startTime.toFormat(
-            "h a"
-          )} - ${endTime.toFormat("h a")}`;
+        // Format date and time for display
+        const formattedDate = startTime.toFormat("LLLL d, yyyy");
+        const formattedTimeSlot = `${startTime.toFormat(
+          "h a"
+        )} - ${endTime.toFormat("h a")}`;
 
-          // Extract room data - handle both object and ID cases
-          let roomName = "Unknown Room";
-          let buildingName = "Unknown Building";
-          let roomCapacity = 0;
+        // Extract room data - handle both object and ID cases
+        let roomName = "Unknown Room";
+        let buildingName = "Unknown Building";
+        let roomCapacity = 0;
 
-          if (booking.room) {
-            if (typeof booking.room === "object") {
-              // If room is already an object, extract data directly
-              roomName = booking.room.name || "Unknown Room";
-              buildingName = booking.room.building_name || "Unknown Building";
-              roomCapacity = booking.room.capacity || 0;
-            } else {
-              // If room is just an ID, fetch the room details from API
-              try {
-                const roomId =
-                  typeof booking.room === "string"
-                    ? parseInt(booking.room)
-                    : booking.room;
-                const roomResponse = await api.get(`/rooms/${roomId}/`);
-
-                if (roomResponse.data) {
-                  roomName = roomResponse.data.name || "Unknown Room";
-                  buildingName =
-                    roomResponse.data.building_name || "Unknown Building";
-                  roomCapacity = roomResponse.data.capacity || 0;
-                }
-              } catch (err) {
-                console.error(
-                  `Failed to fetch room details for room ID: ${booking.room}`,
-                  err
-                );
-              }
-            }
-          }
-
-          // Create a processed booking object with the required fields
-          const processedBooking = {
-            id: booking.id,
-            roomName: roomName,
-            building: buildingName,
-            capacity: roomCapacity,
-            status: booking.status,
-            purpose: booking.purpose,
-            participants: booking.participants,
-            date: formattedDate,
-            slot: formattedTimeSlot,
-            startTime: startTime,
-            endTime: endTime,
-            amenities: booking.room?.amenities || [],
-            originalBooking: booking, // Keep the original data for reference if needed
-          };
-
-          // Put cancelled or rejected bookings in previous, regardless of date
-          if (
-            booking.status.toLowerCase() === "cancelled" ||
-            booking.status.toLowerCase() === "rejected"
-          ) {
-            previous.push(processedBooking);
-          }
-          // For non-cancelled/non-rejected bookings, use date to categorize
-          else if (startTime.toJSDate() > now) {
-            upcoming.push(processedBooking);
+        if (booking.room) {
+          if (typeof booking.room === "object") {
+            // If room is already an object, extract data directly
+            roomName = booking.room.name || "Unknown Room";
+            buildingName = booking.room.building_name || "Unknown Building";
+            roomCapacity = booking.room.capacity || 0;
           } else {
-            previous.push(processedBooking); // FIXED: Push the processed booking, not the original
+            // If room is just an ID, fetch the room details from API
+            try {
+              const roomId =
+                typeof booking.room === "string"
+                  ? parseInt(booking.room)
+                  : booking.room;
+              const roomResponse = await api.get(`/rooms/${roomId}/`);
+
+              if (roomResponse.data) {
+                roomName = roomResponse.data.name || "Unknown Room";
+                buildingName =
+                  roomResponse.data.building_name || "Unknown Building";
+                roomCapacity = roomResponse.data.capacity || 0;
+              }
+            } catch (err) {
+              console.error(
+                `Failed to fetch room details for room ID: ${booking.room}`,
+                err
+              );
+            }
           }
         }
 
-        // Sort upcoming bookings by date (closest first)
-        upcoming.sort((a, b) => {
-          const dateA = DateTime.fromFormat(
-            `${a.date} ${a.slot.split(" - ")[0]}`,
-            "d MMMM yyyy h a"
-          );
+        // Create a processed booking object with the required fields
+        const processedBooking = {
+          id: booking.id,
+          roomName: roomName,
+          building: buildingName,
+          capacity: roomCapacity,
+          status: booking.status,
+          purpose: booking.purpose,
+          participants: booking.participants,
+          date: formattedDate,
+          slot: formattedTimeSlot,
+          startTime: startTime,
+          endTime: endTime,
+          amenities: booking.room?.amenities || [],
+          originalBooking: booking, // Keep the original data for reference if needed
+        };
 
-          const dateB = DateTime.fromFormat(
-            `${b.date} ${b.slot.split(" - ")[0]}`,
-            "d MMMM yyyy h a"
-          );
-
-          return dateA - dateB;
-        });
-
-        // Sort previous bookings by date (most recent first)
-        previous.sort((a, b) => {
-          const dateA = DateTime.fromFormat(
-            `${a.date} ${a.slot.split(" - ")[0]}`,
-            "d MMMM yyyy h a"
-          );
-
-          const dateB = DateTime.fromFormat(
-            `${b.date} ${b.slot.split(" - ")[0]}`,
-            "d MMMM yyyy h a"
-          );
-
-          return dateB - dateA;
-        });
-
-        setUpcomingBookings(upcoming);
-        setPreviousBookings(previous);
-        setError(null);
-      } catch (err) {
-        console.error("Error fetching bookings:", err);
-        setError("Failed to load your bookings. Please try again later.");
-      } finally {
-        setLoading(false);
+        // Put cancelled or rejected bookings in previous, regardless of date
+        if (
+          booking.status.toLowerCase() === "cancelled" ||
+          booking.status.toLowerCase() === "rejected"
+        ) {
+          previous.push(processedBooking);
+        }
+        // For non-cancelled/non-rejected bookings, use date to categorize
+        else if (startTime.toJSDate() > now) {
+          upcoming.push(processedBooking);
+        } else {
+          previous.push(processedBooking); // FIXED: Push the processed booking, not the original
+        }
       }
-    };
 
-    fetchBookings();
-  }, []);
+      // Sort upcoming bookings by date (closest first)
+      upcoming.sort((a, b) => {
+        const dateA = DateTime.fromFormat(
+          `${a.date} ${a.slot.split(" - ")[0]}`,
+          "LLLL d, yyyy h a"
+        );
+
+        const dateB = DateTime.fromFormat(
+          `${b.date} ${b.slot.split(" - ")[0]}`,
+          "LLLL d, yyyy h a"
+        );
+
+        return dateA - dateB;
+      });
+
+      // Sort previous bookings by date (most recent first)
+      previous.sort((a, b) => {
+        const dateA = DateTime.fromFormat(
+          `${a.date} ${a.slot.split(" - ")[0]}`,
+          "LLLL d, yyyy h a"
+        );
+
+        const dateB = DateTime.fromFormat(
+          `${b.date} ${b.slot.split(" - ")[0]}`,
+          "LLLL d, yyyy h a"
+        );
+
+        return dateB - dateA;
+      });
+
+      setUpcomingBookings(upcoming);
+      setPreviousBookings(previous);
+      setError(null);
+    } catch (err) {
+      console.error("Error fetching bookings:", err);
+      setError("Failed to load your bookings. Please try again later.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Fetch bookings when component mounts
+  useEffect(() => {
+    fetchBookings(activeTab);
+  }, [activeTab]);
 
   const handleModify = (booking) => {
     setSelectedBooking(booking);
@@ -275,7 +276,10 @@ function MyBookings() {
                     ? "bg-plek-purple text-white"
                     : "bg-gray-700 text-gray-300 hover:bg-gray-600"
                 }`}
-                onClick={() => setActiveTab("upcoming")}
+                onClick={() => {
+                  setActiveTab("upcoming");
+                  fetchBookings("upcoming");
+                }}
               >
                 Upcoming Bookings
               </button>
@@ -285,7 +289,10 @@ function MyBookings() {
                     ? "bg-plek-purple text-white"
                     : "bg-gray-700 text-gray-300 hover:bg-gray-600"
                 }`}
-                onClick={() => setActiveTab("previous")}
+                onClick={() => {
+                  setActiveTab("previous");
+                  fetchBookings("previous");
+                }}
               >
                 Previous Bookings
               </button>
