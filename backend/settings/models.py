@@ -6,7 +6,7 @@ from django.db import models
 class InstitutePolicy(models.Model):
     booking_opening_days = models.PositiveIntegerField(default=30)
     max_booking_duration_hours = models.PositiveIntegerField(default=4)
-    min_gap_between_bookings_minutes = models.PositiveIntegerField(default=15)
+    min_gap_between_bookings_minutes = models.PositiveIntegerField(default=0)
     working_hours_start = models.TimeField(default="08:00")
     working_hours_end = models.TimeField(default="19:00")
     allow_backdated_bookings = models.BooleanField(default=False)

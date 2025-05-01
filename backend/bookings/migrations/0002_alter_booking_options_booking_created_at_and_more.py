@@ -44,6 +44,11 @@ class Migration(migrations.Migration):
             name="updated_at",
             field=models.DateTimeField(auto_now=True),
         ),
+        migrations.AddField(
+            model_name="booking",
+            name="notes",
+            field=models.TextField(blank=True, null=True),
+        ),
         migrations.AlterField(
             model_name="booking",
             name="room",

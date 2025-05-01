@@ -36,6 +36,7 @@ class BookingSerializer(serializers.ModelSerializer):
             "purpose",
             "participants",
             "cancellation_reason",
+            "notes",
             "created_at",
             "updated_at",
         ]

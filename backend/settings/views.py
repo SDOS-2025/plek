@@ -3,6 +3,7 @@ import logging
 from rest_framework import status
 from rest_framework.response import Response
 from rest_framework.views import APIView
+from rest_framework.permissions import IsAuthenticated
 
 from accounts.permissions import CanManageInstitutePolicies
 
@@ -39,3 +40,18 @@ class InstitutePolicyView(APIView):
                 status=status.HTTP_201_CREATED if created else status.HTTP_200_OK,
             )
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+class PublicInstitutePolicyView(APIView):
+    """Public endpoint for reading institute policies without edit permissions"""
+    permission_classes = [IsAuthenticated]
+    
+    def get(self, request):
+        policy = InstitutePolicy.objects.first()
+        if not policy:
+            # Create the singleton if it doesn't exist yet
+            policy = InstitutePolicy.objects.create()
+            logger.info("Default institute policy created")
+
+        serializer = InstitutePolicySerializer(policy)
+        return Response(serializer.data)

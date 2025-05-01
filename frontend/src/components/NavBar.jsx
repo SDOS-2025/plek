@@ -29,27 +29,32 @@ const NavBar = ({ activePage }) => {
   useEffect(() => {
     const fetchUserProfile = async () => {
       if (!user) return;
-      
+
       try {
         const response = await api.get("/api/accounts/profile/");
         const profileData = response.data;
         setUserRole(profileData);
-        
+
         // Determine if user is a coordinator based on profile data
         const groups = profileData.groups || [];
-        const isCoordinatorRole = groups.some(group => 
-          typeof group === 'string' 
-            ? group.toLowerCase() === 'coordinator'
-            : group.name?.toLowerCase() === 'coordinator'
+        const isCoordinatorRole = groups.some((group) =>
+          typeof group === "string"
+            ? group.toLowerCase() === "coordinator"
+            : group.name?.toLowerCase() === "coordinator"
         );
-        
+
         setIsCoordinator(isCoordinatorRole);
-        console.log("Profile data fetched:", profileData, "Is Coordinator:", isCoordinatorRole);
+        console.log(
+          "Profile data fetched:",
+          profileData,
+          "Is Coordinator:",
+          isCoordinatorRole
+        );
       } catch (err) {
         console.error("Error fetching user profile:", err);
       }
     };
-    
+
     fetchUserProfile();
   }, [user]);
 
@@ -70,7 +75,7 @@ const NavBar = ({ activePage }) => {
 
   // Use either method to determine admin status
   const isAdmin = isAdminByProps || isAdminByPath || false;
-  
+
   console.log(
     "Admin detection - By props:",
     isAdminByProps,
@@ -115,7 +120,12 @@ const NavBar = ({ activePage }) => {
       path: "/admin/manage-bookings",
       id: "manage-bookings",
     },
-    { name: "Manage Rooms", path: "/admin/manage-rooms", id: "manage-rooms", showFor: ["admin", "superadmin"] },
+    {
+      name: "Manage Rooms",
+      path: "/admin/manage-rooms",
+      id: "manage-rooms",
+      showFor: ["admin", "superadmin"],
+    },
     {
       name: "Manage Users",
       path: "/admin/manage-users",
@@ -129,16 +139,23 @@ const NavBar = ({ activePage }) => {
       showFor: ["admin", "superadmin"],
     },
     { name: "Analytics", path: "/admin/analytics", id: "analytics" },
+    {
+      name: "Institute Policies",
+      path: "/admin/institute-policies",
+      id: "institute-policies",
+      showFor: ["superadmin"], // Only for SuperAdmin
+    },
   ];
 
   // Select the appropriate navigation links based on user role
   let navLinks = isAdmin ? adminNavLinks : userNavLinks;
-  
+
   // Filter admin links for coordinators - using the state from profile data
   if (isAdmin && isCoordinator) {
-    navLinks = adminNavLinks.filter(link => 
-      !link.showFor || // If showFor is not defined, show to everyone
-      link.showFor.includes('coordinator') // If showFor includes coordinator, show it
+    navLinks = adminNavLinks.filter(
+      (link) =>
+        !link.showFor || // If showFor is not defined, show to everyone
+        link.showFor.includes("coordinator") // If showFor includes coordinator, show it
     );
   }
 

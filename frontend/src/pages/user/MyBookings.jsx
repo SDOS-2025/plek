@@ -109,6 +109,7 @@ function MyBookings() {
           status: booking.status,
           purpose: booking.purpose,
           participants: booking.participants,
+          notes: booking.notes,
           date: formattedDate,
           slot: formattedTimeSlot,
           startTime: startTime,

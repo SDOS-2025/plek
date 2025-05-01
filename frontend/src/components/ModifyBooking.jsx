@@ -8,12 +8,18 @@ import {
   Loader2,
   Trash2,
   Clock,
+  AlertTriangle,
 } from "lucide-react";
 import api from "../api";
 import { DateTime } from "luxon";
 import Toast from "../components/AlertToast";
+import { usePolicies } from "../context/PolicyProvider";
+import { generateTimeSlotsFromPolicy } from "../utils/institutePolicies";
 
 const ModifyBookingModal = ({ booking, onClose, onCancel }) => {
+  // Debug logging to check what data we're receiving
+  console.log("Original booking data received:", booking);
+
   // Pre-process the booking data to ensure capacity is set correctly
   const processedBooking = {
     ...booking,
@@ -27,12 +33,25 @@ const ModifyBookingModal = ({ booking, onClose, onCancel }) => {
       : 100,
   };
 
+  console.log("Processed booking data:", processedBooking);
+  console.log("Notes value:", processedBooking.notes);
+  console.log("Original notes value:", processedBooking.original?.notes);
+
   const [purpose, setPurpose] = useState(processedBooking.purpose || "");
   // Use nullish coalescing to keep numeric 0 values
   const [attendees, setAttendees] = useState(
     processedBooking.attendees ?? processedBooking.participants ?? ""
   );
-  const [notes, setNotes] = useState(processedBooking.notes || "");
+  const [notes, setNotes] = useState(
+    processedBooking.notes || processedBooking.original?.notes || ""
+  );
+
+  // Get institute policies from context
+  const {
+    policies,
+    loading: loadingPolicies,
+    error: policiesError,
+  } = usePolicies();
 
   // Process the booking time slot from UTC to local time
   const getFormattedSlot = () => {
@@ -80,6 +99,56 @@ const ModifyBookingModal = ({ booking, onClose, onCancel }) => {
   const [currentUserId, setCurrentUserId] = useState(null);
   const [userRole, setUserRole] = useState(null); // State to track the user's role
 
+  // Function to display policy warnings, similar to ConfirmBooking
+  const policyWarnings = () => {
+    if (!policies) return null;
+
+    return (
+      <div className="mb-4">
+        <div className="p-3 bg-yellow-900/20 border border-yellow-700/30 rounded-lg">
+          <div className="flex items-start">
+            <AlertTriangle
+              size={18}
+              className="text-yellow-400 mr-2 mt-0.5 flex-shrink-0"
+            />
+            <div className="text-sm text-yellow-300">
+              <p className="font-medium mb-1">Booking Policies</p>
+              <ul className="list-disc list-inside space-y-1">
+                <li>
+                  Maximum booking duration:{" "}
+                  {policies.max_booking_duration_hours} hours
+                </li>
+                <li>
+                  Bookings can be made up to {policies.booking_opening_days}{" "}
+                  days in advance
+                </li>
+                <li>
+                  Working hours: {policies.working_hours_start.substring(0, 5)}{" "}
+                  to {policies.working_hours_end.substring(0, 5)}
+                </li>
+                {!policies.allow_backdated_bookings && (
+                  <li>Backdated bookings are not allowed</li>
+                )}
+                <li>
+                  {policies.enable_auto_approval ? (
+                    <span className="text-green-300">
+                      Auto-approval is enabled - changes will be immediately
+                      approved
+                    </span>
+                  ) : (
+                    <span>
+                      Administrator approval required for significant changes
+                    </span>
+                  )}
+                </li>
+              </ul>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
   const generateDates = () => {
     const dates = [];
     const today = DateTime.now().setZone("Asia/Kolkata");
@@ -123,17 +192,8 @@ const ModifyBookingModal = ({ booking, onClose, onCancel }) => {
         setSelectedTimeSlots([]);
       }
 
-      // Standard list of all possible time slots
-      const allTimeSlots = [
-        "9:00 AM - 10:00 AM",
-        "10:00 AM - 11:00 AM",
-        "11:00 AM - 12:00 PM",
-        "12:00 PM - 1:00 PM",
-        "1:00 PM - 2:00 PM",
-        "2:00 PM - 3:00 PM",
-        "3:00 PM - 4:00 PM",
-        "4:00 PM - 5:00 PM",
-      ];
+      // Generate time slots based on policies
+      const allTimeSlots = generateTimeSlotsFromPolicy(policies);
 
       // Get current date and time in IST
       const now = DateTime.now().setZone("Asia/Kolkata");
@@ -228,6 +288,44 @@ const ModifyBookingModal = ({ booking, onClose, onCancel }) => {
         (b) => parseInt(b.id) === parseInt(booking.id)
       );
 
+      // Check if the current booking falls outside the current policy working hours
+      let isCurrentBookingOutsideWorkingHours = false;
+      let currentBookingTimeSlot = null;
+
+      if (currentBookingData) {
+        const currentBookingStartHour = currentBookingData.startTime.hour;
+        const currentBookingEndHour = currentBookingData.endTime.hour;
+
+        // Extract policy working hours
+        const policyStartHourMatch =
+          policies?.working_hours_start?.match(/^(\d+):/);
+        const policyEndHourMatch =
+          policies?.working_hours_end?.match(/^(\d+):/);
+
+        if (policyStartHourMatch && policyEndHourMatch) {
+          const policyStartHour = parseInt(policyStartHourMatch[1]);
+          const policyEndHour = parseInt(policyEndHourMatch[1]);
+
+          // Check if booking hours are outside policy hours
+          if (
+            currentBookingStartHour < policyStartHour ||
+            currentBookingEndHour > policyEndHour
+          ) {
+            isCurrentBookingOutsideWorkingHours = true;
+
+            // Create a special time slot for this booking
+            const startFormat = currentBookingData.startTime.toFormat("h:mm a");
+            const endFormat = currentBookingData.endTime.toFormat("h:mm a");
+            currentBookingTimeSlot = `${startFormat} - ${endFormat}`;
+
+            console.log(
+              "Current booking is outside working hours:",
+              currentBookingTimeSlot
+            );
+          }
+        }
+      }
+
       const currentBookingId = parseInt(booking.id);
 
       const sameUserBookingsData = bookings.filter((b) => {
@@ -248,16 +346,19 @@ const ModifyBookingModal = ({ booking, onClose, onCancel }) => {
 
       const sameUserRanges = processedBookings.filter((r) => {
         const isRejected = r.status && r.status.toUpperCase() === "REJECTED";
+        const isCancelled = r.status && r.status.toUpperCase() === "CANCELLED";
         return (
           r.userId === currentUserId &&
           parseInt(r.id) !== currentBookingId &&
-          !isRejected
+          !isRejected &&
+          !isCancelled
         );
       });
 
       const otherUserRanges = processedBookings.filter((r) => {
         const isRejected = r.status && r.status.toUpperCase() === "REJECTED";
-        return r.userId !== currentUserId && !isRejected;
+        const isCancelled = r.status && r.status.toUpperCase() === "CANCELLED";
+        return r.userId !== currentUserId && !isRejected && !isCancelled;
       });
 
       const slotsWithStatus = allTimeSlots.map((timeSlot) => {
@@ -314,10 +415,10 @@ const ModifyBookingModal = ({ booking, onClose, onCancel }) => {
           // Parse start time of the slot to compare with current time
           const parsedTime = parseTimeStr(startStr);
           if (parsedTime) {
-            const slotDateTime = now.set({ 
-              hour: parsedTime.hours, 
-              minute: parsedTime.minutes, 
-              second: 0 
+            const slotDateTime = now.set({
+              hour: parsedTime.hours,
+              minute: parsedTime.minutes,
+              second: 0,
             });
             isPast = slotDateTime <= now;
           }
@@ -339,7 +440,10 @@ const ModifyBookingModal = ({ booking, onClose, onCancel }) => {
 
       // Check if all slots for today are either booked, part of another booking, or in the past
       const allSlotsUnavailable = slotsWithStatus.every(
-        (slot) => slot.isBooked || slot.isPast || (slot.isCurrentBooking && !selectedTimeSlots.includes(slot.time))
+        (slot) =>
+          slot.isBooked ||
+          slot.isPast ||
+          (slot.isCurrentBooking && !selectedTimeSlots.includes(slot.time))
       );
 
       if (isToday && allSlotsUnavailable) {
@@ -351,7 +455,8 @@ const ModifyBookingModal = ({ booking, onClose, onCancel }) => {
           setAlert({
             show: true,
             type: "info",
-            message: "No available slots for today. Showing the next available day.",
+            message:
+              "No available slots for today. Showing the next available day.",
           });
           // fetchAvailableTimeSlots will be called again due to the date change effect
           return;
@@ -381,21 +486,22 @@ const ModifyBookingModal = ({ booking, onClose, onCancel }) => {
   const parseTimeStr = (timeStr) => {
     const match = timeStr.match(/(\d+):(\d+)\s*(AM|PM)/i);
     if (!match) return null;
-    
+
     let hours = parseInt(match[1]);
     const minutes = parseInt(match[2]);
     const period = match[3].toUpperCase();
-    
+
     // Convert to 24-hour format
     if (period === "PM" && hours !== 12) hours += 12;
     if (period === "AM" && hours === 12) hours = 0;
-    
+
     return { hours, minutes };
   };
-  
+
   // Function to find the next available date
   const findNextAvailableDate = (currentDate) => {
-    const currentDateTime = DateTime.fromISO(currentDate).setZone("Asia/Kolkata");
+    const currentDateTime =
+      DateTime.fromISO(currentDate).setZone("Asia/Kolkata");
     // Return the next day
     return currentDateTime.plus({ days: 1 }).toISODate();
   };
@@ -413,36 +519,40 @@ const ModifyBookingModal = ({ booking, onClose, onCancel }) => {
         const response = await api.get("/api/accounts/profile/");
         if (response.status === 200) {
           const profileData = response.data;
-          
+
           // Check if user is admin, superadmin, or coordinator
           const groups = profileData.groups || [];
-          const groupNames = groups.map(group => 
-            typeof group === 'string' ? group.toLowerCase() : group.name?.toLowerCase()
+          const groupNames = groups.map((group) =>
+            typeof group === "string"
+              ? group.toLowerCase()
+              : group.name?.toLowerCase()
           );
-          
-          const isAdmin = profileData.is_superuser || 
-            groupNames.includes('superadmin') || 
-            groupNames.includes('admin') ||
-            groupNames.includes('coordinator');
-            
-          setUserRole({ 
+
+          const isAdmin =
+            profileData.is_superuser ||
+            groupNames.includes("superadmin") ||
+            groupNames.includes("admin") ||
+            groupNames.includes("coordinator");
+
+          setUserRole({
             isAdmin,
-            isCoordinator: groupNames.includes('coordinator'),
-            isSuperAdmin: profileData.is_superuser || groupNames.includes('superadmin'),
-            groupNames
+            isCoordinator: groupNames.includes("coordinator"),
+            isSuperAdmin:
+              profileData.is_superuser || groupNames.includes("superadmin"),
+            groupNames,
           });
-          
-          console.log("User role fetched:", { 
-            isAdmin, 
+
+          console.log("User role fetched:", {
+            isAdmin,
             groups: groupNames,
-            isSuperUser: profileData.is_superuser
+            isSuperUser: profileData.is_superuser,
           });
         }
       } catch (error) {
         console.error("Error fetching user role:", error);
       }
     };
-    
+
     fetchUserRole();
   }, []);
 
@@ -536,63 +646,92 @@ const ModifyBookingModal = ({ booking, onClose, onCancel }) => {
       return;
     }
 
-    // Sort time slots and check if they're continuous
-    const timeRanges = selectedTimeSlots.map((slot) => {
-      const [startStr, endStr] = slot.split(" - ");
-
-      const parseTimeStr = (timeStr) => {
-        const match = timeStr.match(/(\d+):(\d+)\s*(AM|PM)/i);
-        if (!match) return null;
-
-        let [, hours, minutes, period] = match;
-        hours = parseInt(hours);
-        minutes = parseInt(minutes);
-
-        if (period.toUpperCase() === "PM" && hours !== 12) hours += 12;
-        if (period.toUpperCase() === "AM" && hours === 12) hours = 0;
-
-        return { hours, minutes, totalMinutes: hours * 60 + minutes };
-      };
-
-      const startTime = parseTimeStr(startStr);
-      const endTime = parseTimeStr(endStr);
-
-      return {
-        start: startStr,
-        end: endStr,
-        startObj: startTime,
-        endObj: endTime,
-      };
-    });
-
-    // Ensure time slots are sorted in chronological order
-    timeRanges.sort(
-      (a, b) => a.startObj.totalMinutes - b.startObj.totalMinutes
-    );
-
-    // Verify that all selected time slots are continuous
-    const isContinuous = timeRanges.every((slot, index) => {
-      if (index === 0) return true;
-      const prevSlot = timeRanges[index - 1];
-      return slot.startObj.totalMinutes === prevSlot.endObj.totalMinutes;
-    });
-
-    if (!isContinuous) {
-      setAlert({
-        show: true,
-        type: "danger",
-        message:
-          "Please select continuous time slots only. Discontinuous slots cannot be booked together.",
-      });
-      return;
-    }
-
-    // Create a combined time slot from the first start time to the last end time
-    const firstStart = timeRanges[0].start;
-    const lastEnd = timeRanges[timeRanges.length - 1].end;
-    const combinedTimeSlot = `${firstStart} - ${lastEnd}`;
-
     try {
+      // Sort time slots and check if they're continuous
+      const timeRanges = selectedTimeSlots.map((slot) => {
+        const [startStr, endStr] = slot.split(" - ");
+
+        // Create safe parsing function that won't throw errors
+        const parseTimeStr = (timeStr) => {
+          const match = timeStr.match(/(\d+):(\d+)\s*(AM|PM)/i);
+          if (!match) {
+            console.warn("Could not parse time string:", timeStr);
+            return null;
+          }
+
+          let [, hours, minutes, period] = match;
+          hours = parseInt(hours);
+          minutes = parseInt(minutes);
+
+          if (period.toUpperCase() === "PM" && hours !== 12) hours += 12;
+          if (period.toUpperCase() === "AM" && hours === 12) hours = 0;
+
+          return {
+            hours,
+            minutes,
+            totalMinutes: hours * 60 + minutes,
+          };
+        };
+
+        const startTime = parseTimeStr(startStr);
+        const endTime = parseTimeStr(endStr);
+
+        if (!startTime || !endTime) {
+          console.error("Failed to parse time slot:", slot);
+          // Return a placeholder that won't cause sorting errors
+          return {
+            start: startStr,
+            end: endStr,
+            startObj: { totalMinutes: 0 },
+            endObj: { totalMinutes: 0 },
+            isError: true,
+          };
+        }
+
+        return {
+          start: startStr,
+          end: endStr,
+          startObj: startTime,
+          endObj: endTime,
+          isError: false,
+        };
+      });
+
+      // Filter out any slots that failed to parse
+      const validTimeRanges = timeRanges.filter((range) => !range.isError);
+
+      // If we have no valid time ranges, show an error
+      if (validTimeRanges.length === 0) {
+        throw new Error("No valid time slots selected. Please try again.");
+      }
+
+      // Ensure time slots are sorted in chronological order
+      validTimeRanges.sort(
+        (a, b) => a.startObj.totalMinutes - b.startObj.totalMinutes
+      );
+
+      // Verify that all selected time slots are continuous
+      const isContinuous = validTimeRanges.every((slot, index) => {
+        if (index === 0) return true;
+        const prevSlot = validTimeRanges[index - 1];
+        return slot.startObj.totalMinutes === prevSlot.endObj.totalMinutes;
+      });
+
+      if (!isContinuous) {
+        setAlert({
+          show: true,
+          type: "danger",
+          message:
+            "Please select continuous time slots only. Discontinuous slots cannot be booked together.",
+        });
+        return;
+      }
+
+      // Create a combined time slot from the first start time to the last end time
+      const firstStart = validTimeRanges[0].start;
+      const lastEnd = validTimeRanges[validTimeRanges.length - 1].end;
+      const combinedTimeSlot = `${firstStart} - ${lastEnd}`;
+
       // Convert to ISO format with proper timezone
       const timeValues = parseTimeSlot(combinedTimeSlot, date);
 
@@ -617,21 +756,24 @@ const ModifyBookingModal = ({ booking, onClose, onCancel }) => {
 
       // Check if the time slot has changed, which requires re-approval for normal users
       const timeHasChanged = combinedTimeSlot !== originalTimeSlot;
-      
+
       // Check if the user is an admin/coordinator (can auto-approve)
-      const isPrivilegedUser = userRole?.isCoordinator || 
-                              userRole?.isSuperAdmin || 
-                              (userRole?.groupNames || []).includes('admin');
-      
+      const isPrivilegedUser =
+        userRole?.isCoordinator ||
+        userRole?.isSuperAdmin ||
+        (userRole?.groupNames || []).includes("admin");
+
       // For coordinators, admins, or superadmins, we keep status as APPROVED
       // For regular users, booking needs re-approval if time changes
       const needsReapproval = timeHasChanged && !isPrivilegedUser;
-      
+
       console.log("Booking modification:", {
         timeHasChanged,
         isPrivilegedUser,
         needsReapproval,
-        userRole
+        userRole,
+        originalTimeSlot,
+        combinedTimeSlot,
       });
 
       // Get the proper booking ID (ensure it's a number)
@@ -650,7 +792,7 @@ const ModifyBookingModal = ({ booking, onClose, onCancel }) => {
         participants: attendees.toString(),
         notes: notes,
       };
-      
+
       // Only add status=PENDING if the user is not privileged and time has changed
       if (needsReapproval) {
         bookingUpdate.status = "PENDING";
@@ -698,22 +840,51 @@ const ModifyBookingModal = ({ booking, onClose, onCancel }) => {
       // Extract error message from response if available
       let errorMessage = "An error occurred while updating the booking.";
 
-      if (error.response && error.response.data) {
-        // Check for specific validation errors
-        if (
-          error.response.data.start_time &&
-          error.response.data.start_time.includes("Backdated")
-        ) {
+      if (error.response) {
+        // Specifically handle conflict errors (status 409)
+        if (error.response.status === 409) {
           errorMessage =
-            "Backdated bookings are not allowed. Please select a future time slot.";
-        } else if (error.response.data.time) {
-          errorMessage = error.response.data.time;
-        } else if (error.response.data.room) {
-          errorMessage = error.response.data.room;
-        } else if (error.response.data.detail) {
-          errorMessage = error.response.data.detail;
-        } else if (typeof error.response.data === "string") {
-          errorMessage = error.response.data;
+            error.response.data.detail ||
+            "This time slot was just booked by another user. Please select a different time.";
+
+          // Auto-reload available time slots to show updated availability
+          fetchAvailableTimeSlots(date);
+
+          setAlert({
+            show: true,
+            type: "danger",
+            message: errorMessage,
+          });
+          return;
+        }
+
+        // Handle other types of errors
+        if (error.response.data) {
+          // Check for duration validation errors
+          if (error.response.data.duration) {
+            const durationErrors = error.response.data.duration;
+            if (Array.isArray(durationErrors) && durationErrors.length > 0) {
+              errorMessage = durationErrors[0];
+            } else if (typeof durationErrors === "string") {
+              errorMessage = durationErrors;
+            }
+          }
+          // Check for specific validation errors
+          else if (
+            error.response.data.start_time &&
+            error.response.data.start_time.includes("Backdated")
+          ) {
+            errorMessage =
+              "Backdated bookings are not allowed. Please select a future time slot.";
+          } else if (error.response.data.time) {
+            errorMessage = error.response.data.time;
+          } else if (error.response.data.room) {
+            errorMessage = error.response.data.room;
+          } else if (error.response.data.detail) {
+            errorMessage = error.response.data.detail;
+          } else if (typeof error.response.data === "string") {
+            errorMessage = error.response.data;
+          }
         }
       }
 
@@ -745,6 +916,8 @@ const ModifyBookingModal = ({ booking, onClose, onCancel }) => {
             Update the date and time for your booking
           </p>
         </div>
+
+        {policyWarnings()}
 
         <div className="grid grid-cols-2 gap-6 mb-8">
           <div className="space-y-4">
@@ -927,19 +1100,25 @@ const ModifyBookingModal = ({ booking, onClose, onCancel }) => {
                       Your other bookings on this date:
                     </p>
                     <ul className="space-y-1 text-gray-400">
-                      {sameUserBookings.map((b, index) => {
-                        const start = DateTime.fromISO(b.start_time).toFormat(
-                          "h:mm a"
-                        );
-                        const end = DateTime.fromISO(b.end_time).toFormat(
-                          "h:mm a"
-                        );
-                        return (
-                          <li key={`same-${index}`}>
-                            • {start} - {end}
-                          </li>
-                        );
-                      })}
+                      {sameUserBookings
+                        .filter(
+                          (b) =>
+                            b.status?.toUpperCase() !== "CANCELLED" &&
+                            b.status?.toUpperCase() !== "REJECTED"
+                        )
+                        .map((b, index) => {
+                          const start = DateTime.fromISO(b.start_time).toFormat(
+                            "h:mm a"
+                          );
+                          const end = DateTime.fromISO(b.end_time).toFormat(
+                            "h:mm a"
+                          );
+                          return (
+                            <li key={`same-${index}`}>
+                              • {start} - {end}
+                            </li>
+                          );
+                        })}
                     </ul>
                   </div>
                 </div>
@@ -1172,7 +1351,9 @@ const ModifyBookingModal = ({ booking, onClose, onCancel }) => {
               className="flex-1 py-3 bg-plek-purple hover:bg-purple-700 rounded-lg transition-colors"
               disabled={loadingTimeSlots}
             >
-              Save Changes
+              {policies?.enable_auto_approval
+                ? "Save & Apply"
+                : "Request Changes"}
             </button>
           </div>
         </form>
