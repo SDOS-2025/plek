@@ -132,6 +132,7 @@ class RoomManageView(APIView):
                                 'user_email': booking.user.email,
                                 'purpose': booking.purpose,
                                 'participants': booking.participants,
+                                'notes': booking.notes,
                             })
 
                         # Add bookings to response

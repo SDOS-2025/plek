@@ -28,10 +28,12 @@ urlpatterns = [
     # API endpoints
     path("api/accounts/", include("accounts.urls")),
     path("api/analytics/", include("analytics.urls")),
+    # Settings app - include both at /settings and /api/settings for backward compatibility
+    path("settings/", include("settings.urls")),
+    path("api/settings/", include("settings.urls")),
     # Main app functionality
     path("", include("rooms.urls")),
     path("", include("bookings.urls")),
-    path("settings/", include("settings.urls")),
 ]
 
 # Serve media files in development

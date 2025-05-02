@@ -36,6 +36,7 @@ class Booking(models.Model):
     purpose = models.TextField(blank=True)
     participants = models.TextField(null=True, blank=True)
     cancellation_reason = models.TextField(null=True, blank=True)
+    notes = models.TextField(null=True, blank=True)
 
     class Meta:
         permissions = [

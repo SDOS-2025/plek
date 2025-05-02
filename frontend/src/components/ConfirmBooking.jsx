@@ -13,10 +13,13 @@ import {
   Loader2,
   ChevronLeft,
   ChevronRight,
+  AlertTriangle,
 } from "lucide-react";
 import api from "../api";
 import { DateTime } from "luxon";
 import Toast from "../components/AlertToast";
+import { usePolicies } from "../context/PolicyProvider";
+import { generateTimeSlotsFromPolicy } from "../utils/institutePolicies";
 
 // Utility function to properly capitalize amenity names
 const formatAmenityName = (name) => {
@@ -55,6 +58,13 @@ const BookingModal = ({ room, onClose }) => {
   const [loadingTimeSlots, setLoadingTimeSlots] = useState(false);
   const [timeSlotError, setTimeSlotError] = useState(null);
 
+  // Get institute policies from context
+  const {
+    policies,
+    loading: loadingPolicies,
+    error: policiesError,
+  } = usePolicies();
+
   // Initialize date using Luxon in IST timezone
   const [date, setDate] = useState(
     DateTime.now().setZone("Asia/Kolkata").toISODate()
@@ -67,12 +77,13 @@ const BookingModal = ({ room, onClose }) => {
     message: "",
   });
 
-  // Generate dates for the next 14 days
+  // Generate dates based on booking window from policies
   const generateDates = () => {
     const dates = [];
     const today = DateTime.now().setZone("Asia/Kolkata");
+    const daysAhead = policies?.booking_opening_days || 30; // Use policy or default to 30 days
 
-    for (let i = 0; i < 14; i++) {
+    for (let i = 0; i < daysAhead; i++) {
       const date = today.plus({ days: i });
       dates.push({
         value: date.toISODate(),
@@ -87,7 +98,11 @@ const BookingModal = ({ room, onClose }) => {
     return dates;
   };
 
-  const availableDates = generateDates();
+  // Update available dates when policies change
+  const availableDates = useMemo(
+    () => generateDates(),
+    [policies?.booking_opening_days]
+  );
 
   // Fetch available time slots when date changes
   const fetchAvailableTimeSlots = async (selectedDate) => {
@@ -96,17 +111,12 @@ const BookingModal = ({ room, onClose }) => {
       setTimeSlotError(null);
       setSelectedTimeSlots([]); // Reset selected time slots
 
-      // Define all possible time slots
-      const allTimeSlots = [
-        "9:00 AM - 10:00 AM",
-        "10:00 AM - 11:00 AM",
-        "11:00 AM - 12:00 PM",
-        "12:00 PM - 1:00 PM",
-        "1:00 PM - 2:00 PM",
-        "2:00 PM - 3:00 PM",
-        "3:00 PM - 4:00 PM",
-        "4:00 PM - 5:00 PM",
-      ];
+      if (!policies) {
+        throw new Error("Unable to load institute policies");
+      }
+
+      // Generate time slots based on working hours from policies
+      const allTimeSlots = generateTimeSlotsFromPolicy(policies);
 
       // Ensure date is in YYYY-MM-DD format for API
       const formattedDate = DateTime.fromISO(selectedDate)
@@ -126,10 +136,12 @@ const BookingModal = ({ room, onClose }) => {
       const bookings = response.data.bookings || [];
       console.log("Received bookings:", bookings);
 
-      // Filter to only include APPROVED bookings
+      // Filter to only include APPROVED bookings (exclude cancelled ones)
       const approvedBookings = bookings.filter(
         (booking) =>
-          booking.status === "APPROVED" || booking.status === "approved"
+          (booking.status === "APPROVED" || booking.status === "approved") &&
+          booking.status !== "CANCELLED" &&
+          booking.status !== "cancelled"
       );
       console.log("Approved bookings:", approvedBookings);
 
@@ -242,7 +254,8 @@ const BookingModal = ({ room, onClose }) => {
           setAlert({
             show: true,
             type: "info",
-            message: "No available slots for today. Showing the next available day.",
+            message:
+              "No available slots for today. Showing the next available day.",
           });
           // fetchAvailableTimeSlots will be called again due to the date change effect
           return;
@@ -256,16 +269,27 @@ const BookingModal = ({ room, onClose }) => {
       setTimeSlotError(
         "Failed to load available time slots. Please try again."
       );
-      const defaultSlots = [
-        "9:00 AM - 10:00 AM",
-        "10:00 AM - 11:00 AM",
-        "11:00 AM - 12:00 PM",
-        "12:00 PM - 1:00 PM",
-        "1:00 PM - 2:00 PM",
-        "2:00 PM - 3:00 PM",
-        "3:00 PM - 4:00 PM",
-        "4:00 PM - 5:00 PM",
-      ].map((time) => ({ time, isBooked: false, isPast: false }));
+
+      // Use default slots based on policies if available, otherwise fallback
+      let defaultSlots;
+      if (policies) {
+        defaultSlots = generateTimeSlotsFromPolicy(policies).map((time) => ({
+          time,
+          isBooked: false,
+          isPast: false,
+        }));
+      } else {
+        defaultSlots = [
+          "9:00 AM - 10:00 AM",
+          "10:00 AM - 11:00 AM",
+          "11:00 AM - 12:00 PM",
+          "12:00 PM - 1:00 PM",
+          "1:00 PM - 2:00 PM",
+          "2:00 PM - 3:00 PM",
+          "3:00 PM - 4:00 PM",
+          "4:00 PM - 5:00 PM",
+        ].map((time) => ({ time, isBooked: false, isPast: false }));
+      }
 
       setAvailableTimeSlots(defaultSlots);
     } finally {
@@ -273,22 +297,81 @@ const BookingModal = ({ room, onClose }) => {
     }
   };
 
-  // Function to find the next available date 
+  // Function to find the next available date
   const findNextAvailableDate = (currentDate) => {
     const now = DateTime.now().setZone("Asia/Kolkata");
-    const currentDateTime = DateTime.fromISO(currentDate).setZone("Asia/Kolkata");
-    
+    const currentDateTime =
+      DateTime.fromISO(currentDate).setZone("Asia/Kolkata");
+
     // Return the next day
     return currentDateTime.plus({ days: 1 }).toISODate();
   };
 
+  // Display policy-related warnings
+  const policyWarnings = () => {
+    if (!policies) return null;
+
+    return (
+      <div className="mb-4">
+        <div className="p-3 bg-yellow-900/20 border border-yellow-700/30 rounded-lg">
+          <div className="flex items-start">
+            <AlertTriangle
+              size={18}
+              className="text-yellow-400 mr-2 mt-0.5 flex-shrink-0"
+            />
+            <div className="text-sm text-yellow-300">
+              <p className="font-medium mb-1">Booking Policies</p>
+              <ul className="list-disc list-inside space-y-1">
+                <li>
+                  Maximum booking duration:{" "}
+                  {policies.max_booking_duration_hours} hours
+                </li>
+                <li>
+                  Bookings can be made up to {policies.booking_opening_days}{" "}
+                  days in advance
+                </li>
+                <li>
+                  Working hours: {policies.working_hours_start.substring(0, 5)}{" "}
+                  to {policies.working_hours_end.substring(0, 5)}
+                </li>
+                {!policies.allow_backdated_bookings && (
+                  <li>Backdated bookings are not allowed</li>
+                )}
+                <li>
+                  {policies.enable_auto_approval ? (
+                    <span className="text-green-300">
+                      Auto-approval is enabled - bookings will be immediately
+                      approved
+                    </span>
+                  ) : (
+                    <span>
+                      Administrator approval required for all bookings
+                    </span>
+                  )}
+                </li>
+              </ul>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
   // Fetch available slots when component mounts and when date changes
   useEffect(() => {
-    fetchAvailableTimeSlots(date);
-  }, [date, room.id]);
+    // Only fetch time slots if policies are loaded
+    if (!loadingPolicies && policies) {
+      fetchAvailableTimeSlots(date);
+    }
+  }, [date, room.id, policies, loadingPolicies]);
 
   const handleTimeSlotClick = (slot) => {
-    if (slot.isBooked) return; // Don't allow selecting booked slots
+    if (slot.isBooked || slot.isPast) return; // Don't allow selecting booked or past slots
+
+    // Check if selecting this slot would exceed max duration from policy
+    const maxSlots = policies
+      ? Math.ceil(policies.max_booking_duration_hours)
+      : 4;
 
     // Toggle selection
     if (selectedTimeSlots.includes(slot.time)) {
@@ -297,8 +380,17 @@ const BookingModal = ({ room, onClose }) => {
         selectedTimeSlots.filter((time) => time !== slot.time)
       );
     } else {
-      // Add slot if not selected
-      setSelectedTimeSlots([...selectedTimeSlots, slot.time]);
+      // Add slot if not selected, and if it doesn't exceed max duration
+      if (selectedTimeSlots.length < maxSlots) {
+        setSelectedTimeSlots([...selectedTimeSlots, slot.time]);
+      } else {
+        // Show warning that max duration exceeded
+        setAlert({
+          show: true,
+          type: "warning",
+          message: `Maximum booking duration is ${policies.max_booking_duration_hours} hours.`,
+        });
+      }
     }
   };
 
@@ -384,9 +476,6 @@ const BookingModal = ({ room, onClose }) => {
     const parseTimeSlot = (timeSlot, dateStr) => {
       const [startStr, endStr] = timeSlot.split(" - ");
 
-      // Ensure we're working with the correct date in IST
-      const baseDate = DateTime.fromISO(dateStr).setZone("Asia/Kolkata");
-
       // Parse hours and minutes from the time strings
       const startMatch = startStr.match(/(\d+):(\d+)\s*(AM|PM)/i);
       const endMatch = endStr.match(/(\d+):(\d+)\s*(AM|PM)/i);
@@ -414,14 +503,14 @@ const BookingModal = ({ room, onClose }) => {
       if (endPeriod.toUpperCase() === "AM" && endHours === 12) endHours = 0;
 
       // Set hours and minutes using DateTime, maintaining IST timezone
-      const startTime = baseDate.set({
+      const startTime = DateTime.fromISO(dateStr).setZone("Asia/Kolkata").set({
         hour: startHours,
         minute: startMinutes,
         second: 0,
         millisecond: 0,
       });
 
-      const endTime = baseDate.set({
+      const endTime = DateTime.fromISO(dateStr).setZone("Asia/Kolkata").set({
         hour: endHours,
         minute: endMinutes,
         second: 0,
@@ -456,11 +545,15 @@ const BookingModal = ({ room, onClose }) => {
 
       if (response.status === 200 || response.status === 201) {
         console.log("Booking successful:", response.data);
-        // Show success message with custom alert
+        // Set success message based on whether auto-approval is enabled
+        const successMessage = policies?.enable_auto_approval
+          ? "Booking automatically approved! Your reservation is confirmed."
+          : "Booking request submitted successfully! Awaiting administrator approval.";
+
         setAlert({
           show: true,
           type: "success",
-          message: "Booking request sent successfully!",
+          message: successMessage,
         });
         // Close the modal after a short delay
         setTimeout(() => {
@@ -480,39 +573,68 @@ const BookingModal = ({ room, onClose }) => {
       // Extract error message from response if available
       let errorMessage = "An error occurred while booking the room.";
 
-      if (error.response && error.response.data) {
-        // Check for backdated booking error specifically
-        if (
-          error.response.data.start_time &&
-          error.response.data.start_time.includes(
-            "Backdated bookings are not allowed"
-          )
-        ) {
+      if (error.response) {
+        // Specifically handle conflict errors (status 409)
+        if (error.response.status === 409) {
           errorMessage =
-            "Backdated bookings are not allowed. Please select a future time slot.";
+            error.response.data.detail ||
+            "This time slot was just booked by another user. Please select a different time.";
+
+          // Auto-reload available time slots to show updated availability
+          fetchAvailableTimeSlots(date);
+
+          setAlert({
+            show: true,
+            type: "danger",
+            message: errorMessage,
+          });
+          return;
         }
-        // Check for other validation errors
-        else if (error.response.data.time) {
-          errorMessage = error.response.data.time;
-        }
-        // Check for room conflicts
-        else if (error.response.data.room) {
-          errorMessage = error.response.data.room;
-        }
-        // Check for general errors
-        else if (error.response.data.detail) {
-          errorMessage = error.response.data.detail;
-        }
-        // If there are other error formats, try to extract them
-        else if (typeof error.response.data === "object") {
-          // Try to get the first error message from any field
-          const firstErrorField = Object.keys(error.response.data)[0];
-          if (firstErrorField && error.response.data[firstErrorField]) {
-            const fieldErrors = error.response.data[firstErrorField];
-            if (Array.isArray(fieldErrors) && fieldErrors.length > 0) {
-              errorMessage = `${firstErrorField}: ${fieldErrors[0]}`;
-            } else if (typeof fieldErrors === "string") {
-              errorMessage = `${firstErrorField}: ${fieldErrors}`;
+
+        // Handle other error responses
+        if (error.response.data) {
+          // Check for duration validation errors
+          if (error.response.data.duration) {
+            const durationErrors = error.response.data.duration;
+            if (Array.isArray(durationErrors) && durationErrors.length > 0) {
+              errorMessage = durationErrors[0];
+            } else if (typeof durationErrors === "string") {
+              errorMessage = durationErrors;
+            }
+          }
+          // Check for backdated booking error specifically
+          else if (
+            error.response.data.start_time &&
+            error.response.data.start_time.includes(
+              "Backdated bookings are not allowed"
+            )
+          ) {
+            errorMessage =
+              "Backdated bookings are not allowed. Please select a future time slot.";
+          }
+          // Check for other validation errors
+          else if (error.response.data.time) {
+            errorMessage = error.response.data.time;
+          }
+          // Check for room conflicts
+          else if (error.response.data.room) {
+            errorMessage = error.response.data.room;
+          }
+          // Check for general errors
+          else if (error.response.data.detail) {
+            errorMessage = error.response.data.detail;
+          }
+          // If there are other error formats, try to extract them
+          else if (typeof error.response.data === "object") {
+            // Try to get the first error message from any field
+            const firstErrorField = Object.keys(error.response.data)[0];
+            if (firstErrorField && error.response.data[firstErrorField]) {
+              const fieldErrors = error.response.data[firstErrorField];
+              if (Array.isArray(fieldErrors) && fieldErrors.length > 0) {
+                errorMessage = `${firstErrorField}: ${fieldErrors[0]}`;
+              } else if (typeof fieldErrors === "string") {
+                errorMessage = `${firstErrorField}: ${fieldErrors}`;
+              }
             }
           }
         }
@@ -551,6 +673,9 @@ const BookingModal = ({ room, onClose }) => {
             Please review and confirm your room booking details
           </p>
         </div>
+
+        {/* Display institute policy warnings */}
+        {policyWarnings()}
 
         <div className="grid grid-cols-2 gap-6 mb-6">
           <div className="space-y-4">
@@ -689,16 +814,16 @@ const BookingModal = ({ room, onClose }) => {
             </span>
           </h3>
 
-          {loadingTimeSlots ? (
+          {loadingTimeSlots || loadingPolicies ? (
             <div className="flex justify-center items-center py-8">
               <Loader2 size={30} className="animate-spin text-purple-500" />
               <span className="ml-2 text-gray-300">
                 Loading available slots...
               </span>
             </div>
-          ) : timeSlotError ? (
+          ) : policiesError || timeSlotError ? (
             <div className="p-4 bg-red-900/20 border border-red-700/30 rounded-lg text-center text-red-300">
-              {timeSlotError}
+              {policiesError || timeSlotError}
             </div>
           ) : availableTimeSlots.length === 0 ? (
             <div className="p-4 bg-yellow-900/20 border border-yellow-700/30 rounded-lg text-center text-yellow-300">
@@ -723,14 +848,14 @@ const BookingModal = ({ room, onClose }) => {
                 </div>
               </div>
 
-              <div className="grid grid-cols-8 gap-2 bg-plek-lightgray p-4 rounded-lg">
+              <div className="grid grid-cols-4 md:grid-cols-8 gap-2 bg-plek-lightgray p-4 rounded-lg">
                 {availableTimeSlots.map((slot, index) => (
                   <div
                     key={index}
                     className={`
                       relative rounded-lg transition-all overflow-hidden
                       ${
-                        slot.isBooked
+                        slot.isBooked || slot.isPast
                           ? "bg-gray-600 cursor-not-allowed"
                           : selectedTimeSlots.includes(slot.time)
                           ? "bg-green-600 hover:bg-green-700 cursor-pointer"
@@ -742,14 +867,18 @@ const BookingModal = ({ room, onClose }) => {
                     <div className="p-2 text-center h-full flex flex-col justify-center">
                       <p
                         className={`text-xs font-medium ${
-                          slot.isBooked ? "text-gray-400" : "text-white"
+                          slot.isBooked || slot.isPast
+                            ? "text-gray-400"
+                            : "text-white"
                         }`}
                       >
                         {slot.time.split(" - ")[0]}
                       </p>
                       <p
                         className={`text-xs ${
-                          slot.isBooked ? "text-gray-400" : "text-gray-200"
+                          slot.isBooked || slot.isPast
+                            ? "text-gray-400"
+                            : "text-gray-200"
                         }`}
                       >
                         {slot.time.split(" - ")[1]}
@@ -758,7 +887,8 @@ const BookingModal = ({ room, onClose }) => {
 
                     {/* Selection indicator */}
                     {selectedTimeSlots.includes(slot.time) &&
-                      !slot.isBooked && (
+                      !slot.isBooked &&
+                      !slot.isPast && (
                         <div className="absolute bottom-1 right-1">
                           <svg
                             xmlns="http://www.w3.org/2000/svg"
@@ -776,6 +906,13 @@ const BookingModal = ({ room, onClose }) => {
                           </svg>
                         </div>
                       )}
+
+                    {/* Past indicator */}
+                    {slot.isPast && !slot.isBooked && (
+                      <div className="absolute inset-0 bg-black bg-opacity-10 flex items-center justify-center">
+                        <X size={12} className="text-gray-400" />
+                      </div>
+                    )}
 
                     {/* Booked indicator */}
                     {slot.isBooked && (
@@ -869,7 +1006,7 @@ const BookingModal = ({ room, onClose }) => {
               className="flex-1 py-3 bg-plek-purple hover:bg-purple-700 rounded-lg transition-colors"
               disabled={selectedTimeSlots.length === 0 || loadingTimeSlots}
             >
-              Request Booking
+              {policies?.enable_auto_approval ? "Book Now" : "Request Booking"}
             </button>
           </div>
         </form>

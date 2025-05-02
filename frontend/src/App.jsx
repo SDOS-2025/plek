@@ -18,6 +18,7 @@ import ManageRooms from "./pages/admin/ManageRooms";
 import ManageUsers from "./pages/admin/ManageUsers";
 import Analytics from "./pages/admin/Analytics";
 import AdminManageConfig from "./pages/admin/AdminManageConfig";
+import InstitutePolicies from "./pages/admin/InstitutePolicies";
 
 function App() {
   return (
@@ -42,6 +43,10 @@ function App() {
         <Route path="/admin/manage-users" element={<ManageUsers />} />
         <Route path="/admin/manage-config" element={<AdminManageConfig />} />
         <Route path="/admin/analytics" element={<Analytics />} />
+        <Route
+          path="/admin/institute-policies"
+          element={<InstitutePolicies />}
+        />
       </Route>
     </Routes>
   );

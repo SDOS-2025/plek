@@ -301,6 +301,7 @@ function ManageBookings() {
         purpose: booking.purpose || "",
         participants: booking.participants || 0,
         attendees: booking.participants || 0,
+        notes: booking.notes || "",
         user: userName,
         userFirstName: booking.user_first_name || "",
         userLastName: booking.user_last_name || "",
@@ -618,39 +619,44 @@ function ManageBookings() {
         const response = await api.get("/bookings/floor-dept/");
         const bookingsData = response.data.bookings || [];
         const processedBookings = await processBookings(bookingsData);
-        
+
         // Current date for comparing to find past bookings
         const now = DateTime.now();
-        
+
         // Filter bookings based on the selected tab
         if (tab === "requests") {
           const requests = processedBookings.filter(
-            booking => booking.status.toLowerCase() === "pending"
+            (booking) => booking.status.toLowerCase() === "pending"
           );
           setBookingRequests(requests);
         } else if (tab === "bookings") {
           // Get current approved bookings
-          const approved = processedBookings.filter(booking => {
+          const approved = processedBookings.filter((booking) => {
             const bookingDateTime = DateTime.fromISO(booking.end_time);
-            return booking.status.toLowerCase() === "approved" && bookingDateTime > now;
+            return (
+              booking.status.toLowerCase() === "approved" &&
+              bookingDateTime > now
+            );
           });
           setApprovedBookings(approved);
         } else if (tab === "past") {
           // Get past bookings (completed, rejected, or cancelled)
-          const pastBookings = processedBookings.filter(booking => {
+          const pastBookings = processedBookings.filter((booking) => {
             const bookingDateTime = DateTime.fromISO(booking.end_time);
-            return bookingDateTime < now || 
-                   booking.status.toLowerCase() === "rejected" || 
-                   booking.status.toLowerCase() === "cancelled";
+            return (
+              bookingDateTime < now ||
+              booking.status.toLowerCase() === "rejected" ||
+              booking.status.toLowerCase() === "cancelled"
+            );
           });
-          
+
           // Sort past bookings by date (most recent first)
           pastBookings.sort((a, b) => {
             const dateA = DateTime.fromISO(a.end_time);
             const dateB = DateTime.fromISO(b.end_time);
             return dateB - dateA;
           });
-          
+
           setApprovedBookings(pastBookings);
         }
       } else {
@@ -658,39 +664,44 @@ function ManageBookings() {
         const response = await api.get("/bookings/all/");
         const bookingsData = response.data || [];
         const processedBookings = await processBookings(bookingsData);
-        
+
         // Current date for comparing to find past bookings
         const now = DateTime.now();
-        
+
         // Filter bookings based on the selected tab
         if (tab === "requests") {
           const requests = processedBookings.filter(
-            booking => booking.status.toLowerCase() === "pending"
+            (booking) => booking.status.toLowerCase() === "pending"
           );
           setBookingRequests(requests);
         } else if (tab === "bookings") {
           // Get current approved bookings
-          const approved = processedBookings.filter(booking => {
+          const approved = processedBookings.filter((booking) => {
             const bookingDateTime = DateTime.fromISO(booking.end_time);
-            return booking.status.toLowerCase() === "approved" && bookingDateTime > now;
+            return (
+              booking.status.toLowerCase() === "approved" &&
+              bookingDateTime > now
+            );
           });
           setApprovedBookings(approved);
         } else if (tab === "past") {
           // Get past bookings (completed, rejected, or cancelled)
-          const pastBookings = processedBookings.filter(booking => {
+          const pastBookings = processedBookings.filter((booking) => {
             const bookingDateTime = DateTime.fromISO(booking.end_time);
-            return bookingDateTime < now || 
-                   booking.status.toLowerCase() === "rejected" || 
-                   booking.status.toLowerCase() === "cancelled";
+            return (
+              bookingDateTime < now ||
+              booking.status.toLowerCase() === "rejected" ||
+              booking.status.toLowerCase() === "cancelled"
+            );
           });
-          
+
           // Sort past bookings by date (most recent first)
           pastBookings.sort((a, b) => {
             const dateA = DateTime.fromISO(a.end_time);
             const dateB = DateTime.fromISO(b.end_time);
             return dateB - dateA;
           });
-          
+
           setApprovedBookings(pastBookings);
         }
       }
