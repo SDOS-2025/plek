@@ -11,6 +11,7 @@ import {
 } from "lucide-react";
 import NavBar from "../../components/NavBar";
 import Footer from "../../components/Footer";
+import api from "../../api";
 
 function Analytics() {
   const [activeTab, setActiveTab] = useState("totalBookings");
@@ -25,157 +26,118 @@ function Analytics() {
 
       try {
         let response;
-        const BASE_URL =
-          process.env.REACT_APP_API_URL || "http://localhost:8000";
 
         switch (activeTab) {
           case "totalBookings":
-            // Simulated data - replace with API call
-            response = {
-              data: [
-                { month: "January", count: 45 },
-                { month: "February", count: 52 },
-                { month: "March", count: 63 },
-                { month: "April", count: 71 },
-              ],
-            };
+            response = await api.get("/api/analytics/bookings/?stat_type=totals");
+            
+            // Transform the data to group by month and year
+            const bookingsByMonthYear = response.data.reduce((acc, item) => {
+              const date = new Date(item.date);
+              const monthYear = `${date.getFullYear()}-${date.getMonth()}`;
+              const monthName = date.toLocaleString('default', { month: 'long' });
+              const yearMonth = `${monthName} ${date.getFullYear()}`;
+              
+              if (!acc[monthYear]) {
+                acc[monthYear] = {
+                  monthYear: monthYear,
+                  displayName: yearMonth,
+                  count: 0,
+                  date: date
+                };
+              }
+              
+              acc[monthYear].count += item.total_bookings;
+              return acc;
+            }, {});
+            
+            // Convert to array and sort chronologically (oldest to newest)
+            const sortedBookings = Object.values(bookingsByMonthYear)
+              .sort((a, b) => a.date - b.date);
+              
+            // Log all months to verify what data we have
+            console.log("Available months:", sortedBookings.map(item => item.displayName));
+              
+            setData(sortedBookings.map(item => ({
+              month: item.displayName,
+              count: item.count
+            })));
             break;
 
           case "peakHours":
-            // Simulated data - replace with API call
-            response = {
-              data: [
-                { hour: "8:00 AM", count: 28 },
-                { hour: "9:00 AM", count: 32 },
-                { hour: "10:00 AM", count: 47 },
-                { hour: "11:00 AM", count: 51 },
-                { hour: "12:00 PM", count: 38 },
-                { hour: "1:00 PM", count: 36 },
-                { hour: "2:00 PM", count: 43 },
-                { hour: "3:00 PM", count: 49 },
-                { hour: "4:00 PM", count: 41 },
-              ],
-            };
+            response = await api.get("/api/analytics/bookings/?stat_type=peak_hours");
+            setData(response.data.map(item => ({
+              hour: `${item.label}`,
+              count: item.value
+            })));
             break;
 
           case "topUsers":
-            // Simulated data - replace with API call
-            response = {
-              data: [
-                { name: "John Smith", department: "Engineering", bookings: 15 },
-                {
-                  name: "Alice Johnson",
-                  department: "Marketing",
-                  bookings: 12,
-                },
-                { name: "David Chen", department: "Product", bookings: 10 },
-                { name: "Sarah Williams", department: "HR", bookings: 8 },
-                { name: "Michael Brown", department: "Sales", bookings: 7 },
-              ],
-            };
+            response = await api.get("/api/analytics/bookings/?stat_type=top_users");
+            console.log("Top Users API response:", response.data);
+            
+            // Check if the data is in the expected format
+            if (Array.isArray(response.data) && response.data.length > 0) {
+              setData(response.data.map(item => ({
+                name: item.label || "Unknown User",
+                department: "N/A", // The API doesn't provide department info
+                bookings: item.value || 0
+              })));
+              console.log("Transformed top users data:", data);
+            } else {
+              console.error("Unexpected data format for top users:", response.data);
+              setError("Received unexpected data format from the server");
+              setData([]);
+            }
             break;
 
           case "mostBookedRooms":
-            // Simulated data - replace with API call
-            response = {
-              data: [
-                {
-                  room: "B512",
-                  building: "R&D Building",
-                  bookings: 23,
-                  capacity: 8,
-                },
-                {
-                  room: "A204",
-                  building: "Main Building",
-                  bookings: 19,
-                  capacity: 12,
-                },
-                {
-                  room: "C101",
-                  building: "Marketing Building",
-                  bookings: 17,
-                  capacity: 6,
-                },
-                {
-                  room: "D305",
-                  building: "Executive Building",
-                  bookings: 14,
-                  capacity: 16,
-                },
-              ],
-            };
+            response = await api.get("/api/analytics/rooms/?stat_type=most_booked");
+            setData(response.data.map(item => ({
+              room: item.name,
+              building: item.building,
+              bookings: item.count,
+              // Extract capacity from amenities if it exists in that format
+              capacity: item.amenities && Array.isArray(item.amenities) 
+                ? item.amenities.find(a => a.startsWith("Capacity:"))
+                  ? parseInt(item.amenities.find(a => a.startsWith("Capacity:")).split("Capacity:")[1].trim())
+                  : 0
+                : 0
+            })));
             break;
 
           case "leastBookedRooms":
-            // Simulated data - replace with API call
-            response = {
-              data: [
-                {
-                  room: "E201",
-                  building: "Annex Building",
-                  bookings: 2,
-                  capacity: 4,
-                },
-                {
-                  room: "F102",
-                  building: "Remote Office",
-                  bookings: 3,
-                  capacity: 8,
-                },
-                {
-                  room: "G305",
-                  building: "Research Building",
-                  bookings: 5,
-                  capacity: 10,
-                },
-                {
-                  room: "H401",
-                  building: "Training Center",
-                  bookings: 6,
-                  capacity: 20,
-                },
-              ],
-            };
+            response = await api.get("/api/analytics/rooms/?stat_type=least_booked");
+            setData(response.data.map(item => ({
+              room: item.name,
+              building: item.building,
+              bookings: item.count,
+              // Extract capacity from amenities if it exists in that format
+              capacity: item.amenities && Array.isArray(item.amenities) 
+                ? item.amenities.find(a => a.startsWith("Capacity:"))
+                  ? parseInt(item.amenities.find(a => a.startsWith("Capacity:")).split("Capacity:")[1].trim())
+                  : 0
+                : 0
+            })));
             break;
 
           case "utilization":
-            // Simulated data - replace with API call
-            response = {
-              data: [
-                {
-                  room: "B512",
-                  building: "R&D Building",
-                  utilization: 85,
-                  capacity: 8,
-                },
-                {
-                  room: "A204",
-                  building: "Main Building",
-                  utilization: 72,
-                  capacity: 12,
-                },
-                {
-                  room: "C101",
-                  building: "Marketing Building",
-                  utilization: 64,
-                  capacity: 6,
-                },
-                {
-                  room: "D305",
-                  building: "Executive Building",
-                  utilization: 45,
-                  capacity: 16,
-                },
-              ],
-            };
+            response = await api.get("/api/analytics/rooms/?stat_type=utilization");
+            setData(response.data.map(item => ({
+              room: item.name,
+              building: item.building_name || item.building,
+              utilization: Math.round(item.usage_hours || 0),
+              capacity: item.capacity || 0,
+              totalAttendees: item.total_attendees || 0,
+              bookingCount: item.booking_count || 0,
+              avgAttendees: item.avg_attendees || 0,
+              attendeeRatio: Math.round(((item.avg_attendees || 0) / (item.capacity || 1)) * 100)
+            })));
             break;
 
           default:
-            response = { data: [] };
+            setData([]);
         }
-
-        setData(response.data);
       } catch (error) {
         console.error("Error fetching data:", error);
         setError("Failed to load data. Please try again later.");
@@ -220,32 +182,59 @@ function Analytics() {
           <div className="space-y-6">
             <div className="section-card">
               <h3 className="card-header">Monthly Booking Trends</h3>
-              <div className="h-64 p-4">
-                {/* Chart would go here - Simplified representation */}
-                <div className="h-full flex items-end justify-between">
-                  {data.map((item, index) => (
-                    <div
-                      key={index}
-                      className="flex flex-col items-center space-y-2 w-1/6"
-                    >
-                      <div
-                        className="w-full bg-plek-purple rounded-t-md transition-all duration-500"
-                        style={{
-                          height: `${
-                            (item.count /
-                              Math.max(...data.map((d) => d.count))) *
-                            100
-                          }%`,
-                        }}
-                      ></div>
-                      <div className="text-xs text-gray-400 truncate">
-                        {item.month}
-                      </div>
-                    </div>
-                  ))}
-                </div>
+              
+              {/* Chart visualization - Improved bar sizing and spacing */}
+              <div className="h-64 p-4 w-full">
+                {data.length > 0 ? (
+                  <div className="h-full w-full flex items-end justify-between px-4">
+                    {data.map((item, index) => {
+                      // Calculate the max count for proper height scaling
+                      const maxCount = Math.max(...data.map(d => d.count));
+                      // Calculate height percentage with no minimum to show actual scale
+                      const heightPercentage = maxCount > 0 
+                        ? ((item.count / maxCount) * 100)
+                        : 0;
+                      
+                      return (
+                        <div
+                          key={index}
+                          className="flex flex-col items-center"
+                          style={{ 
+                            width: `${90 / data.length}%`,
+                            minWidth: '40px'
+                          }}
+                        >
+                          <div
+                            className="w-4/5 bg-blue-500 rounded-t-md transition-all duration-300 hover:bg-blue-400 relative group shadow-lg"
+                            style={{
+                              height: `${heightPercentage}%`,
+                              minHeight: item.count > 0 ? '2px' : '0',
+                              minWidth: '30px',
+                              maxWidth: '100px',
+                              margin: '0 auto',
+                              boxShadow: '0 4px 6px rgba(0, 0, 0, 0.3)'
+                            }}
+                          >
+                            {/* Tooltip showing the exact number on hover */}
+                            <div className="opacity-0 group-hover:opacity-100 absolute -top-8 left-1/2 transform -translate-x-1/2 bg-blue-600 px-2 py-1 rounded text-xs whitespace-nowrap shadow-lg">
+                              {item.count} bookings
+                            </div>
+                          </div>
+                          <div className="text-xs text-gray-400 mt-2 text-center w-full truncate">
+                            {item.month}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <div className="h-full flex items-center justify-center">
+                    <p className="text-gray-400">No booking data available</p>
+                  </div>
+                )}
               </div>
-              <div className="mt-6 grid grid-cols-2 md:grid-cols-4 gap-4">
+              
+              <div className="mt-6 grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
                 {data.map((item, index) => (
                   <div
                     key={index}
@@ -272,31 +261,60 @@ function Analytics() {
           <div className="space-y-6">
             <div className="section-card">
               <h3 className="card-header">Peak Booking Hours</h3>
-              <div className="h-64 p-4">
-                {/* Chart would go here - Simplified representation */}
-                <div className="h-full flex items-end justify-between">
-                  {data.map((item, index) => (
-                    <div
-                      key={index}
-                      className="flex flex-col items-center space-y-2 w-1/12"
-                    >
+              <div className="h-64 p-4 w-full bg-plek-lightgray/10 rounded-lg">
+                {/* Chart visualization - Completely redesigned for better proportional display */}
+                <div className="h-full w-full flex items-end justify-between px-4">
+                  {data.map((item, index) => {
+                    const maxCount = Math.max(...data.map((d) => d.count));
+                    // Ensure clear heights with proper proportion
+                    const heightPercentage = maxCount > 0 
+                      ? Math.max(5, (item.count / maxCount * 100)) // Use 90% of height max to ensure visibility
+                      : 0;
+                    
+                    // Color gradient based on booking count percentage
+                    const getBarColor = () => {
+                      const percentage = maxCount > 0 ? (item.count / maxCount) : 0;
+                      if (percentage > 0.7) return 'bg-blue-500';
+                      if (percentage > 0.4) return 'bg-blue-400';
+                      if (percentage > 0.1) return 'bg-blue-300';
+                      return 'bg-blue-200';
+                    };
+                    
+                    return (
                       <div
-                        className="w-full bg-blue-500 rounded-t-md transition-all duration-500"
-                        style={{
-                          height: `${
-                            (item.count /
-                              Math.max(...data.map((d) => d.count))) *
-                            100
-                          }%`,
+                        key={index}
+                        className="flex flex-col items-center"
+                        style={{ 
+                          width: `${Math.max(12, 85 / data.length)}%`,
+                          minWidth: '20px',
+                          maxWidth: '45px'
                         }}
-                      ></div>
-                      <div className="text-xs text-gray-400 truncate rotate-45 origin-top-left mt-4 ml-4">
-                        {item.hour}
+                      >
+                        {/* The bar with dynamic height and width */}
+                        <div className="relative w-full flex items-end justify-center h-[90%]">
+                          <div
+                            className={`${getBarColor()} rounded-t-md w-full transition-all duration-300 hover:brightness-110 relative group`}
+                            style={{
+                              height: `${heightPercentage}%`,
+                              minHeight: item.count > 0 ? '4px' : '0',
+                            }}
+                          >
+                            {/* Value display on top of the bar */}
+                            <div className="absolute -top-6 left-1/2 transform -translate-x-1/2 text-xs text-white font-medium">
+                              {item.count > 0 ? item.count : ''}
+                            </div>
+                          </div>
+                        </div>
+                        {/* Hour label */}
+                        <div className="text-xs text-gray-400 mt-2 text-center w-full">
+                          {item.hour}
+                        </div>
                       </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               </div>
+              
               <div className="mt-8 grid grid-cols-2 lg:grid-cols-4 gap-4">
                 <div className="bg-blue-900/30 p-4 rounded-lg col-span-2 lg:col-span-4">
                   <div className="flex justify-between items-center">
@@ -310,22 +328,26 @@ function Analytics() {
                     </p>
                   </div>
                 </div>
-                {data.slice(0, 4).map((item, index) => (
-                  <div
-                    key={index}
-                    className="bg-plek-lightgray/50 p-4 rounded-lg"
-                  >
-                    <h4 className="text-sm font-medium text-gray-300">
-                      {item.hour}
-                    </h4>
-                    <p className="text-xl font-bold mt-1">
-                      {item.count}{" "}
-                      <span className="text-xs font-normal text-gray-400">
-                        bookings
-                      </span>
-                    </p>
+                <div className="col-span-2 lg:col-span-4 overflow-x-auto">
+                  <div className="grid grid-cols-4 md:grid-cols-6 lg:grid-cols-8 gap-4 min-w-full">
+                    {data.map((item, index) => (
+                      <div
+                        key={index}
+                        className="bg-plek-lightgray/50 p-4 rounded-lg"
+                      >
+                        <h4 className="text-sm font-medium text-gray-300">
+                          {item.hour}
+                        </h4>
+                        <p className="text-xl font-bold mt-1">
+                          {item.count}{" "}
+                          <span className="text-xs font-normal text-gray-400">
+                            bookings
+                          </span>
+                        </p>
+                      </div>
+                    ))}
                   </div>
-                ))}
+                </div>
               </div>
             </div>
           </div>
@@ -360,50 +382,64 @@ function Analytics() {
                   </tr>
                 </thead>
                 <tbody className="bg-plek-lightgray/20 divide-y divide-gray-700">
-                  {data.map((user, index) => (
-                    <tr
-                      key={index}
-                      className={index % 2 === 0 ? "bg-plek-background/50" : ""}
-                    >
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="flex items-center">
-                          <div className="flex-shrink-0 h-8 w-8 rounded-full bg-plek-purple flex items-center justify-center text-white">
-                            {user.name
-                              .split(" ")
-                              .map((n) => n[0])
-                              .join("")}
+                  {data.map((user, index) => {
+                    // Handle email addresses for initials with null check
+                    let initials = "";
+                    const userName = user.name || "Unknown";  // Default to "Unknown" if name is undefined
+                    
+                    if (userName.includes("@")) {
+                      // It's an email address, use the first letter of the local part
+                      initials = userName.split("@")[0][0].toUpperCase();
+                    } else {
+                      // It's a regular name, use initials as before
+                      initials = userName
+                        .split(" ")
+                        .map((n) => n[0])
+                        .join("");
+                    }
+                    
+                    return (
+                      <tr
+                        key={index}
+                        className={index % 2 === 0 ? "bg-plek-background/50" : ""}
+                      >
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <div className="flex items-center">
+                            <div className="flex-shrink-0 h-8 w-8 rounded-full bg-plek-purple flex items-center justify-center text-white">
+                              {initials || "?"}
+                            </div>
+                            <div className="ml-3">
+                              <p className="text-sm font-medium text-white">
+                                {userName}
+                              </p>
+                            </div>
                           </div>
-                          <div className="ml-3">
-                            <p className="text-sm font-medium text-white">
-                              {user.name}
-                            </p>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-300">
+                          {user.department}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <div className="flex items-center">
+                            <span className="px-3 py-1 text-sm font-medium rounded-full bg-green-900/30 text-green-400">
+                              {user.bookings}
+                            </span>
+                            <div className="ml-2 h-2 bg-plek-dark rounded-full w-24">
+                              <div
+                                className="bg-green-500 h-2 rounded-full"
+                                style={{
+                                  width: `${
+                                    (user.bookings /
+                                      Math.max(...data.map((u) => u.bookings))) *
+                                    100
+                                  }%`,
+                                }}
+                              ></div>
+                            </div>
                           </div>
-                        </div>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-300">
-                        {user.department}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="flex items-center">
-                          <span className="px-3 py-1 text-sm font-medium rounded-full bg-green-900/30 text-green-400">
-                            {user.bookings}
-                          </span>
-                          <div className="ml-2 h-2 bg-plek-dark rounded-full w-24">
-                            <div
-                              className="bg-green-500 h-2 rounded-full"
-                              style={{
-                                width: `${
-                                  (user.bookings /
-                                    Math.max(...data.map((u) => u.bookings))) *
-                                  100
-                                }%`,
-                              }}
-                            ></div>
-                          </div>
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
@@ -473,7 +509,7 @@ function Analytics() {
         return (
           <div className="space-y-6">
             <div className="section-card">
-              <h3 className="card-header">Room Utilization Rates</h3>
+              <h3 className="card-header">Room Utilization and Attendance</h3>
               <div className="mb-4 grid grid-cols-1 lg:grid-cols-2 gap-4">
                 <div className="bg-plek-lightgray/30 p-4 rounded-lg">
                   <h4 className="text-sm font-medium text-gray-300 mb-3">
@@ -504,21 +540,26 @@ function Analytics() {
                 </div>
                 <div className="bg-plek-lightgray/30 p-4 rounded-lg">
                   <h4 className="text-sm font-medium text-gray-300 mb-3">
-                    Highest Utilized Room
+                    Average Space Utilization (Attendees/Capacity)
                   </h4>
-                  <div className="flex justify-between items-center">
-                    <p className="text-white font-medium">
-                      Room{" "}
-                      {
-                        data.reduce((prev, current) =>
-                          prev.utilization > current.utilization
-                            ? prev
-                            : current
-                        ).room
-                      }
-                    </p>
-                    <span className="text-xl font-bold">
-                      {Math.max(...data.map((room) => room.utilization))}%
+                  <div className="flex items-center">
+                    <div className="relative w-full h-6 bg-plek-background rounded-full overflow-hidden">
+                      <div
+                        className="absolute top-0 left-0 h-full bg-gradient-to-r from-blue-500 to-plek-purple rounded-full"
+                        style={{
+                          width: `${Math.min(100, 
+                            data.reduce((acc, curr) => acc + curr.attendeeRatio, 0) /
+                              data.length
+                          )}%`,
+                        }}
+                      ></div>
+                    </div>
+                    <span className="ml-3 text-xl font-bold">
+                      {Math.round(
+                        data.reduce((acc, curr) => acc + curr.attendeeRatio, 0) /
+                          data.length
+                      )}
+                      %
                     </span>
                   </div>
                 </div>
@@ -537,19 +578,34 @@ function Analytics() {
                           {room.building} • Capacity: {room.capacity}
                         </p>
                       </div>
-                      <span
-                        className={`px-2 py-1 text-xs font-medium rounded-full ${
-                          room.utilization > 75
-                            ? "bg-green-900/30 text-green-400"
-                            : room.utilization > 50
-                            ? "bg-yellow-900/30 text-yellow-400"
-                            : "bg-red-900/30 text-red-400"
-                        }`}
-                      >
-                        {room.utilization}%
-                      </span>
+                      <div className="flex flex-col items-end">
+                        <span
+                          className={`px-2 py-1 text-xs font-medium rounded-full ${
+                            room.utilization > 75
+                              ? "bg-green-900/30 text-green-400"
+                              : room.utilization > 50
+                              ? "bg-yellow-900/30 text-yellow-400"
+                              : "bg-red-900/30 text-red-400"
+                          }`}
+                        >
+                          {room.utilization}% time used
+                        </span>
+                        <span
+                          className={`mt-1 px-2 py-1 text-xs font-medium rounded-full ${
+                            room.attendeeRatio > 75
+                              ? "bg-blue-900/30 text-blue-400"
+                              : room.attendeeRatio > 50
+                              ? "bg-indigo-900/30 text-indigo-400"
+                              : "bg-purple-900/30 text-purple-400"
+                          }`}
+                        >
+                          {room.attendeeRatio}% space filled
+                        </span>
+                      </div>
                     </div>
-                    <div className="relative w-full h-2 bg-plek-background rounded-full overflow-hidden">
+                    
+                    {/* Time utilization bar */}
+                    <div className="relative w-full h-2 bg-plek-background rounded-full overflow-hidden mb-2">
                       <div
                         className={`absolute top-0 left-0 h-full rounded-full ${
                           room.utilization > 75
@@ -560,6 +616,25 @@ function Analytics() {
                         }`}
                         style={{ width: `${room.utilization}%` }}
                       ></div>
+                    </div>
+                    
+                    {/* Attendees/Capacity bar */}
+                    <div className="relative w-full h-2 bg-plek-background rounded-full overflow-hidden">
+                      <div
+                        className={`absolute top-0 left-0 h-full rounded-full ${
+                          room.attendeeRatio > 75
+                            ? "bg-blue-500"
+                            : room.attendeeRatio > 50
+                            ? "bg-indigo-500"
+                            : "bg-purple-500"
+                        }`}
+                        style={{ width: `${room.attendeeRatio}%` }}
+                      ></div>
+                    </div>
+                    
+                    <div className="mt-3 text-xs text-gray-400 flex justify-between">
+                      <span>Avg attendees: {room.avgAttendees} people</span>
+                      <span>Total bookings: {room.bookingCount}</span>
                     </div>
                   </div>
                 ))}

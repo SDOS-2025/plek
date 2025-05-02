@@ -1,13 +1,13 @@
-from django.db.models import Count, DurationField, ExpressionWrapper, F, Q, Sum
-from django.db.models.functions import TruncDate
-from django.utils.timezone import now
+from django.db.models import Count, DurationField, ExpressionWrapper, F, Q, Sum, Avg, IntegerField
+from django.db.models.functions import TruncDate, Cast, Coalesce
+from django.utils.timezone import now, localtime, localdate
 from rest_framework import status
 from rest_framework.permissions import IsAdminUser
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from bookings.models import Booking
-from rooms.models import Room
+from rooms.models import Building, Room
 
 from .serializers import CountStatSerializer, RoomUsageStatSerializer, TimeSeriesStatSerializer
 
@@ -18,7 +18,48 @@ class BookingStatsView(APIView):
     def get(self, request):
         stat_type = request.query_params.get("stat_type", None)
 
-        if stat_type == "totals":
+        if stat_type == "dashboard":
+            # Get today's date
+            today = localdate()
+            
+            # Count today's bookings
+            today_bookings = Booking.objects.filter(
+                start_time__date=today
+            ).count()
+            
+            # Count pending approvals
+            pending_approvals = Booking.objects.filter(
+                status="pending"
+            ).count()
+            
+            # Count conflicts (bookings that overlap with others)
+            # This is a simplified representation - actual conflict detection may be more complex
+            current_bookings = Booking.objects.filter(
+                Q(start_time__date__lte=today) & Q(end_time__date__gte=today)
+            )
+            
+            # Simple conflict detection - rooms with more than one active booking
+            conflicts = 0
+            room_booking_counts = {}
+            for booking in current_bookings:
+                room_id = booking.room_id
+                if room_id in room_booking_counts:
+                    # If we already counted this room, it means there's at least one conflict
+                    if room_booking_counts[room_id] == 1:
+                        conflicts += 1
+                    room_booking_counts[room_id] += 1
+                else:
+                    room_booking_counts[room_id] = 1
+            
+            data = {
+                "today_bookings": today_bookings,
+                "pending_approvals": pending_approvals,
+                "conflicts": conflicts
+            }
+            
+            return Response(data)
+
+        elif stat_type == "totals":
             stats = (
                 Booking.objects.annotate(date=TruncDate("start_time"))
                 .values("date")
@@ -33,7 +74,7 @@ class BookingStatsView(APIView):
                 Booking.objects.annotate(hour=F("start_time__hour"))
                 .values("hour")
                 .annotate(count=Count("id"))
-                .order_by("-count")[:5]
+                .order_by("hour")  # Order by hour instead of count, and don't limit to 5
             )
 
             data = [{"label": f"{int(stat['hour'])}:00", "value": stat["count"]} for stat in stats]
@@ -122,13 +163,15 @@ class RoomStatsView(APIView):
         stat_type = request.query_params.get("stat_type", None)
 
         if stat_type == "most_booked":
-            stats = Room.objects.annotate(count=Count("booking")).order_by("-count")[:5]
+            stats = Room.objects.annotate(count=Count("bookings")).order_by("-count")[:5]
             data = [
                 {
                     "name": room.name,
-                    "description": room.description,
-                    "building": room.building,
-                    "amenities": room.amenities,
+                    "building": room.building.id if hasattr(room.building, "id") else None,
+                    "building_name": room.building.name if hasattr(room.building, "name") else str(room.building) if room.building else None,
+                    # Convert amenities queryset to a list of names
+                    "amenities": list(room.amenities.values_list("name", flat=True)),
+                    "capacity": room.capacity,
                     "count": room.count,
                 }
                 for room in stats
@@ -137,13 +180,15 @@ class RoomStatsView(APIView):
             return Response(serializer.data)
 
         elif stat_type == "least_booked":
-            stats = Room.objects.annotate(count=Count("booking")).order_by("count")[:5]
+            stats = Room.objects.annotate(count=Count("bookings")).order_by("count")[:5]
             data = [
                 {
                     "name": room.name,
-                    "description": room.description,
-                    "building": room.building,
-                    "amenities": room.amenities,
+                    "building": room.building.id if hasattr(room.building, "id") else None,
+                    "building_name": room.building.name if hasattr(room.building, "name") else str(room.building) if room.building else None,
+                    # Convert amenities queryset to a list of names
+                    "amenities": list(room.amenities.values_list("name", flat=True)),
+                    "capacity": room.capacity,
                     "count": room.count,
                 }
                 for room in stats
@@ -155,25 +200,49 @@ class RoomStatsView(APIView):
             stats = (
                 Room.objects.annotate(
                     usage_hours=ExpressionWrapper(
-                        Sum(F("booking__end_time") - F("booking__start_time")),
+                        Sum(F("bookings__end_time") - F("bookings__start_time")),
                         output_field=DurationField(),
-                    )
+                    ),
+                    total_attendees=Sum(Cast('bookings__participants', output_field=IntegerField())),
+                    booking_count=Count("bookings")
                 )
-                .values("name", "description", "building", "amenities", "usage_hours")
+                .values("name", "building", "capacity", "usage_hours", "total_attendees", "booking_count")
                 .order_by("-usage_hours")
             )
-            data = [
-                {
+            
+            data = []
+            for stat in stats:
+                # Handle the case where usage_hours might be None
+                usage_hours_value = 0
+                if stat.get("usage_hours") is not None:
+                    usage_hours_value = stat["usage_hours"].total_seconds() / 3600
+                
+                # Get the building name if possible
+                building_name = None
+                if stat["building"] is not None:
+                    try:
+                        building = Building.objects.get(id=stat["building"])
+                        building_name = building.name
+                    except Building.DoesNotExist:
+                        building_name = str(stat["building"])
+                
+                # Calculate average attendees if there are bookings
+                total_attendees = stat.get("total_attendees") or 0
+                booking_count = stat.get("booking_count") or 0
+                avg_attendees = total_attendees / booking_count if booking_count > 0 else 0
+                
+                data.append({
                     "name": stat["name"],
-                    "description": stat["description"],
                     "building": stat["building"],
-                    "amenities": stat["amenities"],
-                    "usage_hours": stat["usage_hours"].total_seconds() / 3600
-                    if stat["usage_hours"]
-                    else 0,
-                }
-                for stat in stats
-            ]
+                    "building_name": building_name,
+                    "amenities": [],  # We don't need amenities for utilization stats
+                    "capacity": stat["capacity"],
+                    "usage_hours": usage_hours_value,
+                    "total_attendees": total_attendees,
+                    "booking_count": booking_count,
+                    "avg_attendees": round(avg_attendees, 1)
+                })
+            
             serializer = RoomUsageStatSerializer(data, many=True)
             return Response(serializer.data)
 
