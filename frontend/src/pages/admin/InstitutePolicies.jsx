@@ -10,6 +10,8 @@ import {
   CalendarClock,
   AlertTriangle,
 } from "lucide-react";
+import NavBar from "../../components/NavBar";
+import Footer from "../../components/Footer";
 import {
   fetchInstitutePoliciesAdmin,
   updateInstitutePolicies,
@@ -142,19 +144,19 @@ const InstitutePolicies = () => {
     }
   };
 
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center h-full">
-        <div className="animate-spin mr-2">
-          <RefreshCw size={24} />
-        </div>
-        <span>Loading policies...</span>
+  // Loading state
+  const renderLoadingState = () => (
+    <div className="flex items-center justify-center h-full">
+      <div className="animate-spin mr-2">
+        <RefreshCw size={24} />
       </div>
-    );
-  }
+      <span>Loading policies...</span>
+    </div>
+  );
 
-  return (
-    <div className="p-6 max-w-4xl mx-auto">
+  // Main content render
+  const renderContent = () => (
+    <>
       <div className="mb-8">
         <h1 className="text-3xl font-semibold flex items-center">
           <Settings size={28} className="mr-3 text-purple-500" />
@@ -378,6 +380,18 @@ const InstitutePolicies = () => {
           </button>
         </div>
       </form>
+    </>
+  );
+
+  return (
+    <div className="page-container">
+      <NavBar activePage="institute-policies" />
+      
+      <div className="main-content">
+        {loading ? renderLoadingState() : renderContent()}
+      </div>
+      
+      <Footer />
     </div>
   );
 };

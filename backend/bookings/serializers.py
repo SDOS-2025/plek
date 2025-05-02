@@ -20,14 +20,29 @@ class BookingSerializer(serializers.ModelSerializer):
         source="approved_by.email",
         read_only=True,
     )
+    # Add room details to the serializer
+    room_name = serializers.CharField(source="room.name", read_only=True)
+    building_name = serializers.CharField(source="room.building.name", read_only=True, default="")
+    room_capacity = serializers.IntegerField(source="room.capacity", read_only=True)
+    room_floor_id = serializers.IntegerField(source="room.floor.id", read_only=True, default=None)
+    
+    # Include user details for better display
+    user_first_name = serializers.CharField(source="user.first_name", read_only=True, default="")
+    user_last_name = serializers.CharField(source="user.last_name", read_only=True, default="")
 
     class Meta:
         model = Booking
         fields = [
             "id",
             "room",
+            "room_name",
+            "building_name",
+            "room_capacity",
+            "room_floor_id",
             "user",
             "user_email",
+            "user_first_name",
+            "user_last_name",
             "approved_by",
             "approved_by_email",
             "start_time",

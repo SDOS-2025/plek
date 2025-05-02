@@ -50,7 +50,7 @@ export const fetchInstitutePoliciesAdmin = async () => {
  */
 export const updateInstitutePolicies = async (policyData) => {
   try {
-    const response = await api.post('/api/settings/institute-policies/', policyData);
+    const response = await api.post('/settings/policies/', policyData);
     return response.data;
   } catch (error) {
     console.error('Error updating institute policies:', error);

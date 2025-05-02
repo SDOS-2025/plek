@@ -56,6 +56,9 @@ function ManageRooms() {
   const [selectedRoom, setSelectedRoom] = useState(null);
   const [selectedBuilding, setSelectedBuilding] = useState("all");
   const [selectedCapacity, setSelectedCapacity] = useState("all");
+  const [selectedFloor, setSelectedFloor] = useState("all");
+  const [selectedDepartment, setSelectedDepartment] = useState("all");
+  const [selectedAvailability, setSelectedAvailability] = useState("all");
   const [showFilters, setShowFilters] = useState(false);
   const [rooms, setRooms] = useState([]); // Initialize with an empty array
   const [error, setError] = useState(null);
@@ -67,6 +70,8 @@ function ManageRooms() {
   });
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [roomToDelete, setRoomToDelete] = useState(null);
+  const [floors, setFloors] = useState([]);
+  const [departments, setDepartments] = useState([]);
 
   const showAlert = (type, message) => {
     setAlert({ show: true, type, message });
@@ -76,52 +81,65 @@ function ManageRooms() {
     setAlert((prev) => ({ ...prev, show: false }));
   };
 
+  // Define fetchRooms function outside useEffect so it can be accessed globally in the component
+  const fetchRooms = async () => {
+    setLoading(true);
+    try {
+      const response = await api.get("rooms/");
+      setRooms(response.data);
+      setError(null);
+    } catch (error) {
+      setError("Failed to fetch rooms");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Define startPolling function outside useEffect so it can be accessed globally in the component
+  const startPolling = () => {
+    fetchRooms(); // Initial fetch
+    return setInterval(fetchRooms, 60000); // Every minute
+  };
+
+  // Define stopPolling function to clear the interval
+  const stopPolling = (intervalId) => {
+    if (intervalId) {
+      clearInterval(intervalId);
+    }
+  };
+
   useEffect(() => {
     let isMounted = true;
     let intervalId;
 
-    const fetchRooms = async () => {
-      setLoading(true);
-      try {
-        const response = await api.get("rooms/");
-        if (isMounted) {
-          setRooms(response.data);
-          setError(null);
-        }
-      } catch (error) {
-        if (isMounted) {
-          setError("Failed to fetch rooms");
-        }
-      } finally {
-        if (isMounted) {
-          setLoading(false);
-        }
-      }
-    };
-
-    const startPolling = () => {
-      fetchRooms(); // Initial fetch
-      intervalId = setInterval(fetchRooms, 60000); // Every minute
-    };
-
-    const stopPolling = () => {
-      if (intervalId) {
-        clearInterval(intervalId);
-      }
-    };
-
     if (!showAddModal && !showEditModal) {
-      startPolling();
-    } else {
-      stopPolling();
+      intervalId = startPolling();
     }
 
     // This is the cleanup function
     return () => {
       isMounted = false;
-      stopPolling();
+      stopPolling(intervalId);
     };
   }, [showAddModal, showEditModal]); // Fetch rooms on component mount
+
+  useEffect(() => {
+    const fetchFilterData = async () => {
+      try {
+        const [floorsResponse, departmentsResponse] = await Promise.all([
+          api.get("/floors/"),
+          api.get("/departments/"),
+        ]);
+
+        setFloors(floorsResponse.data);
+        setDepartments(departmentsResponse.data);
+      } catch (error) {
+        console.error("Error fetching filter data:", error);
+      }
+    };
+
+    fetchFilterData();
+  }, []);
 
   {
     error && (
@@ -131,11 +149,36 @@ function ManageRooms() {
     );
   }
 
+  // Adding debugging utility to help track departments in each room
+  useEffect(() => {
+    if (selectedDepartment !== "all") {
+      console.log("Selected Department:", selectedDepartment);
+      rooms.forEach((room) => {
+        if (room.department_names) {
+          console.log(`Room ${room.name} departments:`, room.department_names);
+        }
+      });
+    }
+  }, [selectedDepartment, rooms]);
+
   // Get unique buildings and capacity ranges
-  const buildings = useMemo(
-    () => ["all", ...new Set(rooms.map((room) => room.building))],
-    [rooms]
-  );
+  const buildings = useMemo(() => {
+    const buildingSet = new Set();
+    // Add "all" option first
+    buildingSet.add("all");
+
+    // Add building names from rooms
+    rooms.forEach((room) => {
+      // Prefer building_name if available, fall back to building if it's a string
+      if (room.building_name) {
+        buildingSet.add(room.building_name);
+      } else if (typeof room.building === "string" && room.building !== "all") {
+        buildingSet.add(room.building);
+      }
+    });
+
+    return Array.from(buildingSet);
+  }, [rooms]);
 
   const capacityRanges = useMemo(
     () => [
@@ -148,16 +191,115 @@ function ManageRooms() {
     []
   );
 
+  const uniqueFloors = useMemo(() => {
+    const floorNames = ["all"];
+    rooms.forEach((room) => {
+      if (room.floor_name && !floorNames.includes(room.floor_name)) {
+        floorNames.push(room.floor_name);
+      }
+    });
+    return floorNames;
+  }, [rooms]);
+
+  // Improved department list with both IDs and names for better filtering
+  const uniqueDepartments = useMemo(() => {
+    // Start with "all" option
+    const options = [{ id: "all", name: "All Departments" }];
+
+    // Add departments from API with their IDs for reference
+    departments
+      .filter((dept) => dept.is_active !== false)
+      .forEach((dept) => {
+        options.push({
+          id: dept.id,
+          name: dept.name,
+        });
+      });
+
+    return options;
+  }, [departments]);
+
   // Filter rooms based on search query and filters
   const filteredRooms = useMemo(() => {
     return rooms.filter((room) => {
+      // Search functionality - check if the search query matches room name, building, floor name, or any amenity
+      const roomNameMatch =
+        typeof room.name === "string"
+          ? room.name.toLowerCase().includes(searchQuery.toLowerCase())
+          : false;
+
+      const buildingMatch =
+        typeof room.building === "string"
+          ? room.building.toLowerCase().includes(searchQuery.toLowerCase())
+          : room.building && room.building.toString
+          ? room.building
+              .toString()
+              .toLowerCase()
+              .includes(searchQuery.toLowerCase())
+          : false;
+
+      const floorMatch =
+        room.floor_name && typeof room.floor_name === "string"
+          ? room.floor_name.toLowerCase().includes(searchQuery.toLowerCase())
+          : false;
+
+      // Check if search matches any of the room's amenities
+      const amenityMatch =
+        room.amenity_names &&
+        Array.isArray(room.amenity_names) &&
+        room.amenity_names.some(
+          (amenity) =>
+            typeof amenity === "string" &&
+            amenity.toLowerCase().includes(searchQuery.toLowerCase())
+        );
+
+      const departmentMatch =
+        room.department_names &&
+        Array.isArray(room.department_names) &&
+        room.department_names.some(
+          (dept) =>
+            typeof dept === "string" &&
+            dept.toLowerCase().includes(searchQuery.toLowerCase())
+        );
+
       const matchesSearch =
-        room.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        room.building.toLowerCase().includes(searchQuery.toLowerCase());
+        roomNameMatch ||
+        buildingMatch ||
+        floorMatch ||
+        amenityMatch ||
+        departmentMatch;
 
+      // Filter by building
       const matchesBuilding =
-        selectedBuilding === "all" || room.building === selectedBuilding;
+        selectedBuilding === "all" ||
+        room.building === selectedBuilding ||
+        (room.building_name && room.building_name === selectedBuilding);
 
+      // Filter by floor
+      const matchesFloor =
+        selectedFloor === "all" ||
+        (room.floor_name && room.floor_name === selectedFloor);
+
+      // Filter by department - match by ID or name
+      const matchesDepartment =
+        selectedDepartment === "all" ||
+        // Try to match against department IDs first (integers)
+        (room.departments &&
+          Array.isArray(room.departments) &&
+          room.departments.some(
+            (deptId) => deptId.toString() === selectedDepartment.toString()
+          )) ||
+        // Then try to match against department names (strings)
+        (room.department_names &&
+          Array.isArray(room.department_names) &&
+          room.department_names.includes(
+            // Find the name corresponding to the selected ID
+            departments.find(
+              (dept) => dept.id.toString() === selectedDepartment.toString()
+            )?.name
+          ));
+
+      // Filter by capacity
       const matchesCapacity =
         selectedCapacity === "all" ||
         capacityRanges.find(
@@ -167,9 +309,32 @@ function ManageRooms() {
             room.capacity <= range.max
         );
 
-      return matchesSearch && matchesBuilding && matchesCapacity;
+      // Filter by availability
+      const matchesAvailability =
+        selectedAvailability === "all" ||
+        (selectedAvailability === "available" && room.is_active !== false) ||
+        (selectedAvailability === "unavailable" && room.is_active === false);
+
+      return (
+        matchesSearch &&
+        matchesBuilding &&
+        matchesFloor &&
+        matchesDepartment &&
+        matchesCapacity &&
+        matchesAvailability
+      );
     });
-  }, [rooms, searchQuery, selectedBuilding, selectedCapacity, capacityRanges]);
+  }, [
+    rooms,
+    searchQuery,
+    selectedBuilding,
+    selectedFloor,
+    selectedDepartment,
+    selectedCapacity,
+    selectedAvailability,
+    capacityRanges,
+    departments,
+  ]);
 
   const handleEditClick = useCallback((room) => {
     setSelectedRoom(room);
@@ -210,6 +375,9 @@ function ManageRooms() {
     const [amenityIds, setAmenityIds] = useState(room ? room.amenities : []);
     const [departmentIds, setDepartmentIds] = useState(
       room ? room.departments || [] : []
+    );
+    const [isActive, setIsActive] = useState(
+      room ? room.is_active !== false : true
     );
 
     // Add new state variables for data fetching
@@ -339,6 +507,7 @@ function ManageRooms() {
         capacity: parseInt(capacity),
         amenities: amenityIds,
         departments: departmentIds,
+        is_active: isActive,
       };
       try {
         if (isEdit && room) {
@@ -511,6 +680,23 @@ function ManageRooms() {
               </div>
             </div>
 
+            {/* Available status checkbox */}
+            <div className="mb-4 flex items-center">
+              <input
+                type="checkbox"
+                id="isActive"
+                checked={isActive}
+                onChange={(e) => setIsActive(e.target.checked)}
+                className="h-5 w-5 text-plek-purple bg-plek-background border-gray-300 rounded focus:ring-plek-purple"
+              />
+              <label htmlFor="isActive" className="ml-2 text-gray-300">
+                Available Room
+              </label>
+              <span className="ml-2 text-xs text-gray-400">
+                (Unavailable rooms can't be booked)
+              </span>
+            </div>
+
             <div className="flex space-x-4">
               <button
                 type="button"
@@ -592,7 +778,7 @@ function ManageRooms() {
 
           {/* Filters */}
           {showFilters && (
-            <div className="grid-layout-2 gap-4 p-4 bg-gray-700 rounded-lg">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 p-4 bg-gray-700 rounded-lg">
               <div>
                 <label className="block text-sm font-medium text-gray-300 mb-2">
                   Building
@@ -605,6 +791,40 @@ function ManageRooms() {
                   {buildings.map((building) => (
                     <option key={building} value={building}>
                       {building === "all" ? "All Buildings" : building}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-2">
+                  Floor
+                </label>
+                <select
+                  value={selectedFloor}
+                  onChange={(e) => setSelectedFloor(e.target.value)}
+                  className="w-full bg-gray-600 rounded-lg p-3 focus:outline-none focus:ring-2 focus:ring-blue-400"
+                >
+                  {uniqueFloors.map((floor) => (
+                    <option key={floor} value={floor}>
+                      {floor === "all" ? "All Floors" : floor}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-2">
+                  Department
+                </label>
+                <select
+                  value={selectedDepartment}
+                  onChange={(e) => setSelectedDepartment(e.target.value)}
+                  className="w-full bg-gray-600 rounded-lg p-3 focus:outline-none focus:ring-2 focus:ring-blue-400"
+                >
+                  {uniqueDepartments.map((department) => (
+                    <option key={department.id} value={department.id}>
+                      {department.name}
                     </option>
                   ))}
                 </select>
@@ -625,6 +845,37 @@ function ManageRooms() {
                     </option>
                   ))}
                 </select>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-2">
+                  Availability
+                </label>
+                <select
+                  value={selectedAvailability}
+                  onChange={(e) => setSelectedAvailability(e.target.value)}
+                  className="w-full bg-gray-600 rounded-lg p-3 focus:outline-none focus:ring-2 focus:ring-blue-400"
+                >
+                  <option value="all">All Rooms</option>
+                  <option value="available">Available Only</option>
+                  <option value="unavailable">Unavailable Only</option>
+                </select>
+              </div>
+
+              <div className="flex items-end">
+                <button
+                  onClick={() => {
+                    setSelectedBuilding("all");
+                    setSelectedFloor("all");
+                    setSelectedDepartment("all");
+                    setSelectedCapacity("all");
+                    setSelectedAvailability("all");
+                    setSearchQuery("");
+                  }}
+                  className="w-full py-3 bg-gray-800 hover:bg-gray-600 rounded-lg transition-colors text-gray-300"
+                >
+                  Reset Filters
+                </button>
               </div>
             </div>
           )}
@@ -652,7 +903,14 @@ function ManageRooms() {
             filteredRooms.map((room) => (
               <div key={room.id} className="section-card">
                 <div className="flex justify-between items-start">
-                  <h3 className="text-xl font-semibold">{room.name}</h3>
+                  <h3 className="text-xl font-semibold">
+                    {room.name}
+                    {room.is_active === false && (
+                      <span className="ml-2 text-sm px-2 py-0.5 bg-red-900/30 text-red-400 rounded-md">
+                        Unavailable
+                      </span>
+                    )}
+                  </h3>
                   <div className="flex space-x-2">
                     <button
                       onClick={() => handleEditClick(room)}

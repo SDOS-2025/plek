@@ -39,6 +39,7 @@ class RoomListView(APIView):
         floor_number = request.query_params.get("floor_number")
         floor_name = request.query_params.get("floor_name")
         department_id = request.query_params.get("department_id")
+        is_active = request.query_params.get("is_active")
 
         try:
             start_datetime = datetime.fromisoformat(start_time) if start_time else None
@@ -54,9 +55,18 @@ class RoomListView(APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        rooms = Room.objects.filter(available=True)
+        # Start with all rooms, then filter
+        rooms = Room.objects.all()
+        
+        # Filter by available status
+        rooms = rooms.filter(available=True)
+        
+        # Filter by active status if specified
+        if is_active is not None:
+            is_active_bool = is_active.lower() == "true"
+            rooms = rooms.filter(is_active=is_active_bool)
 
-        # Apply filters
+        # Apply other filters
         if capacity:
             rooms = rooms.filter(capacity__gte=capacity)
 
@@ -151,6 +161,13 @@ class RoomManageView(APIView):
         # Handle GET request for a list of rooms (fallback to RoomListView)
         else:
             rooms = Room.objects.filter(available=True)
+            
+            # Handle is_active filtering if specified
+            is_active = request.query_params.get("is_active")
+            if is_active is not None:
+                is_active_bool = is_active.lower() == "true"
+                rooms = rooms.filter(is_active=is_active_bool)
+                
             serializer = RoomSerializer(rooms, many=True)
             return Response(serializer.data, status=status.HTTP_200_OK)
 
@@ -170,7 +187,7 @@ class RoomManageView(APIView):
                 {"detail": "Room not found"}, status=status.HTTP_404_NOT_FOUND
             )
 
-        serializer = RoomSerializer(room, data=request.data)
+        serializer = RoomSerializer(room, data=request.data, partial=True)
         if serializer.is_valid():
             serializer.save()
             logger.info(f"Room {room_id} updated by user {request.user.email}")

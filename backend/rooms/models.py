@@ -65,6 +65,7 @@ class Room(models.Model):
     name = models.CharField(max_length=100, unique=True, default="Unnamed Room")
     capacity = models.IntegerField(default=50)
     available = models.BooleanField(default=True)
+    is_active = models.BooleanField(default=True, help_text="Whether this room is available and can be booked")
     building = models.ForeignKey(
         Building, on_delete=models.CASCADE, related_name="rooms", null=True, blank=True
     )

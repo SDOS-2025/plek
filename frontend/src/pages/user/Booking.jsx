@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import {
   Search,
   Filter,
@@ -48,35 +48,60 @@ function Booking() {
   const [showFilters, setShowFilters] = useState(false);
   const [selectedBuilding, setSelectedBuilding] = useState("all");
   const [selectedCapacity, setSelectedCapacity] = useState("all");
+  const [selectedFloor, setSelectedFloor] = useState("all");
+  const [selectedDepartment, setSelectedDepartment] = useState("all");
+  const [availableAmenities, setAvailableAmenities] = useState([]);
   const [rooms, setRooms] = useState([]);
+  const [floors, setFloors] = useState([]);
+  const [departments, setDepartments] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
-  // Modify the useEffect hook to refresh data every minute
+  // Fetch all required data for filtering (rooms, floors, departments, amenities)
   useEffect(() => {
     // Create a reference to track if component is mounted
     let isMounted = true;
 
-    const fetchRooms = async () => {
+    const fetchData = async () => {
       // Only proceed if component is still mounted
       if (!isMounted) return;
 
       try {
-        setLoading((prevLoading) => {
-          // Only show loading indicator on first load, not refreshes
-          return prevLoading && rooms.length === 0;
-        });
+        setLoading(true);
 
-        const response = await api.get("rooms/");
+        // Fetch all required data in parallel
+        const [
+          roomsResponse,
+          floorsResponse,
+          departmentsResponse,
+          amenitiesResponse,
+        ] = await Promise.all([
+          api.get("rooms/"),
+          api.get("floors/"),
+          api.get("departments/"),
+          api.get("amenities/"),
+        ]);
 
         if (isMounted) {
-          setRooms(response.data);
+          // Set all data to state
+          setRooms(roomsResponse.data);
+          setFloors(floorsResponse.data);
+          setDepartments(departmentsResponse.data);
+
+          // Process amenities to create a consistent format for filtering
+          const amenities = amenitiesResponse.data.map((amenity) => ({
+            id: amenity.id,
+            name: amenity.name,
+            value: amenity.name.toLowerCase(),
+          }));
+          setAvailableAmenities(amenities);
+
           setError(null);
         }
       } catch (err) {
-        console.error("Error fetching rooms:", err);
+        console.error("Error fetching data:", err);
         if (isMounted) {
-          setError("Failed to load available rooms");
+          setError("Failed to load available rooms and filters");
         }
       } finally {
         if (isMounted) {
@@ -86,12 +111,21 @@ function Booking() {
     };
 
     // Initial fetch
-    fetchRooms();
+    fetchData();
 
-    // Set up interval for fetching every minute (60000 milliseconds)
+    // Set up interval for refreshing room data every minute (60000 milliseconds)
     const intervalId = setInterval(() => {
       console.log("Refreshing room data...");
-      fetchRooms();
+      api
+        .get("rooms/")
+        .then((response) => {
+          if (isMounted) {
+            setRooms(response.data);
+          }
+        })
+        .catch((err) => {
+          console.error("Error refreshing rooms:", err);
+        });
     }, 60000);
 
     // Cleanup function to run when component unmounts
@@ -101,7 +135,21 @@ function Booking() {
     };
   }, []); // Empty dependency array means this runs once on mount
 
-  const buildings = ["all", ...new Set(rooms.map((room) => room.building))];
+  // Use building_name for dropdown instead of just building field
+  const buildings = useMemo(() => {
+    // Start with "all" option
+    let buildingOptions = ["all"];
+
+    // Extract unique building names from rooms, preferring building_name field
+    const uniqueBuildings = new Set(
+      rooms
+        .filter((room) => room.building_name) // Only include rooms with building_name
+        .map((room) => room.building_name)
+    );
+
+    // Convert Set back to array and return
+    return [...buildingOptions, ...uniqueBuildings];
+  }, [rooms]);
 
   const capacityRanges = [
     { label: "All", value: "all" },
@@ -126,13 +174,44 @@ function Booking() {
 
   // Filter rooms based on search query, building, capacity, and amenities
   const filteredRooms = rooms.filter((room) => {
+    // Only show active rooms
+    const isActive = room.is_active !== false;
+
+    // Search functionality - match room name, building, floor name, or amenities
+    const searchLower = searchQuery.toLowerCase();
     const matchesSearch =
-      room.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      room.building.toLowerCase().includes(searchQuery.toLowerCase());
+      searchQuery === "" ||
+      room.name.toLowerCase().includes(searchLower) ||
+      room.building.toLowerCase().includes(searchLower) ||
+      (room.floor_name &&
+        room.floor_name.toLowerCase().includes(searchLower)) ||
+      (room.amenity_names &&
+        Array.isArray(room.amenity_names) &&
+        room.amenity_names.some((amenity) =>
+          amenity.toLowerCase().includes(searchLower)
+        ));
 
+    // Building filter
     const matchesBuilding =
-      selectedBuilding === "all" || room.building === selectedBuilding;
+      selectedBuilding === "all" || room.building_name === selectedBuilding;
 
+    // Floor filter
+    const matchesFloor =
+      selectedFloor === "all" ||
+      (room.floor && room.floor.toString() === selectedFloor) ||
+      (room.floor_id && room.floor_id.toString() === selectedFloor);
+
+    // Department filter
+    const matchesDepartment =
+      selectedDepartment === "all" ||
+      (room.departments &&
+        Array.isArray(room.departments) &&
+        room.departments.includes(parseInt(selectedDepartment))) ||
+      (room.department_ids &&
+        Array.isArray(room.department_ids) &&
+        room.department_ids.includes(parseInt(selectedDepartment)));
+
+    // Capacity filter
     const matchesCapacity =
       selectedCapacity === "all" ||
       capacityRanges.find(
@@ -142,12 +221,26 @@ function Booking() {
           room.capacity <= range.max
       );
 
+    // Amenities filter - check if room has all selected amenities
     const matchesAmenities =
       selectedAmenities.length === 0 ||
-      selectedAmenities.every((amenity) => room.amenities.includes(amenity));
+      (room.amenity_names &&
+        Array.isArray(room.amenity_names) &&
+        selectedAmenities.every((selectedAmenity) => {
+          return room.amenity_names.some(
+            (roomAmenity) =>
+              roomAmenity.toLowerCase() === selectedAmenity.toLowerCase()
+          );
+        }));
 
     return (
-      matchesSearch && matchesBuilding && matchesCapacity && matchesAmenities
+      isActive &&
+      matchesSearch &&
+      matchesBuilding &&
+      matchesFloor &&
+      matchesDepartment &&
+      matchesCapacity &&
+      matchesAmenities
     );
   });
 
@@ -179,9 +272,9 @@ function Booking() {
             </button>
           </div>
 
-          {/* Filters */}
+          {/* Enhanced Filters */}
           {showFilters && (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 p-4 bg-gray-700 rounded-lg">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 p-4 bg-gray-700 rounded-lg">
               <div className="space-y-2">
                 <label className="block text-gray-300">Building</label>
                 <select
@@ -196,6 +289,50 @@ function Booking() {
                   ))}
                 </select>
               </div>
+
+              {/* Floor Filter */}
+              <div className="space-y-2">
+                <label className="block text-gray-300">Floor</label>
+                <select
+                  className="w-full bg-gray-600 rounded-lg p-3 focus:outline-none focus:ring-2 focus:ring-blue-400"
+                  value={selectedFloor}
+                  onChange={(e) => setSelectedFloor(e.target.value)}
+                >
+                  <option value="all">Any Floor</option>
+                  {floors
+                    .filter(
+                      (floor) =>
+                        selectedBuilding === "all" ||
+                        floor.building_name === selectedBuilding
+                    )
+                    .map((floor) => (
+                      <option key={floor.id} value={floor.id}>
+                        {floor.name || `Floor ${floor.number}`}
+                      </option>
+                    ))}
+                </select>
+              </div>
+
+              {/* Department Filter */}
+              <div className="space-y-2">
+                <label className="block text-gray-300">Department</label>
+                <select
+                  className="w-full bg-gray-600 rounded-lg p-3 focus:outline-none focus:ring-2 focus:ring-blue-400"
+                  value={selectedDepartment}
+                  onChange={(e) => setSelectedDepartment(e.target.value)}
+                >
+                  <option value="all">Any Department</option>
+                  {departments
+                    .filter((dept) => dept.is_active !== false)
+                    .map((department) => (
+                      <option key={department.id} value={department.id}>
+                        {department.name}{" "}
+                        {department.code ? `(${department.code})` : ""}
+                      </option>
+                    ))}
+                </select>
+              </div>
+
               <div className="space-y-2">
                 <label className="block text-gray-300">Capacity</label>
                 <select
@@ -210,39 +347,46 @@ function Booking() {
                   ))}
                 </select>
               </div>
-              <div className="md:col-span-2">
+
+              {/* Reset Button */}
+              <div className="flex items-end">
+                <button
+                  onClick={() => {
+                    setSelectedBuilding("all");
+                    setSelectedFloor("all");
+                    setSelectedDepartment("all");
+                    setSelectedCapacity("all");
+                    setSelectedAmenities([]);
+                    setSearchQuery("");
+                  }}
+                  className="w-full py-3 bg-gray-800 hover:bg-gray-600 rounded-lg transition-colors text-gray-300"
+                >
+                  Reset Filters
+                </button>
+              </div>
+
+              {/* Dynamic Amenities Section */}
+              <div className="lg:col-span-3">
                 <label className="block text-gray-300 mb-2">Amenities</label>
                 <div className="flex flex-wrap gap-2">
-                  <button
-                    className={`px-4 py-2 ${
-                      selectedAmenities.includes("projector")
-                        ? "bg-plek-purple"
-                        : "bg-gray-600"
-                    } rounded-lg flex items-center space-x-2`}
-                    onClick={() => toggleAmenity("projector")}
-                  >
-                    <span>Projector</span>
-                  </button>
-                  <button
-                    className={`px-4 py-2 ${
-                      selectedAmenities.includes("wifi")
-                        ? "bg-plek-purple"
-                        : "bg-gray-600"
-                    } rounded-lg flex items-center space-x-2`}
-                    onClick={() => toggleAmenity("wifi")}
-                  >
-                    <span>Wi-Fi</span>
-                  </button>
-                  <button
-                    className={`px-4 py-2 ${
-                      selectedAmenities.includes("whiteboard")
-                        ? "bg-plek-purple"
-                        : "bg-gray-600"
-                    } rounded-lg flex items-center space-x-2`}
-                    onClick={() => toggleAmenity("whiteboard")}
-                  >
-                    <span>Whiteboard</span>
-                  </button>
+                  {availableAmenities.map((amenity) => (
+                    <button
+                      key={amenity.id}
+                      className={`px-4 py-2 ${
+                        selectedAmenities.includes(amenity.value)
+                          ? "bg-plek-purple"
+                          : "bg-gray-600"
+                      } rounded-lg flex items-center space-x-2 transition-colors`}
+                      onClick={() => toggleAmenity(amenity.value)}
+                    >
+                      <span>{formatAmenityName(amenity.name)}</span>
+                    </button>
+                  ))}
+                  {availableAmenities.length === 0 && (
+                    <span className="text-gray-400 text-sm">
+                      No amenities available
+                    </span>
+                  )}
                 </div>
               </div>
             </div>

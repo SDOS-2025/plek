@@ -50,6 +50,9 @@ function ManageBookings() {
   const [selectedBuilding, setSelectedBuilding] = useState("all");
   const [selectedDateRange, setSelectedDateRange] = useState("all");
   const [selectedStatus, setSelectedStatus] = useState("all");
+  const [selectedCapacity, setSelectedCapacity] = useState("all");
+  const [selectedUser, setSelectedUser] = useState("all");
+  const [selectedParticipants, setSelectedParticipants] = useState("all"); // New filter for participants
 
   const firstName = localStorage.getItem("FirstName");
 
@@ -273,12 +276,23 @@ function ManageBookings() {
         "h a"
       )} - ${endTime.toFormat("h a")}`;
 
-      // Extract room information - use room_name from enhanced API response if available
+      // Get room information directly from the booking response
       let roomName = booking.room_name || "Unknown Room";
       let buildingName = booking.building_name || "";
-      let roomCapacity = booking.capacity || 0;
 
-      // Get user information from enhanced booking data if available
+      // Get room capacity directly from the API response
+      let roomCapacity = booking.room_capacity || 0;
+
+      // As a fallback, if room_capacity isn't available but participants is numeric, use that
+      if (
+        roomCapacity === 0 &&
+        booking.participants &&
+        !isNaN(parseInt(booking.participants))
+      ) {
+        roomCapacity = parseInt(booking.participants);
+      }
+
+      // Get user information from booking data
       const userName =
         booking.user_first_name || booking.user_last_name
           ? `${booking.user_first_name || ""} ${
@@ -594,12 +608,78 @@ function ManageBookings() {
         selectedStatus === "all" ||
         booking.status?.toLowerCase() === selectedStatus;
 
+      // Capacity filtering
+      let matchesCapacity = true;
+      if (selectedCapacity !== "all") {
+        // Make sure we have a numeric capacity
+        const capacity = booking.capacity ? parseInt(booking.capacity) : 0;
+
+        // Debug the capacity filtering
+        console.log(
+          `Filtering booking ${booking.id} with capacity: ${capacity}, selected filter: ${selectedCapacity}`
+        );
+
+        if (selectedCapacity === "small") {
+          matchesCapacity = capacity >= 1 && capacity <= 10;
+        } else if (selectedCapacity === "medium") {
+          matchesCapacity = capacity >= 11 && capacity <= 30;
+        } else if (selectedCapacity === "large") {
+          matchesCapacity = capacity >= 31 && capacity <= 100;
+        } else if (selectedCapacity === "xlarge") {
+          matchesCapacity = capacity > 100;
+        }
+
+        // Debug the filter result
+        console.log(`Match result for ${booking.room}: ${matchesCapacity}`);
+      }
+
+      // User filtering
+      const matchesUser =
+        selectedUser === "all" || booking.userFirstName === selectedUser;
+
+      // Participants filtering
+      let matchesParticipants = true;
+      if (selectedParticipants !== "all") {
+        // Parse participants count - try to extract a number from the string if needed
+        let participantsCount = 0;
+
+        if (typeof booking.participants === "number") {
+          participantsCount = booking.participants;
+        } else if (typeof booking.participants === "string") {
+          // Try to extract number from string like "12 participants"
+          const numMatch = booking.participants.match(/\d+/);
+          if (numMatch) {
+            participantsCount = parseInt(numMatch[0]);
+          }
+        }
+
+        console.log(
+          `Filtering booking ${booking.id} with participants: ${participantsCount}, selected filter: ${selectedParticipants}`
+        );
+
+        if (selectedParticipants === "small") {
+          matchesParticipants =
+            participantsCount >= 1 && participantsCount <= 5;
+        } else if (selectedParticipants === "medium") {
+          matchesParticipants =
+            participantsCount >= 6 && participantsCount <= 15;
+        } else if (selectedParticipants === "large") {
+          matchesParticipants =
+            participantsCount >= 16 && participantsCount <= 30;
+        } else if (selectedParticipants === "xlarge") {
+          matchesParticipants = participantsCount > 30;
+        }
+      }
+
       return (
         matchesSearch &&
         matchesBuilding &&
         matchesDate &&
         matchesStatus &&
-        matchesCoordinatorResources
+        matchesCoordinatorResources &&
+        matchesCapacity &&
+        matchesUser &&
+        matchesParticipants
       );
     });
   };
@@ -890,7 +970,7 @@ function ManageBookings() {
 
           {/* Filters */}
           {showFilters && (
-            <div className="grid-layout-2 gap-4 p-4 bg-gray-700 rounded-lg">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 p-4 bg-gray-700 rounded-lg">
               <div>
                 <label className="block text-sm font-medium text-gray-300 mb-2">
                   Building
@@ -907,6 +987,7 @@ function ManageBookings() {
                   ))}
                 </select>
               </div>
+
               <div>
                 <label className="block text-sm font-medium text-gray-300 mb-2">
                   Date Range
@@ -923,8 +1004,52 @@ function ManageBookings() {
                   ))}
                 </select>
               </div>
-              {activeTab === "bookings" && (
-                <div className="col-span-2">
+
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-2">
+                  Room Capacity
+                </label>
+                <select
+                  value={selectedCapacity}
+                  onChange={(e) => setSelectedCapacity(e.target.value)}
+                  className="w-full bg-gray-600 rounded-lg p-3 focus:outline-none focus:ring-2 focus:ring-blue-400"
+                >
+                  <option value="all">Any Capacity</option>
+                  <option value="small">Small (1-10)</option>
+                  <option value="medium">Medium (11-30)</option>
+                  <option value="large">Large (31-100)</option>
+                  <option value="xlarge">Extra Large (100+)</option>
+                </select>
+              </div>
+
+              {activeTab !== "past" && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-300 mb-2">
+                    Filter by User
+                  </label>
+                  <select
+                    value={selectedUser}
+                    onChange={(e) => setSelectedUser(e.target.value)}
+                    className="w-full bg-gray-600 rounded-lg p-3 focus:outline-none focus:ring-2 focus:ring-blue-400"
+                  >
+                    <option value="all">All Users</option>
+                    {[
+                      ...new Set(
+                        [...bookingRequests, ...approvedBookings]
+                          .filter((booking) => booking.userFirstName)
+                          .map((booking) => booking.userFirstName)
+                      ),
+                    ].map((userName, index) => (
+                      <option key={index} value={userName}>
+                        {userName}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
+
+              {activeTab !== "requests" && (
+                <div>
                   <label className="block text-sm font-medium text-gray-300 mb-2">
                     Status
                   </label>
@@ -941,6 +1066,40 @@ function ManageBookings() {
                   </select>
                 </div>
               )}
+
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-2">
+                  Participants Count
+                </label>
+                <select
+                  value={selectedParticipants}
+                  onChange={(e) => setSelectedParticipants(e.target.value)}
+                  className="w-full bg-gray-600 rounded-lg p-3 focus:outline-none focus:ring-2 focus:ring-blue-400"
+                >
+                  <option value="all">Any Number</option>
+                  <option value="small">Small (1-5)</option>
+                  <option value="medium">Medium (6-15)</option>
+                  <option value="large">Large (16-30)</option>
+                  <option value="xlarge">Extra Large (30+)</option>
+                </select>
+              </div>
+
+              <div className="flex items-end">
+                <button
+                  onClick={() => {
+                    setSelectedBuilding("all");
+                    setSelectedDateRange("all");
+                    setSelectedStatus("all");
+                    setSelectedCapacity("all");
+                    setSelectedUser("all");
+                    setSelectedParticipants("all");
+                    setSearchQuery("");
+                  }}
+                  className="w-full py-3 bg-gray-800 hover:bg-gray-600 rounded-lg transition-colors text-gray-300"
+                >
+                  Reset Filters
+                </button>
+              </div>
             </div>
           )}
         </div>
@@ -1052,7 +1211,7 @@ function ManageBookings() {
                             <X size={18} className="text-red-400" />
                           </button>
                         </div>
-                      ) : (
+                      ) : activeTab === "bookings" ? (
                         <div className="flex justify-end space-x-2">
                           <button
                             onClick={() => handleModifyClick(booking)}
@@ -1069,6 +1228,9 @@ function ManageBookings() {
                             <X size={18} className="text-red-400" />
                           </button>
                         </div>
+                      ) : (
+                        // For "past" bookings tab - no actions needed
+                        <span className="text-gray-500 text-sm">-</span>
                       )}
                     </td>
                   </tr>

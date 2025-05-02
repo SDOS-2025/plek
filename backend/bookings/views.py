@@ -1,6 +1,5 @@
 import logging
 from django.db.models import Q
-from django.db import transaction
 from rest_framework import status
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -17,9 +16,7 @@ from accounts.permissions import (
 )
 
 from .models import Booking
-from rooms.models import Room
 from .serializers import BookingSerializer
-from settings.models import InstitutePolicy
 
 logger = logging.getLogger(__name__)
 
@@ -30,50 +27,12 @@ class BookingCreateView(APIView):
     def post(self, request):
         serializer = BookingSerializer(data=request.data, context={"request": request})
         if serializer.is_valid():
-            # Use a transaction to ensure atomicity
-            with transaction.atomic():
-                # Get the institute policy to check if auto-approval is enabled
-                policy = InstitutePolicy.objects.first()
-                
-                # Lock the room for this transaction to prevent concurrent conflicting bookings
-                room_id = serializer.validated_data['room'].id
-                room = Room.objects.select_for_update().get(id=room_id)
-                
-                # Before creating the booking, do one final check for conflicts
-                # This handles the case of simultaneous booking attempts at the same time
-                start_time = serializer.validated_data['start_time']
-                end_time = serializer.validated_data['end_time']
-                
-                # Check for any booking that was created between validation and now
-                conflicts = Booking.objects.filter(
-                    room=room,
-                    status__in=[Booking.APPROVED, Booking.PENDING],
-                    start_time__lt=end_time,
-                    end_time__gt=start_time
-                )
-                
-                if conflicts.exists():
-                    return Response(
-                        {"detail": "This time slot was just booked by another user. Please select a different time."},
-                        status=status.HTTP_409_CONFLICT
-                    )
-                
-                # Create the booking with pending status first
-                booking = serializer.save(user=request.user)
-                
-                # If auto-approval is enabled, update the status to approved
-                if policy and policy.enable_auto_approval:
-                    booking.status = Booking.APPROVED
-                    booking.save()
-                    logger.info(
-                        f"Booking auto-approved for user {request.user.email} - Auto-approval enabled in institute policies"
-                    )
-                    
-                logger.info(
-                    f"Booking created by user {request.user.email} for purpose: {booking.purpose[:50] if booking.purpose else 'No purpose'}... "
-                    f"with {booking.participants or 'no'} participants - Status: {booking.status}"
-                )
-                return Response(serializer.data, status=status.HTTP_201_CREATED)
+            booking = serializer.save(user=request.user)
+            logger.info(
+                f"Booking created by user {request.user.email} for purpose: {booking.purpose[:50]}... "
+                f"with {booking.participants or 'no'} participants"
+            )
+            return Response(serializer.data, status=status.HTTP_201_CREATED)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
@@ -129,93 +88,49 @@ class BookingManageView(APIView):
 
         serializer = BookingSerializer(booking, data=request.data, partial=True)
         if serializer.is_valid():
-            # Use transaction to ensure atomicity when modifying bookings
-            with transaction.atomic():
-                # If time is being modified, lock the room for the duration of this transaction
-                if "start_time" in request.data or "end_time" in request.data:
-                    # Get room with lock to prevent concurrent conflicting bookings
-                    room = Room.objects.select_for_update().get(id=booking.room.id)
-                    
-                    # Before updating the booking, do an additional check for conflicts
-                    # This is only necessary if we're changing the time
-                    if serializer.validated_data.get('start_time') or serializer.validated_data.get('end_time'):
-                        start_time = serializer.validated_data.get('start_time', booking.start_time)
-                        end_time = serializer.validated_data.get('end_time', booking.end_time)
-                        
-                        # Check for any booking that was created/modified between validation and now
-                        conflicts = Booking.objects.filter(
-                            room=room,
-                            status__in=[Booking.APPROVED, Booking.PENDING],
-                            start_time__lt=end_time,
-                            end_time__gt=start_time
-                        ).exclude(id=booking_id)
-                        
-                        if conflicts.exists():
-                            return Response(
-                                {"detail": "This time slot was just booked by another user. Please select a different time."},
-                                status=status.HTTP_409_CONFLICT
-                            )
-                
-                updated_booking = serializer.save()
+            updated_booking = serializer.save()
 
-                # Get institute policy to check if auto-approval is enabled
-                policy = InstitutePolicy.objects.first()
-                auto_approve = policy and policy.enable_auto_approval
-
-                # Only reset to PENDING if user is not privileged, made significant changes,
-                # auto-approval is not enabled, and the booking is not already cancelled or rejected
-                if (is_significant_change and 
-                    not is_privileged_user and 
-                    not auto_approve and 
-                    updated_booking.status not in [Booking.CANCELLED, Booking.REJECTED]):
-                        
-                    updated_booking.status = Booking.PENDING
-                    updated_booking.approved_by = None  # Remove previous approver
-                    updated_booking.save()
+            # Only reset to PENDING if user is not privileged and made significant changes
+            if is_significant_change and not is_privileged_user and updated_booking.status not in [
+                Booking.CANCELLED,
+                Booking.REJECTED,
+            ]:
+                updated_booking.status = Booking.PENDING
+                updated_booking.approved_by = None  # Remove previous approver
+                updated_booking.save()
+                logger.info(
+                    f"Booking {booking_id} modified by user {request.user.email} - Status reset to PENDING"
+                )
+            else:
+                # For privileged users or non-significant changes, respect the status from the request
+                if "status" in request.data and is_privileged_user:
+                    # If status was explicitly included in the request and user is privileged
                     logger.info(
-                        f"Booking {booking_id} modified by user {request.user.email} - Status reset to PENDING"
-                    )
-                # Auto-approve significant changes if the policy is enabled and the booking is not cancelled/rejected
-                elif (is_significant_change and 
-                      not is_privileged_user and 
-                      auto_approve and 
-                      updated_booking.status not in [Booking.CANCELLED, Booking.REJECTED]):
-                        
-                    updated_booking.status = Booking.APPROVED
-                    updated_booking.save()
-                    logger.info(
-                        f"Booking {booking_id} modified by user {request.user.email} - Auto-approved based on institute policy"
+                        f"Booking {booking_id} modified by privileged user {request.user.email} - Status set to {updated_booking.status}"
                     )
                 else:
-                    # For privileged users or non-significant changes, respect the status from the request
-                    if "status" in request.data and is_privileged_user:
-                        # If status was explicitly included in the request and user is privileged
-                        logger.info(
-                            f"Booking {booking_id} modified by privileged user {request.user.email} - Status set to {updated_booking.status}"
-                        )
-                    else:
-                        logger.info(
-                            f"Booking {booking_id} modified by privileged user {request.user.email} - Status kept as {updated_booking.status}"
-                        )
-                    
-                    # Log details about modified purpose and participants if they were updated
-                    update_details = []
-                    if "purpose" in request.data:
-                        update_details.append(
-                            f"purpose updated to: {updated_booking.purpose[:30]}..."
-                        )
-                    if "participants" in request.data:
-                        update_details.append(
-                            f"participants updated to: {updated_booking.participants or 'none'}"
-                        )
-
-                    details_str = (
-                        ", ".join(update_details) if update_details else "no detail changes"
-                    )
                     logger.info(
-                        f"Booking {booking_id} modified by user {request.user.email} ({details_str})"
+                        f"Booking {booking_id} modified by privileged user {request.user.email} - Status kept as {updated_booking.status}"
                     )
-                return Response(serializer.data, status=status.HTTP_200_OK)
+                
+                # Log details about modified purpose and participants if they were updated
+                update_details = []
+                if "purpose" in request.data:
+                    update_details.append(
+                        f"purpose updated to: {updated_booking.purpose[:30]}..."
+                    )
+                if "participants" in request.data:
+                    update_details.append(
+                        f"participants updated to: {updated_booking.participants or 'none'}"
+                    )
+
+                details_str = (
+                    ", ".join(update_details) if update_details else "no detail changes"
+                )
+                logger.info(
+                    f"Booking {booking_id} modified by user {request.user.email} ({details_str})"
+                )
+            return Response(serializer.data, status=status.HTTP_200_OK)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
     def delete(self, request, booking_id):
@@ -314,7 +229,6 @@ class FloorDeptBookingView(APIView):
                 'status': booking.status,
                 'purpose': booking.purpose,
                 'participants': booking.participants,
-                'notes': booking.notes,
                 'cancellation_reason': booking.cancellation_reason,
                 'created_at': booking.created_at,
                 'updated_at': booking.updated_at,
@@ -439,7 +353,6 @@ class AllBookingsView(APIView):
                 'status': booking.status,
                 'purpose': booking.purpose,
                 'participants': booking.participants,
-                'notes': booking.notes,
                 'cancellation_reason': booking.cancellation_reason,
                 'created_at': booking.created_at,
                 'updated_at': booking.updated_at,

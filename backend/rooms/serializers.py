@@ -82,6 +82,7 @@ class RoomSerializer(serializers.ModelSerializer):
             "amenities",
             "amenity_names",
             "available",
+            "is_active",
             "created_at",
             "updated_at",
         ]
