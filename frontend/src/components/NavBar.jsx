@@ -16,6 +16,8 @@ const NavBar = ({ activePage }) => {
   const [scrolled, setScrolled] = useState(false);
   const [userRole, setUserRole] = useState(null); // State to store user role details
   const [isCoordinator, setIsCoordinator] = useState(false); // State to track if user is a coordinator
+  const [isSuperAdmin, setIsSuperAdmin] = useState(false); // State to track if user is a superadmin
+  const [isRegularAdmin, setIsRegularAdmin] = useState(false); // State to track if user is a regular admin
   const location = useLocation();
   const path = location.pathname;
 
@@ -24,6 +26,9 @@ const NavBar = ({ activePage }) => {
 
   // Set active page from prop or derive from path
   const currentPage = activePage || currentPageFromPath || "";
+
+  // Check if the user is currently in the admin section based on URL path
+  const isInAdminSection = path.includes("/admin/");
 
   // Fetch user profile for role detection
   useEffect(() => {
@@ -35,21 +40,26 @@ const NavBar = ({ activePage }) => {
         const profileData = response.data;
         setUserRole(profileData);
 
-        // Determine if user is a coordinator based on profile data
+        // Determine user roles based on profile data
         const groups = profileData.groups || [];
-        const isCoordinatorRole = groups.some((group) =>
+
+        // Process group data which can come in different formats
+        const groupNames = groups.map((group) =>
           typeof group === "string"
-            ? group.toLowerCase() === "coordinator"
-            : group.name?.toLowerCase() === "coordinator"
+            ? group.toLowerCase()
+            : (group.name || "").toLowerCase()
         );
 
+        const isCoordinatorRole = groupNames.includes("coordinator");
+        const isSuperAdminRole =
+          groupNames.includes("superadmin") ||
+          profileData.is_superuser === true;
+        const isRegularAdminRole =
+          groupNames.includes("admin") || profileData.is_staff === true;
+
         setIsCoordinator(isCoordinatorRole);
-        console.log(
-          "Profile data fetched:",
-          profileData,
-          "Is Coordinator:",
-          isCoordinatorRole
-        );
+        setIsSuperAdmin(isSuperAdminRole);
+        setIsRegularAdmin(isRegularAdminRole);
       } catch (err) {
         console.error("Error fetching user profile:", err);
       }
@@ -57,35 +67,6 @@ const NavBar = ({ activePage }) => {
 
     fetchUserProfile();
   }, [user]);
-
-  // Check if the user is an admin - improved detection with multiple approaches
-  console.log("User object in NavBar:", user);
-
-  // Method 1: Check user object properties that might indicate admin status
-  const isAdminByProps =
-    user?.is_staff ||
-    user?.isAdmin ||
-    user?.is_admin ||
-    user?.admin ||
-    user?.role === "admin" ||
-    user?.user_type === "admin";
-
-  // Method 2: Check if the current URL is in the admin section
-  const isAdminByPath = path.includes("/admin/");
-
-  // Use either method to determine admin status
-  const isAdmin = isAdminByProps || isAdminByPath || false;
-
-  console.log(
-    "Admin detection - By props:",
-    isAdminByProps,
-    "By path:",
-    isAdminByPath,
-    "Is Coordinator from profile:",
-    isCoordinator,
-    "Final decision:",
-    isAdmin
-  );
 
   // Handle scroll event for navbar transparency effect
   useEffect(() => {
@@ -112,55 +93,57 @@ const NavBar = ({ activePage }) => {
     { name: "My Bookings", path: "/my-bookings", id: "my-bookings" },
   ];
 
-  // Admin navigation links
-  const adminNavLinks = [
+  // Admin navigation links (base links that everyone in admin section can see)
+  const baseAdminNavLinks = [
     { name: "Dashboard", path: "/admin/dashboard", id: "dashboard" },
     {
       name: "Manage Bookings",
       path: "/admin/manage-bookings",
       id: "manage-bookings",
     },
-    {
-      name: "Manage Rooms",
-      path: "/admin/manage-rooms",
-      id: "manage-rooms",
-      showFor: ["admin", "superadmin"],
-    },
-    {
-      name: "Manage Users",
-      path: "/admin/manage-users",
-      id: "manage-users",
-      showFor: ["admin", "superadmin"],
-    },
+  ];
+
+  // Additional admin links for full admins and superadmins only
+  const adminOnlyLinks = [
+    { name: "Manage Rooms", path: "/admin/manage-rooms", id: "manage-rooms" },
+    { name: "Manage Users", path: "/admin/manage-users", id: "manage-users" },
     {
       name: "Configuration",
       path: "/admin/manage-config",
       id: "manage-config",
-      showFor: ["admin", "superadmin"],
-    },
-    { name: "Analytics", path: "/admin/analytics", id: "analytics" },
-    {
-      name: "Institute Policies",
-      path: "/admin/institute-policies",
-      id: "institute-policies",
-      showFor: ["superadmin"], // Only for SuperAdmin
     },
   ];
 
-  // Select the appropriate navigation links based on user role
-  let navLinks = isAdmin ? adminNavLinks : userNavLinks;
+  // Analytics is available to all admin users including coordinators
+  const commonAdminLinks = [
+    { name: "Analytics", path: "/admin/analytics", id: "analytics" },
+  ];
 
-  // Filter admin links for coordinators - using the state from profile data
-  if (isAdmin && isCoordinator) {
-    navLinks = adminNavLinks.filter(
-      (link) =>
-        !link.showFor || // If showFor is not defined, show to everyone
-        link.showFor.includes("coordinator") // If showFor includes coordinator, show it
-    );
+  // Build the admin navigation links based on user role
+  let adminNavLinks = [...baseAdminNavLinks];
+
+  // Only add admin-specific links if user is not a coordinator (is admin or superadmin)
+  if (isRegularAdmin || isSuperAdmin) {
+    adminNavLinks = [...adminNavLinks, ...adminOnlyLinks];
   }
 
-  // Determine the dashboard link based on user role
-  const dashboardLink = isAdmin ? "/admin/dashboard" : "/dashboard";
+  // Add common links available to all admin users
+  adminNavLinks = [...adminNavLinks, ...commonAdminLinks];
+
+  // Add Institute Policies link for superadmins only
+  if (isSuperAdmin) {
+    adminNavLinks.push({
+      name: "Institute Policies",
+      path: "/admin/institute-policies",
+      id: "institute-policies",
+    });
+  }
+
+  // Use the admin or user navigation links based on current URL path
+  const navLinks = isInAdminSection ? adminNavLinks : userNavLinks;
+
+  // Determine the dashboard link based on current section
+  const dashboardLink = isInAdminSection ? "/admin/dashboard" : "/dashboard";
 
   return (
     <nav
@@ -174,7 +157,7 @@ const NavBar = ({ activePage }) => {
           <div className="flex items-center">
             <Link to={dashboardLink} className="flex items-center">
               <span className="text-xl font-bold text-plek-purple">
-                {isAdmin ? "Plek Admin" : "Plek"}
+                {isInAdminSection ? "Plek Admin" : "Plek"}
               </span>
             </Link>
 

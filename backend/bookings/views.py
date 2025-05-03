@@ -194,30 +194,83 @@ class FloorDeptBookingView(APIView):
         managed_floors = request.user.managed_floors.all().select_related('building')
         managed_departments = request.user.managed_departments.all()
         
-        # Get bookings from managed buildings, floors and departments
-        building_bookings = Booking.objects.filter(
-            room__building__in=managed_buildings
-        ).select_related('room', 'user', 'approved_by', 'room__floor', 'room__building')
+        # Check if the user is a coordinator only (not admin or superadmin)
+        user_groups = [group.name.lower() for group in request.user.groups.all()]
+        is_coordinator_only = ("coordinator" in user_groups and 
+                              "admin" not in user_groups and 
+                              "superadmin" not in user_groups and
+                              not request.user.is_superuser)
         
-        floor_bookings = Booking.objects.filter(
-            room__floor__in=managed_floors
-        ).select_related('room', 'user', 'approved_by', 'room__floor', 'room__building')
+        # Create base querysets with proper select_related for efficiency
+        base_query = Booking.objects.select_related(
+            'room', 'user', 'approved_by', 'room__floor', 'room__building'
+        )
         
-        dept_bookings = Booking.objects.filter(
-            room__departments__in=managed_departments
-        ).select_related('room', 'user', 'approved_by', 'room__floor', 'room__building')
-        
-        # Combine the queries using OR logic
-        bookings = (building_bookings | floor_bookings | dept_bookings).distinct()
+        # For coordinators, we need to strictly enforce their floor + department assignments
+        if is_coordinator_only:
+            # Get managed floor IDs and department IDs to use for filtering
+            managed_floor_ids = list(managed_floors.values_list('id', flat=True)) or []
+            managed_dept_ids = list(managed_departments.values_list('id', flat=True)) or []
+            
+            # NEW IMPLEMENTATION: Much stricter filtering for coordinators
+            # Only show bookings where:
+            # 1. The room is on a floor managed by the coordinator AND
+            # 2. Either:
+            #    a) The room belongs to a department managed by the coordinator OR
+            #    b) The room has no department assignments at all
+            if managed_floor_ids:
+                # First filter by managed floors (this is required)
+                bookings = base_query.filter(room__floor__id__in=managed_floor_ids)
+                
+                # Then apply department filtering if coordinator has department assignments
+                if managed_dept_ids:
+                    # Get rooms in managed departments AND on managed floors
+                    # OR rooms without departments on managed floors
+                    bookings = bookings.filter(
+                        Q(room__departments__id__in=managed_dept_ids) | 
+                        Q(room__departments__isnull=True)
+                    ).distinct()
+            else:
+                # If coordinator doesn't manage any floors, they should only see
+                # bookings for rooms in their managed departments
+                if managed_dept_ids:
+                    bookings = base_query.filter(room__departments__id__in=managed_dept_ids)
+                else:
+                    # If coordinator has neither floor nor department assignments
+                    bookings = Booking.objects.none()
+        else:
+            # For admins and superadmins, show all bookings they have access to
+            building_bookings = base_query.filter(room__building__in=managed_buildings) if managed_buildings.exists() else Booking.objects.none()
+            floor_bookings = base_query.filter(room__floor__in=managed_floors) if managed_floors.exists() else Booking.objects.none()
+            dept_bookings = base_query.filter(room__departments__in=managed_departments) if managed_departments.exists() else Booking.objects.none()
+            
+            # Combine the queries using OR logic and remove duplicates
+            bookings = (building_bookings | floor_bookings | dept_bookings).distinct()
         
         # Create enhanced booking data with user information
         enhanced_bookings = []
         for booking in bookings:
+            # Get the departments for this room to include in response
+            room_departments = []
+            if hasattr(booking.room, 'departments'):
+                room_departments = [
+                    {
+                        "id": dept.id,
+                        "name": dept.name,
+                        "code": getattr(dept, 'code', None)
+                    }
+                    for dept in booking.room.departments.all()[:5]  # Limit to 5 to avoid large payloads
+                ]
+            
             booking_data = {
                 'id': booking.id,
                 'room': booking.room.id,
                 'room_name': booking.room.name,
+                'floor_id': booking.room.floor.id if booking.room.floor else None,
+                'floor_name': booking.room.floor.name if booking.room.floor else None,
+                'building_id': booking.room.building.id if booking.room.building else None,
                 'building_name': booking.room.building.name if booking.room.building else '',
+                'departments': room_departments,
                 'user': booking.user.id,
                 'user_email': booking.user.email,
                 'user_first_name': booking.user.first_name,
@@ -230,24 +283,20 @@ class FloorDeptBookingView(APIView):
                 'purpose': booking.purpose,
                 'participants': booking.participants,
                 'cancellation_reason': booking.cancellation_reason,
-                'notes': booking.notes,  # Added notes field
+                'notes': booking.notes,
                 'created_at': booking.created_at,
                 'updated_at': booking.updated_at,
             }
             enhanced_bookings.append(booking_data)
         
-        # Prepare minimal building data
-        minimal_buildings = []
-        if managed_buildings:
-            minimal_buildings = [
+        # Return the bookings along with the coordinator's managed resources info
+        return Response({
+            "bookings": enhanced_bookings,
+            "managed_buildings": [
                 {"id": building.id, "name": building.name} 
                 for building in managed_buildings
-            ]
-        
-        # Prepare minimal floor data  
-        minimal_floors = []
-        if managed_floors:
-            minimal_floors = [
+            ],
+            "managed_floors": [
                 {
                     "id": floor.id,
                     "number": floor.number,
@@ -256,13 +305,7 @@ class FloorDeptBookingView(APIView):
                     "building_name": floor.building.name if floor.building else None
                 }
                 for floor in managed_floors
-            ]
-        
-        # Return only the essential information
-        return Response({
-            "bookings": enhanced_bookings,
-            "managed_buildings": minimal_buildings,
-            "managed_floors": minimal_floors,
+            ],
             "managed_departments": [
                 {
                     "id": dept.id,
@@ -270,7 +313,9 @@ class FloorDeptBookingView(APIView):
                     "code": getattr(dept, 'code', None)
                 }
                 for dept in managed_departments
-            ]
+            ],
+            "has_department_assignments": bool(managed_departments.exists()),
+            "has_floor_assignments": bool(managed_floors.exists())
         }, status=status.HTTP_200_OK)
 
 

@@ -52,39 +52,27 @@ function ManageUsers() {
     floors: [],
     buildings: [],
   });
-  // Move activeTab state to the parent component to persist during re-renders
   const [activeAssignmentTab, setActiveAssignmentTab] = useState("buildings");
 
   const { user: currentUser } = useContext(AuthContext);
 
-  // State for current user's role information
   const [currentUserRole, setCurrentUserRole] = useState(null);
   const [isSuperUser, setIsSuperUser] = useState(false);
 
-  // Fetch current user's role information
   useEffect(() => {
     const fetchCurrentUserRole = async () => {
       if (!currentUser) return;
 
       try {
-        // First try to get user profile
         const response = await api.get("/api/accounts/profile/");
-        console.log("Current user profile:", response.data);
-
-        // Check if user is SuperAdmin
         const groups = response.data.groups || [];
         const isSuperAdminByGroup = groups.some((g) => g.name === "SuperAdmin");
         const isSuperAdminByFlag = response.data.is_superuser === true;
 
         setCurrentUserRole(response.data);
         setIsSuperUser(isSuperAdminByGroup || isSuperAdminByFlag);
-        console.log(
-          "SuperAdmin status:",
-          isSuperAdminByGroup || isSuperAdminByFlag
-        );
       } catch (err) {
         console.error("Error fetching user role:", err);
-        // Temporarily force SuperAdmin status for testing
         setIsSuperUser(true);
       }
     };
@@ -92,7 +80,6 @@ function ManageUsers() {
     fetchCurrentUserRole();
   }, [currentUser]);
 
-  // Fetch all users
   useEffect(() => {
     const fetchUsers = async () => {
       try {
@@ -111,7 +98,6 @@ function ManageUsers() {
     fetchUsers();
   }, []);
 
-  // Fetch departments and floors
   useEffect(() => {
     const fetchResources = async () => {
       try {
@@ -141,7 +127,6 @@ function ManageUsers() {
     setAlert((prev) => ({ ...prev, show: false }));
   };
 
-  // Filter users based on search query and role filter
   const filteredUsers = users.filter((user) => {
     const matchesSearch =
       user.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -152,17 +137,22 @@ function ManageUsers() {
     if (filter === "all") return matchesSearch;
 
     const userGroups =
-      user.groups?.map((group) => group.name.toLowerCase()) || [];
+      user.groups?.map((group) => {
+        if (typeof group === "string") {
+          return group.toLowerCase();
+        } else if (group && typeof group === "object" && group.name) {
+          return group.name.toLowerCase();
+        }
+        return "";
+      }) || [];
     return matchesSearch && userGroups.includes(filter.toLowerCase());
   });
 
-  // Get user role (group) for display
   const getUserRole = (user) => {
     if (!user.groups || user.groups.length === 0) return "User";
     return user.groups[0]?.name || "User";
   };
 
-  // Get next role up in the hierarchy for promotion
   const getNextRoleUp = (currentRole) => {
     const roleHierarchy = ["User", "Coordinator", "Admin", "SuperAdmin"];
     const currentIndex = roleHierarchy.indexOf(currentRole);
@@ -171,14 +161,12 @@ function ManageUsers() {
       : null;
   };
 
-  // Get next role down in the hierarchy for demotion
   const getNextRoleDown = (currentRole) => {
     const roleHierarchy = ["User", "Coordinator", "Admin", "SuperAdmin"];
     const currentIndex = roleHierarchy.indexOf(currentRole);
     return currentIndex > 0 ? roleHierarchy[currentIndex - 1] : null;
   };
 
-  // Handle promotion
   const handlePromote = (user) => {
     const currentRole = getUserRole(user);
     const nextRole = getNextRoleUp(currentRole);
@@ -188,7 +176,6 @@ function ManageUsers() {
     }
   };
 
-  // Handle demotion
   const handleDemote = (user) => {
     const currentRole = getUserRole(user);
     const prevRole = getNextRoleDown(currentRole);
@@ -198,12 +185,10 @@ function ManageUsers() {
     }
   };
 
-  // Handle role change action
   const handleRoleChangeClick = (user, newRole) => {
     setSelectedUser(user);
     setTargetRole(newRole);
 
-    // Determine appropriate message based on the roles being changed
     const currentRole = getUserRole(user);
     const roleHierarchy = ["User", "Coordinator", "Admin", "SuperAdmin"];
     const currentRoleIndex = roleHierarchy.indexOf(currentRole);
@@ -221,9 +206,8 @@ function ManageUsers() {
         action === "promote" ? "to" : "to"
       } ${newRole}?`,
       action: async () => {
-        await changeUserRole(user.id, newRole);
+        await changeUserRole(user.id, newRole, action);
 
-        // For Coordinator roles, show the assignment modal after confirmation
         if (newRole === "Coordinator") {
           setShowAssignModal(true);
         }
@@ -233,33 +217,26 @@ function ManageUsers() {
     setShowConfirmation(true);
   };
 
-  // Change user role via API
-  const changeUserRole = async (userId, newRole) => {
+  const changeUserRole = async (userId, newRole, action) => {
     try {
       setLoading(true);
 
-      // Find the user in our users array to get their current role
       const userToUpdate = users.find((u) => u.id === userId);
       if (!userToUpdate) {
         throw new Error(`User with ID ${userId} not found`);
       }
 
-      // Determine if this is a promotion or demotion
-      const currentRole = getUserRole(userToUpdate);
-      const roleHierarchy = ["User", "Coordinator", "Admin", "SuperAdmin"];
-      const currentRoleIndex = roleHierarchy.indexOf(currentRole);
-      const newRoleIndex = roleHierarchy.indexOf(newRole);
-
-      const action = newRoleIndex > currentRoleIndex ? "promote" : "demote";
-
-      await api.post(`/api/accounts/users/${userId}/role/`, {
+      const response = await api.post(`/api/accounts/users/${userId}/role/`, {
         action: action,
         group: newRole,
       });
 
-      // Refresh the users list after role change
-      const response = await api.get("/api/accounts/users/");
-      setUsers(response.data);
+      if (response.status !== 200) {
+        throw new Error(`Failed to change user role: ${response.statusText}`);
+      }
+
+      const usersResponse = await api.get("/api/accounts/users/");
+      setUsers(usersResponse.data);
 
       showAlert(
         "success",
@@ -269,9 +246,24 @@ function ManageUsers() {
       );
     } catch (err) {
       console.error(`Error changing user role:`, err);
-      const errorMsg =
-        err.response?.data?.error ||
-        `Failed to change user role. Please try again.`;
+
+      let errorMsg = "Failed to change user role. Please try again.";
+
+      if (err.response) {
+        if (err.response.data && err.response.data.detail) {
+          errorMsg = err.response.data.detail;
+        } else if (err.response.data && err.response.data.error) {
+          errorMsg = err.response.data.error;
+        } else if (err.response.statusText) {
+          errorMsg = `Error: ${err.response.statusText}`;
+        }
+
+        if (err.response.status === 403) {
+          errorMsg =
+            "You don't have permission to perform this action. Only superadmins can promote to Admin or higher.";
+        }
+      }
+
       showAlert("danger", errorMsg);
     } finally {
       setLoading(false);
@@ -279,14 +271,54 @@ function ManageUsers() {
     }
   };
 
-  // Reset and initialize assignment data when a user is selected
+  const canPromote = (user, currentRole) => {
+    const isCurrentUser = user.id === currentUser?.id;
+
+    if (isCurrentUser) return false;
+
+    if (
+      currentRole === "Admin" ||
+      currentRole === "Coordinator" ||
+      currentRole === "User"
+    ) {
+      const nextRole = getNextRoleUp(currentRole);
+      if (nextRole === "Admin" || nextRole === "SuperAdmin") {
+        return isSuperUser;
+      }
+      return true;
+    }
+
+    return currentRole !== "SuperAdmin";
+  };
+
+  const canDemote = (user, currentRole) => {
+    const isCurrentUser = user.id === currentUser?.id;
+
+    if (isCurrentUser) return false;
+
+    if (currentRole === "Admin" || currentRole === "SuperAdmin") {
+      return isSuperUser;
+    }
+
+    if (
+      currentRole === "SuperAdmin" &&
+      users.filter((u) =>
+        u.groups?.some((g) =>
+          typeof g === "string" ? g === "SuperAdmin" : g.name === "SuperAdmin"
+        )
+      ).length <= 1
+    ) {
+      return false;
+    }
+
+    return currentRole !== "User";
+  };
+
   const initializeAssignmentData = (user) => {
-    // Get user's currently assigned resources
     const managedBuildings = user.managed_buildings || [];
     const managedFloors = user.managed_floors || [];
     const managedDepartments = user.managed_departments || [];
 
-    // Find buildings containing assigned floors if no buildings explicitly assigned
     const buildingsFromFloors = [];
     if (managedBuildings.length === 0 && managedFloors.length > 0) {
       managedFloors.forEach((floorId) => {
@@ -301,30 +333,25 @@ function ManageUsers() {
       });
     }
 
-    // Set the initial assignment data
     setAssignmentData({
       buildings: [...managedBuildings, ...buildingsFromFloors],
       floors: managedFloors,
       departments: managedDepartments,
     });
 
-    // Reset to buildings tab when opening modal
     setActiveAssignmentTab("buildings");
   };
 
-  // Handle assignment of floors or departments
   const handleAssignment = async () => {
     try {
       setLoading(true);
 
-      // Update user with assignments (only for coordinators)
       await api.patch(`/api/accounts/users/${selectedUser.id}/`, {
         managed_floors: assignmentData.floors,
         managed_departments: assignmentData.departments,
         managed_buildings: assignmentData.buildings,
       });
 
-      // Refresh user data
       const response = await api.get("/api/accounts/users/");
       setUsers(response.data);
 
@@ -342,7 +369,6 @@ function ManageUsers() {
     }
   };
 
-  // Handle floor or department selection change
   const handleAssignmentChange = (type, id, checked) => {
     setAssignmentData((prev) => {
       const updatedArray = checked
@@ -353,22 +379,18 @@ function ManageUsers() {
     });
   };
 
-  // Assignment modal for coordinators
   const AssignmentModal = () => {
     if (!selectedUser) return null;
 
-    // Get floors for the currently selected buildings
     const getFloorsForSelectedBuildings = () => {
       if (!assignmentData.buildings || assignmentData.buildings.length === 0)
         return [];
 
-      // Filter floors that belong to the selected buildings
       return floors.filter((floor) =>
         assignmentData.buildings.includes(floor.building)
       );
     };
 
-    // Group floors by building for better organization
     const floorsByBuilding = floors.reduce((groups, floor) => {
       const buildingId = floor.building;
       if (!groups[buildingId]) {
@@ -378,15 +400,12 @@ function ManageUsers() {
       return groups;
     }, {});
 
-    // Handle building selection change
     const handleBuildingChange = (buildingId, checked) => {
-      // Update buildings list
       setAssignmentData((prev) => {
         const updatedBuildings = checked
           ? [...prev.buildings, buildingId]
           : prev.buildings.filter((id) => id !== buildingId);
 
-        // If a building is unchecked, also remove its floors from selection
         const buildingFloors = floors
           .filter((f) => f.building === buildingId)
           .map((f) => f.id);
@@ -402,7 +421,6 @@ function ManageUsers() {
       });
     };
 
-    // Get building name by ID
     const getBuildingName = (buildingId) => {
       const building = buildings.find((b) => b.id === buildingId);
       return building ? building.name : "Unknown Building";
@@ -424,7 +442,6 @@ function ManageUsers() {
             </button>
           </div>
 
-          {/* Tab navigation */}
           <div className="flex border-b border-gray-700 mb-6">
             <button
               className={`px-4 py-2 font-medium ${
@@ -458,7 +475,6 @@ function ManageUsers() {
             </button>
           </div>
 
-          {/* Buildings tab content */}
           {activeAssignmentTab === "buildings" && (
             <div className="mb-6">
               <h3 className="font-medium mb-2 flex items-center">
@@ -516,7 +532,6 @@ function ManageUsers() {
             </div>
           )}
 
-          {/* Floors tab content */}
           {activeAssignmentTab === "floors" && (
             <div className="mb-6">
               <h3 className="font-medium mb-2 flex items-center">
@@ -606,7 +621,6 @@ function ManageUsers() {
             </div>
           )}
 
-          {/* Departments tab content */}
           {activeAssignmentTab === "departments" && (
             <div className="mb-6">
               <h3 className="font-medium mb-2 flex items-center">
@@ -699,7 +713,6 @@ function ManageUsers() {
           </p>
         </div>
 
-        {/* Search and filter section */}
         <div className="flex flex-col md:flex-row justify-between mb-6 gap-4">
           <div className="relative md:w-1/2">
             <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-300" />
@@ -777,7 +790,6 @@ function ManageUsers() {
           </div>
         </div>
 
-        {/* Role legend */}
         <div className="bg-gray-800/50 p-4 rounded-lg mb-6">
           <h3 className="text-gray-300 flex items-center mb-2">
             <Info size={18} className="mr-2" />
@@ -823,7 +835,6 @@ function ManageUsers() {
           </div>
         </div>
 
-        {/* Users Table */}
         <div className="section-card">
           <h2 className="card-header">
             <Users className="h-5 w-5 mr-2 text-purple-500" />
@@ -862,19 +873,6 @@ function ManageUsers() {
                   {filteredUsers.map((user, index) => {
                     const role = getUserRole(user);
                     const isCurrentUser = user.id === currentUser?.id;
-
-                    // Check if user can be promoted or demoted based on role and permissions
-                    const canPromote =
-                      !isCurrentUser &&
-                      ((isSuperUser && role !== "SuperAdmin") ||
-                        (!isSuperUser &&
-                          role !== "Admin" &&
-                          role !== "SuperAdmin"));
-
-                    const canDemote =
-                      !isCurrentUser &&
-                      ((isSuperUser && role !== "User") ||
-                        (!isSuperUser && role === "Coordinator"));
 
                     return (
                       <tr
@@ -957,7 +955,7 @@ function ManageUsers() {
                             </span>
                           ) : (
                             <div className="flex justify-end space-x-2">
-                              {canPromote && (
+                              {canPromote(user, role) && (
                                 <button
                                   onClick={() => handlePromote(user)}
                                   className="p-2 bg-green-600 hover:bg-green-700 text-white rounded-lg transition-colors"
@@ -981,7 +979,7 @@ function ManageUsers() {
                                 </button>
                               )}
 
-                              {canDemote && (
+                              {canDemote(user, role) && (
                                 <button
                                   onClick={() => handleDemote(user)}
                                   className="p-2 bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors"
@@ -1005,7 +1003,6 @@ function ManageUsers() {
 
       <Footer />
 
-      {/* Show confirmation dialog */}
       {showConfirmation && (
         <DeleteConfirmation
           show={showConfirmation}
@@ -1017,10 +1014,8 @@ function ManageUsers() {
         />
       )}
 
-      {/* Assignment modal */}
       {showAssignModal && <AssignmentModal />}
 
-      {/* Alert Toast */}
       {alert.show && (
         <Toast
           type={alert.type}

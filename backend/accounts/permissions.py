@@ -177,7 +177,19 @@ class CanManageInstitutePolicies(permissions.BasePermission):
 class CanViewUsers(permissions.BasePermission):
     def has_permission(self, request, view):
         try:
-            return request.user.is_authenticated and request.user.has_perm("users.view_all_users")
+            # Check if user is authenticated
+            if not request.user.is_authenticated:
+                return False
+            
+            # Check if user is in admin group or has staff status
+            user_groups = request.user.groups.values_list('name', flat=True)
+            is_admin = 'Admin' in user_groups or 'SuperAdmin' in user_groups
+            
+            # Allow access if user is admin, superadmin or has the specific permission
+            return (is_admin or 
+                    request.user.is_staff or 
+                    request.user.is_superuser or 
+                    request.user.has_perm("users.view_all_users"))
         except Exception as e:
             logger.error(f"Permission check failed for user {request.user.email}: {str(e)}")
             return False
@@ -198,10 +210,31 @@ class CanModerateUsers(permissions.BasePermission):
 class CanPromoteOrDemote(permissions.BasePermission):
     def has_permission(self, request, view):
         try:
+            # Check authentication
+            if not request.user.is_authenticated:
+                return False
+                
+            # Get action and target role
             target_role = request.data.get("group")
             action = request.data.get("action")  # 'promote' or 'demote'
+            
             if not target_role or not action:
                 return False
+                
+            # Check if user is an admin
+            user_groups = request.user.groups.values_list('name', flat=True)
+            is_admin = 'Admin' in user_groups or request.user.is_staff
+            is_superadmin = 'SuperAdmin' in user_groups or request.user.is_superuser
+            
+            # Special case for admin users promoting to Coordinator or demoting from Coordinator
+            if is_admin and target_role in ["Coordinator", "User"]:
+                return True
+                
+            # SuperAdmin can do all role changes
+            if is_superadmin:
+                return True
+                
+            # Fall back to permission-based check
             role_to_perm = {
                 "User": f"users.{action}_to_user",
                 "Coordinator": f"users.{action}_to_coordinator",
@@ -211,16 +244,23 @@ class CanPromoteOrDemote(permissions.BasePermission):
             required_perm = role_to_perm.get(target_role)
             if not required_perm:
                 return False
-            return request.user.is_authenticated and request.user.has_perm(required_perm)
+                
+            return request.user.has_perm(required_perm)
         except Exception as e:
             logger.error(f"Permission check failed for user {request.user.email}: {str(e)}")
             return False
 
     def has_object_permission(self, request, view, obj):
+        # Prevent users from modifying their own role
+        if obj == request.user:
+            return False
+            
+        # Special check for demoting the last SuperAdmin
         if request.data.get("action") == "demote" and obj.groups.filter(name="SuperAdmin").exists():
             superadmin_count = CustomUser.objects.filter(
                 groups__name="SuperAdmin", is_active=True
             ).count()
             if superadmin_count <= 1:
                 return False
-        return obj != request.user
+                
+        return True

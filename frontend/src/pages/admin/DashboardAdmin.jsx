@@ -39,7 +39,9 @@ function Dashboard() {
     localStorage.getItem("firstName") ||
     "Admin";
   const isSuper = user?.is_superuser || user?.isSuperAdmin || false;
-  const userRole = isSuper ? "superadmin" : "admin";
+
+  // Determine user role from groups - including coordinator detection
+  const [userRole, setUserRole] = useState(isSuper ? "superadmin" : "admin");
 
   // State variables for admin dashboard
   const [showBookingModal, setShowBookingModal] = useState(false);
@@ -76,15 +78,56 @@ function Dashboard() {
     .setLocale("en-US")
     .toLocaleString(DateTime.TIME_SIMPLE);
 
+  // Check if user is a coordinator
+  useEffect(() => {
+    const checkUserRole = async () => {
+      try {
+        const response = await api.get("/api/accounts/profile/");
+        if (response.status === 200) {
+          const profileData = response.data;
+
+          // Check groups
+          const groups = profileData.groups || [];
+          const groupNames = groups.map((group) =>
+            typeof group === "string"
+              ? group.toLowerCase()
+              : group.name?.toLowerCase()
+          );
+
+          if (profileData.is_superuser || groupNames.includes("superadmin")) {
+            setUserRole("superadmin");
+          } else if (groupNames.includes("admin")) {
+            setUserRole("admin");
+          } else if (groupNames.includes("coordinator")) {
+            setUserRole("coordinator");
+          }
+        }
+      } catch (err) {
+        console.error("Error fetching user profile:", err);
+      }
+    };
+
+    checkUserRole();
+  }, [user]);
+
   // Fetch booking statistics
   useEffect(() => {
     const fetchBookingStats = async () => {
       try {
         setLoading((prev) => ({ ...prev, bookings: true }));
 
-        // Get all bookings
-        const response = await api.get("/bookings/all/");
-        const bookings = response.data || [];
+        let bookings = [];
+
+        // Use the appropriate endpoint based on user role
+        if (userRole === "coordinator") {
+          // Coordinators should use floor-dept endpoint which has appropriate permissions
+          const response = await api.get("/bookings/floor-dept/");
+          bookings = response.data.bookings || [];
+        } else {
+          // Admins and superadmins can use the all bookings endpoint
+          const response = await api.get("/bookings/all/");
+          bookings = response.data || [];
+        }
 
         // Calculate today's bookings
         const today = DateTime.now().startOf("day");
@@ -135,7 +178,7 @@ function Dashboard() {
     };
 
     fetchBookingStats();
-  }, []);
+  }, [userRole]);
 
   // Fetch room statistics
   useEffect(() => {
@@ -183,17 +226,17 @@ function Dashboard() {
         // Get notifications from the API
         const notificationsResponse = await api.get("/notifications/");
         const notificationsData = notificationsResponse.data || [];
-        
+
         // Process notifications for display
-        const processedNotifications = notificationsData.map(notification => {
+        const processedNotifications = notificationsData.map((notification) => {
           // Calculate relative time (e.g., "5 minutes ago")
           const notificationTime = DateTime.fromISO(notification.created_at);
           const now = DateTime.now();
-          const diffMinutes = now.diff(notificationTime, 'minutes').minutes;
-          
+          const diffMinutes = now.diff(notificationTime, "minutes").minutes;
+
           let relativeTime;
           if (diffMinutes < 1) {
-            relativeTime = 'Just now';
+            relativeTime = "Just now";
           } else if (diffMinutes < 60) {
             relativeTime = `${Math.floor(diffMinutes)} minutes ago`;
           } else if (diffMinutes < 1440) {
@@ -201,11 +244,14 @@ function Dashboard() {
           } else {
             relativeTime = `${Math.floor(diffMinutes / 1440)} days ago`;
           }
-          
+
           return {
             id: notification.id,
-            message: notification.message || notification.content || "New notification",
-            time: relativeTime
+            message:
+              notification.message ||
+              notification.content ||
+              "New notification",
+            time: relativeTime,
           };
         });
 
@@ -213,7 +259,7 @@ function Dashboard() {
         setError((prev) => ({ ...prev, notifications: null }));
       } catch (err) {
         console.error("Error fetching notifications:", err);
-        
+
         // Fallback to empty notifications array in case of error
         setNotifications([]);
         setError((prev) => ({
@@ -252,31 +298,31 @@ function Dashboard() {
       });
 
       // Filter only available rooms
-      const availableRooms = rooms.filter(room => room.available);
-      
+      const availableRooms = rooms.filter((room) => room.available);
+
       // Calculate total bookable time slots (8am-6pm = 10 slots per day per room)
       const timeSlots = 10; // Number of bookable hours in a day (e.g., 8am-6pm)
       const days = 5; // Next 5 days
-      
+
       // Total possible time slots across all available rooms for 5 days
       const totalPossibleTimeSlots = availableRooms.length * timeSlots * days;
-      
+
       // Count booked time slots
       let bookedTimeSlots = 0;
-      
-      relevantBookings.forEach(booking => {
+
+      relevantBookings.forEach((booking) => {
         const startTime = DateTime.fromISO(booking.start_time);
         const endTime = DateTime.fromISO(booking.end_time);
-        
+
         // Calculate how many hour slots this booking takes up
-        const durationHours = Math.ceil(endTime.diff(startTime, 'hours').hours);
-        
+        const durationHours = Math.ceil(endTime.diff(startTime, "hours").hours);
+
         // Add to the total booked time slots
         bookedTimeSlots += durationHours;
       });
-      
+
       // Calculate utilization rate based on time slots
-      const utilizationRate = 
+      const utilizationRate =
         totalPossibleTimeSlots === 0
           ? 0
           : Math.round((bookedTimeSlots / totalPossibleTimeSlots) * 100);
@@ -297,9 +343,9 @@ function Dashboard() {
 
       // Format date and time slot
       const formattedDate = startTime.toFormat("LLLL d, yyyy");
-      const formattedTimeSlot = `${startTime.toFormat("h a")} - ${endTime.toFormat(
+      const formattedTimeSlot = `${startTime.toFormat(
         "h a"
-      )}`;
+      )} - ${endTime.toFormat("h a")}`;
 
       // Extract room information
       let roomName = "Unknown Room";
@@ -568,7 +614,9 @@ function Dashboard() {
                   >
                     <div className="flex items-center mb-2">
                       <Settings className="h-6 w-6 mr-2 text-white" />
-                      <h3 className="font-medium text-lg">Institute Settings</h3>
+                      <h3 className="font-medium text-lg">
+                        Institute Settings
+                      </h3>
                     </div>
                     <p className="text-gray-300">
                       Configure global system settings and policies

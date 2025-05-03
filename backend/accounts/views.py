@@ -94,7 +94,22 @@ class UserDetailView(APIView):
 
     def patch(self, request, user_id):
         """Update user details (for admins and moderators)"""
-        if not request.user.has_perm("users.moderate_user"):
+        # Check user's permissions or role
+        user_groups = request.user.groups.values_list('name', flat=True)
+        is_admin = ('Admin' in user_groups or 'SuperAdmin' in user_groups or 
+                   request.user.is_staff or request.user.is_superuser)
+        
+        # Check if this is a coordinator assignment operation
+        is_coordinator_assignment = (
+            'managed_floors' in request.data or 
+            'managed_departments' in request.data or 
+            'managed_buildings' in request.data
+        )
+        
+        # Allow the operation if user is admin and this is a coordinator assignment
+        has_permission = (is_admin and is_coordinator_assignment) or request.user.has_perm("users.moderate_user")
+        
+        if not has_permission:
             return Response(
                 {"error": "You don't have permission to modify users"},
                 status=status.HTTP_403_FORBIDDEN,
@@ -107,13 +122,14 @@ class UserDetailView(APIView):
                 {"error": "User not found"}, status=status.HTTP_404_NOT_FOUND
             )
 
-        # Check object-level permission
-        permission = CanModerateUsers()
-        if not permission.has_object_permission(request, self, user):
-            return Response(
-                {"error": "You cannot modify yourself or this specific user"},
-                status=status.HTTP_403_FORBIDDEN,
-            )
+        # Check object-level permission (skip for coordinator assignments by admins)
+        if not is_coordinator_assignment or not is_admin:
+            permission = CanModerateUsers()
+            if not permission.has_object_permission(request, self, user):
+                return Response(
+                    {"error": "You cannot modify yourself or this specific user"},
+                    status=status.HTTP_403_FORBIDDEN,
+                )
 
         # Filter out name fields that admins/superadmins shouldn't be able to change
         data = request.data.copy()

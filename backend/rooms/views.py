@@ -57,8 +57,44 @@ class RoomListView(APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
+        # Check if the user is a coordinator
+        user_groups = [group.name.lower() for group in request.user.groups.all()]
+        is_coordinator = "coordinator" in user_groups
+        is_admin_or_superadmin = ("admin" in user_groups or "superadmin" in user_groups or 
+                                  request.user.is_staff or request.user.is_superuser)
+
         # Start with all rooms, then filter
         rooms = Room.objects.all()
+        
+        # Handle special coordinator permissions
+        if is_coordinator and not is_admin_or_superadmin:
+            managed_floor_ids = list(request.user.managed_floors.values_list('id', flat=True)) or []
+            managed_dept_ids = list(request.user.managed_departments.values_list('id', flat=True)) or []
+            
+            # If coordinator has department assignments, show:
+            # 1. Rooms in their assigned departments (regardless of floor)
+            # 2. Rooms with NO department assignments on their assigned floors
+            if managed_dept_ids:
+                # Get rooms in managed departments
+                dept_rooms = Room.objects.filter(departments__id__in=managed_dept_ids)
+                
+                # Get rooms with NO departments on managed floors
+                floor_rooms_no_dept = Room.objects.filter(
+                    floor_id__in=managed_floor_ids
+                ).exclude(
+                    departments__isnull=False
+                )
+                
+                # Combine the querysets
+                rooms = (dept_rooms | floor_rooms_no_dept).distinct()
+            
+            # If coordinator has no department assignments, show:
+            # Only rooms with NO department assignments on their assigned floors
+            else:
+                rooms = Room.objects.filter(
+                    floor_id__in=managed_floor_ids,
+                    departments__isnull=True
+                )
         
         # Filter by available status
         rooms = rooms.filter(available=True)
