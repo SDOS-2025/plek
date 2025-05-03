@@ -38,12 +38,59 @@ function Dashboard() {
     user?.firstName ||
     localStorage.getItem("firstName") ||
     "Admin";
-  const isSuper = user?.is_superuser || user?.isSuperAdmin || false;
 
-  // Determine user role from groups - including coordinator detection
-  const [userRole, setUserRole] = useState(isSuper ? "superadmin" : "admin");
+  // Simplified user role determination
+  const [userRole, setUserRole] = useState("admin");
+  const [loading, setLoading] = useState({
+    profile: true,
+    bookings: true,
+    rooms: true,
+    notifications: true,
+  });
 
-  // State variables for admin dashboard
+  // Fetch profile once at component mount to determine exact role
+  useEffect(() => {
+    const fetchProfileData = async () => {
+      try {
+        const response = await api.get("/api/accounts/profile/");
+
+        if (response.status === 200) {
+          const profileData = response.data;
+
+          // Determine role based on is_superuser flag and groups
+          if (profileData.is_superuser) {
+            setUserRole("superadmin");
+          } else {
+            // Check for group membership
+            const groups = profileData.groups || [];
+            const groupNames = Array.isArray(groups)
+              ? groups.map((g) =>
+                  typeof g === "string"
+                    ? g.toLowerCase()
+                    : g.name?.toLowerCase()
+                )
+              : [];
+
+            if (groupNames.includes("admin")) {
+              setUserRole("admin");
+            } else if (groupNames.includes("coordinator")) {
+              setUserRole("coordinator");
+            }
+          }
+        }
+      } catch (err) {
+        console.error("Error fetching user profile:", err);
+        // Fall back to basic role determination based on is_superuser
+        setUserRole(user?.is_superuser ? "superadmin" : "admin");
+      } finally {
+        setLoading((prev) => ({ ...prev, profile: false }));
+      }
+    };
+
+    fetchProfileData();
+  }, [user]);
+
+  // Other state variables for admin dashboard
   const [showBookingModal, setShowBookingModal] = useState(false);
   const [showModifyModal, setShowModifyModal] = useState(false);
   const [selectedRoom, setSelectedRoom] = useState(null);
@@ -58,11 +105,6 @@ function Dashboard() {
   });
   const [upcomingBookings, setUpcomingBookings] = useState([]);
   const [notifications, setNotifications] = useState([]);
-  const [loading, setLoading] = useState({
-    bookings: true,
-    rooms: true,
-    notifications: true,
-  });
   const [error, setError] = useState({
     bookings: null,
     rooms: null,
@@ -78,40 +120,13 @@ function Dashboard() {
     .setLocale("en-US")
     .toLocaleString(DateTime.TIME_SIMPLE);
 
-  // Check if user is a coordinator
-  useEffect(() => {
-    const checkUserRole = async () => {
-      try {
-        const response = await api.get("/api/accounts/profile/");
-        if (response.status === 200) {
-          const profileData = response.data;
-
-          // Check groups
-          const groups = profileData.groups || [];
-          const groupNames = groups.map((group) =>
-            typeof group === "string"
-              ? group.toLowerCase()
-              : group.name?.toLowerCase()
-          );
-
-          if (profileData.is_superuser || groupNames.includes("superadmin")) {
-            setUserRole("superadmin");
-          } else if (groupNames.includes("admin")) {
-            setUserRole("admin");
-          } else if (groupNames.includes("coordinator")) {
-            setUserRole("coordinator");
-          }
-        }
-      } catch (err) {
-        console.error("Error fetching user profile:", err);
-      }
-    };
-
-    checkUserRole();
-  }, [user]);
-
   // Fetch booking statistics
   useEffect(() => {
+    // Skip fetching if profile is still loading
+    if (loading.profile) {
+      return;
+    }
+
     const fetchBookingStats = async () => {
       try {
         setLoading((prev) => ({ ...prev, bookings: true }));
@@ -166,116 +181,60 @@ function Dashboard() {
 
         setUpcomingBookings(processed);
         setError((prev) => ({ ...prev, bookings: null }));
+
+        // Now that we have the bookings data, fetch room stats with this data
+        fetchRoomStats(bookings);
       } catch (err) {
         console.error("Error fetching booking statistics:", err);
         setError((prev) => ({
           ...prev,
           bookings: "Failed to load booking statistics",
         }));
+        // Still try to fetch room stats even if bookings failed
+        fetchRoomStats([]);
       } finally {
         setLoading((prev) => ({ ...prev, bookings: false }));
       }
     };
 
     fetchBookingStats();
-  }, [userRole]);
+  }, [userRole, loading.profile]);
 
-  // Fetch room statistics
-  useEffect(() => {
-    const fetchRoomStats = async () => {
-      try {
-        setLoading((prev) => ({ ...prev, rooms: true }));
+  // Fetch room statistics - modified to accept bookings data
+  const fetchRoomStats = async (existingBookings = []) => {
+    try {
+      setLoading((prev) => ({ ...prev, rooms: true }));
 
-        // Get all rooms
-        const roomsResponse = await api.get("/rooms/");
-        const rooms = roomsResponse.data || [];
+      // Get all rooms
+      const roomsResponse = await api.get("/rooms/");
+      const rooms = roomsResponse.data || [];
 
-        // Count maintenance rooms
-        const maintenanceRooms = rooms.filter((room) => !room.available);
+      // Count maintenance rooms
+      const maintenanceRooms = rooms.filter((room) => !room.available);
 
-        // Calculate utilization rate for next 5 days
-        const utilizationRate = await calculateUtilizationRate(rooms);
+      // Calculate utilization rate for next 5 days using existing bookings data
+      const utilizationRate = calculateUtilizationRate(rooms, existingBookings);
 
-        // Set room stats
-        setRoomStats({
-          maintenance: maintenanceRooms.length,
-          utilizationRate,
-        });
+      // Set room stats
+      setRoomStats({
+        maintenance: maintenanceRooms.length,
+        utilizationRate,
+      });
 
-        setError((prev) => ({ ...prev, rooms: null }));
-      } catch (err) {
-        console.error("Error fetching room statistics:", err);
-        setError((prev) => ({
-          ...prev,
-          rooms: "Failed to load room statistics",
-        }));
-      } finally {
-        setLoading((prev) => ({ ...prev, rooms: false }));
-      }
-    };
+      setError((prev) => ({ ...prev, rooms: null }));
+    } catch (err) {
+      console.error("Error fetching room statistics:", err);
+      setError((prev) => ({
+        ...prev,
+        rooms: "Failed to load room statistics",
+      }));
+    } finally {
+      setLoading((prev) => ({ ...prev, rooms: false }));
+    }
+  };
 
-    fetchRoomStats();
-  }, []);
-
-  // Fetch recent notifications
-  useEffect(() => {
-    const fetchNotifications = async () => {
-      try {
-        setLoading((prev) => ({ ...prev, notifications: true }));
-
-        // Get notifications from the API
-        const notificationsResponse = await api.get("/notifications/");
-        const notificationsData = notificationsResponse.data || [];
-
-        // Process notifications for display
-        const processedNotifications = notificationsData.map((notification) => {
-          // Calculate relative time (e.g., "5 minutes ago")
-          const notificationTime = DateTime.fromISO(notification.created_at);
-          const now = DateTime.now();
-          const diffMinutes = now.diff(notificationTime, "minutes").minutes;
-
-          let relativeTime;
-          if (diffMinutes < 1) {
-            relativeTime = "Just now";
-          } else if (diffMinutes < 60) {
-            relativeTime = `${Math.floor(diffMinutes)} minutes ago`;
-          } else if (diffMinutes < 1440) {
-            relativeTime = `${Math.floor(diffMinutes / 60)} hours ago`;
-          } else {
-            relativeTime = `${Math.floor(diffMinutes / 1440)} days ago`;
-          }
-
-          return {
-            id: notification.id,
-            message:
-              notification.message ||
-              notification.content ||
-              "New notification",
-            time: relativeTime,
-          };
-        });
-
-        setNotifications(processedNotifications);
-        setError((prev) => ({ ...prev, notifications: null }));
-      } catch (err) {
-        console.error("Error fetching notifications:", err);
-
-        // Fallback to empty notifications array in case of error
-        setNotifications([]);
-        setError((prev) => ({
-          ...prev,
-          notifications: "Failed to load notifications",
-        }));
-      } finally {
-        setLoading((prev) => ({ ...prev, notifications: false }));
-      }
-    };
-
-    fetchNotifications();
-  }, []);
-
-  // Calculate utilization rate for the next 5 days
-  const calculateUtilizationRate = async (rooms) => {
+  // Modified to use existing bookings data instead of making another API call
+  const calculateUtilizationRate = (rooms, existingBookings) => {
     try {
       if (!rooms || rooms.length === 0) return 0;
 
@@ -283,9 +242,8 @@ function Dashboard() {
       const startDate = DateTime.now().startOf("day");
       const endDate = startDate.plus({ days: 5 });
 
-      // Get all bookings for the next 5 days
-      const bookingsResponse = await api.get("/bookings/all/");
-      const allBookings = bookingsResponse.data || [];
+      // Use the existing bookings data passed as parameter
+      const allBookings = existingBookings || [];
 
       // Filter bookings for next 5 days that are approved
       const relevantBookings = allBookings.filter((booking) => {
@@ -422,7 +380,9 @@ function Dashboard() {
                   <div className="flex items-center space-x-2">
                     <span className="text-sm text-gray-300">
                       <span className="font-medium">
-                        {isSuper ? "Super Administrator" : "Administrator"}
+                        {userRole === "superadmin"
+                          ? "Super Administrator"
+                          : "Administrator"}
                       </span>{" "}
                       • {currentDate} • {currentTime}
                     </span>
@@ -597,7 +557,7 @@ function Dashboard() {
           </div>
 
           {/* Super Admin Section - Only visible for Super Admins */}
-          {isSuper && (
+          {userRole === "superadmin" && (
             <div className="mt-6 lg:col-span-2">
               <div className="section-card bg-plek-dark border-l-4 border-plek-purple">
                 <div className="flex items-center mb-4">
