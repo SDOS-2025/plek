@@ -230,6 +230,7 @@ class FloorDeptBookingView(APIView):
                 'purpose': booking.purpose,
                 'participants': booking.participants,
                 'cancellation_reason': booking.cancellation_reason,
+                'notes': booking.notes,  # Added notes field
                 'created_at': booking.created_at,
                 'updated_at': booking.updated_at,
             }
@@ -354,6 +355,7 @@ class AllBookingsView(APIView):
                 'purpose': booking.purpose,
                 'participants': booking.participants,
                 'cancellation_reason': booking.cancellation_reason,
+                'notes': booking.notes,  # Added notes field
                 'created_at': booking.created_at,
                 'updated_at': booking.updated_at,
             }

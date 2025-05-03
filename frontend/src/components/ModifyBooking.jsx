@@ -9,6 +9,8 @@ import {
   Trash2,
   Clock,
   AlertTriangle,
+  Building,
+  Layers,
 } from "lucide-react";
 import api from "../api";
 import { DateTime } from "luxon";
@@ -16,9 +18,15 @@ import Toast from "../components/AlertToast";
 import { usePolicies } from "../context/PolicyProvider";
 import { generateTimeSlotsFromPolicy } from "../utils/institutePolicies";
 
-const ModifyBookingModal = ({ booking, onClose, onCancel }) => {
+const ModifyBookingModal = ({
+  booking,
+  onClose,
+  onCancel,
+  isPending = false,
+}) => {
   // Debug logging to check what data we're receiving
   console.log("Original booking data received:", booking);
+  console.log("Is Pending Request:", isPending);
 
   // Pre-process the booking data to ensure capacity is set correctly
   const processedBooking = {
@@ -37,14 +45,58 @@ const ModifyBookingModal = ({ booking, onClose, onCancel }) => {
   console.log("Notes value:", processedBooking.notes);
   console.log("Original notes value:", processedBooking.original?.notes);
 
+  // Debug attendees values
+  console.log("Attendees from booking:", processedBooking.attendees);
+  console.log("Participants from booking:", processedBooking.participants);
+  console.log(
+    "Original participants:",
+    processedBooking.original?.participants
+  );
+
   const [purpose, setPurpose] = useState(processedBooking.purpose || "");
-  // Use nullish coalescing to keep numeric 0 values
-  const [attendees, setAttendees] = useState(
-    processedBooking.attendees ?? processedBooking.participants ?? ""
-  );
-  const [notes, setNotes] = useState(
-    processedBooking.notes || processedBooking.original?.notes || ""
-  );
+
+  // Extract numeric value from attendees/participants which may be in format "X participants"
+  const [attendees, setAttendees] = useState(() => {
+    // Check all possible locations where attendees information might be stored
+    let attendeesValue =
+      processedBooking.attendees ??
+      processedBooking.participants ??
+      processedBooking.original?.participants ??
+      "";
+
+    // If the value is a string like "9 participants", extract just the number
+    if (typeof attendeesValue === "string") {
+      const numericMatch = attendeesValue.match(/^(\d+)/);
+      if (numericMatch && numericMatch[1]) {
+        attendeesValue = parseInt(numericMatch[1], 10);
+      }
+    }
+
+    console.log("Initial attendees value set to:", attendeesValue);
+    return attendeesValue;
+  });
+
+  // Improved notes handling to ensure it finds the right value
+  const [notes, setNotes] = useState(() => {
+    const notesValue =
+      processedBooking.notes ?? processedBooking.original?.notes ?? "";
+    console.log("Initial notes value set to:", notesValue);
+    return notesValue;
+  });
+
+  // Admin room change functionality
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [buildings, setBuildings] = useState([]);
+  const [floors, setFloors] = useState([]);
+  const [rooms, setRooms] = useState([]);
+  const [selectedBuildingId, setSelectedBuildingId] = useState("");
+  const [selectedFloorId, setSelectedFloorId] = useState("");
+  const [selectedRoomId, setSelectedRoomId] = useState("");
+  const [originalRoomId, setOriginalRoomId] = useState("");
+  const [loadingBuildings, setLoadingBuildings] = useState(false);
+  const [loadingFloors, setLoadingFloors] = useState(false);
+  const [loadingRooms, setLoadingRooms] = useState(false);
+  const [roomChangeError, setRoomChangeError] = useState(null);
 
   // Get institute policies from context
   const {
@@ -200,19 +252,31 @@ const ModifyBookingModal = ({ booking, onClose, onCancel }) => {
       const isToday = now.toISODate() === selectedDate;
 
       const formattedDate = DateTime.fromISO(selectedDate).toISODate();
+
+      // Determine which room ID to use - if admin has selected a different room, use that
       let roomId = null;
 
-      if (booking.originalBooking && booking.originalBooking.room) {
-        if (typeof booking.originalBooking.room === "object") {
-          roomId = booking.originalBooking.room.id;
-        } else {
-          roomId = booking.originalBooking.room;
+      // For admins who have selected a different room
+      if (isAdmin && selectedRoomId && selectedRoomId !== originalRoomId) {
+        roomId = selectedRoomId;
+        console.log(
+          "Admin is checking availability for a different room:",
+          roomId
+        );
+      } else {
+        // Use the original room ID
+        if (booking.originalBooking && booking.originalBooking.room) {
+          if (typeof booking.originalBooking.room === "object") {
+            roomId = booking.originalBooking.room.id;
+          } else {
+            roomId = booking.originalBooking.room;
+          }
+        } else if (booking.roomId) {
+          roomId = booking.roomId;
+        } else if (booking.room) {
+          roomId =
+            typeof booking.room === "object" ? booking.room.id : booking.room;
         }
-      } else if (booking.roomId) {
-        roomId = booking.roomId;
-      } else if (booking.room) {
-        roomId =
-          typeof booking.room === "object" ? booking.room.id : booking.room;
       }
 
       if (!roomId) {
@@ -531,9 +595,9 @@ const ModifyBookingModal = ({ booking, onClose, onCancel }) => {
           const isAdmin =
             profileData.is_superuser ||
             groupNames.includes("superadmin") ||
-            groupNames.includes("admin") ||
-            groupNames.includes("coordinator");
+            groupNames.includes("admin");
 
+          setIsAdmin(isAdmin);
           setUserRole({
             isAdmin,
             isCoordinator: groupNames.includes("coordinator"),
@@ -555,6 +619,130 @@ const ModifyBookingModal = ({ booking, onClose, onCancel }) => {
 
     fetchUserRole();
   }, []);
+
+  // Fetch buildings when component mounts
+  useEffect(() => {
+    const fetchBuildings = async () => {
+      if (isAdmin) {
+        try {
+          setLoadingBuildings(true);
+          const response = await api.get("/buildings/");
+          setBuildings(response.data);
+
+          // Set original room ID
+          let roomId = null;
+          if (booking.originalBooking && booking.originalBooking.room) {
+            if (typeof booking.originalBooking.room === "object") {
+              roomId = booking.originalBooking.room.id;
+            } else {
+              roomId = booking.originalBooking.room;
+            }
+          } else if (booking.roomId) {
+            roomId = booking.roomId;
+          } else if (booking.room) {
+            roomId =
+              typeof booking.room === "object" ? booking.room.id : booking.room;
+          }
+
+          setOriginalRoomId(roomId);
+          setSelectedRoomId(roomId);
+
+          // Try to find the building for this room
+          if (roomId) {
+            try {
+              const roomResponse = await api.get(`/rooms/${roomId}/`);
+              if (roomResponse.data && roomResponse.data.building) {
+                setSelectedBuildingId(roomResponse.data.building);
+              }
+            } catch (error) {
+              console.error("Error fetching room details:", error);
+            }
+          }
+        } catch (error) {
+          console.error("Error fetching buildings:", error);
+        } finally {
+          setLoadingBuildings(false);
+        }
+      }
+    };
+
+    fetchBuildings();
+  }, [isAdmin, booking]);
+
+  // Fetch floors when building is selected
+  useEffect(() => {
+    const fetchFloors = async () => {
+      if (isAdmin && selectedBuildingId) {
+        try {
+          setLoadingFloors(true);
+          const response = await api.get(
+            `/buildings/${selectedBuildingId}/floors/`
+          );
+          setFloors(response.data);
+
+          // Try to find the floor for the currently selected room
+          if (originalRoomId) {
+            try {
+              const roomResponse = await api.get(`/rooms/${originalRoomId}/`);
+              if (roomResponse.data && roomResponse.data.floor) {
+                setSelectedFloorId(roomResponse.data.floor);
+              }
+            } catch (error) {
+              console.error("Error fetching room floor details:", error);
+            }
+          }
+        } catch (error) {
+          console.error("Error fetching floors:", error);
+        } finally {
+          setLoadingFloors(false);
+        }
+      }
+    };
+
+    fetchFloors();
+  }, [isAdmin, selectedBuildingId, originalRoomId]);
+
+  // Fetch rooms when floor is selected
+  useEffect(() => {
+    const fetchRooms = async () => {
+      if (isAdmin && selectedFloorId) {
+        try {
+          setLoadingRooms(true);
+          console.log(`Fetching rooms for floor ID: ${selectedFloorId}`);
+          const response = await api.get(`/rooms/?floor=${selectedFloorId}`);
+          console.log("Rooms API response:", response.data);
+          setRooms(response.data);
+        } catch (error) {
+          console.error("Error fetching rooms:", error);
+        } finally {
+          setLoadingRooms(false);
+        }
+      }
+    };
+
+    fetchRooms();
+  }, [isAdmin, selectedFloorId]);
+
+  // Refetch available time slots when room changes
+  useEffect(() => {
+    if (
+      isAdmin &&
+      selectedRoomId &&
+      selectedRoomId !== originalRoomId &&
+      date
+    ) {
+      // Store current values before fetching new time slots
+      const currentAttendees = attendees;
+      const currentNotes = notes;
+
+      // Fetch time slots for new room
+      fetchAvailableTimeSlots(date).then(() => {
+        // Restore attendees and notes after fetching
+        setAttendees(currentAttendees);
+        setNotes(currentNotes);
+      });
+    }
+  }, [selectedRoomId, isAdmin]);
 
   const toggleDatePicker = () => {
     setShowDatePicker(!showDatePicker);
@@ -737,17 +925,25 @@ const ModifyBookingModal = ({ booking, onClose, onCancel }) => {
 
       // Determine the room ID - handle different data structures
       let roomId = null;
-      if (booking.originalBooking && booking.originalBooking.room) {
-        if (typeof booking.originalBooking.room === "object") {
-          roomId = booking.originalBooking.room.id;
-        } else {
-          roomId = booking.originalBooking.room;
+
+      // If admin has selected a new room, use that instead
+      if (isAdmin && selectedRoomId && selectedRoomId !== originalRoomId) {
+        roomId = selectedRoomId;
+        console.log("Admin is changing room to:", roomId);
+      } else {
+        // Otherwise use the original room ID
+        if (booking.originalBooking && booking.originalBooking.room) {
+          if (typeof booking.originalBooking.room === "object") {
+            roomId = booking.originalBooking.room.id;
+          } else {
+            roomId = booking.originalBooking.room;
+          }
+        } else if (booking.roomId) {
+          roomId = booking.roomId;
+        } else if (booking.room) {
+          roomId =
+            typeof booking.room === "object" ? booking.room.id : booking.room;
         }
-      } else if (booking.roomId) {
-        roomId = booking.roomId;
-      } else if (booking.room) {
-        roomId =
-          typeof booking.room === "object" ? booking.room.id : booking.room;
       }
 
       if (!roomId) {
@@ -892,6 +1088,139 @@ const ModifyBookingModal = ({ booking, onClose, onCancel }) => {
         show: true,
         type: "danger",
         message: errorMessage,
+      });
+    }
+  };
+
+  // Handle approving the booking directly from the modal
+  const handleApprove = async () => {
+    try {
+      const bookingId = booking.id;
+
+      // First save any changes made to the booking
+      // Determine the room ID - handle different data structures
+      let roomId = null;
+
+      // If admin has selected a new room, use that instead
+      if (isAdmin && selectedRoomId && selectedRoomId !== originalRoomId) {
+        roomId = selectedRoomId;
+      } else {
+        // Otherwise use the original room ID
+        if (booking.originalBooking && booking.originalBooking.room) {
+          if (typeof booking.originalBooking.room === "object") {
+            roomId = booking.originalBooking.room.id;
+          } else {
+            roomId = booking.originalBooking.room;
+          }
+        } else if (booking.roomId) {
+          roomId = booking.roomId;
+        } else if (booking.room) {
+          roomId =
+            typeof booking.room === "object" ? booking.room.id : booking.room;
+        }
+      }
+
+      if (!roomId) {
+        throw new Error("Could not identify the room for this booking");
+      }
+
+      // Parse any selected time slots
+      let timeValues = null;
+      if (selectedTimeSlots.length > 0) {
+        // Sort time slots and ensure they're continuous (simplified check)
+        const timeRanges = selectedTimeSlots.map((slot) => {
+          const [startStr, endStr] = slot.split(" - ");
+          return { start: startStr, end: endStr };
+        });
+
+        // Create a combined time slot from the first start time to the last end time
+        const firstStart = timeRanges[0].start;
+        const lastEnd = timeRanges[timeRanges.length - 1].end;
+        const combinedTimeSlot = `${firstStart} - ${lastEnd}`;
+
+        // Convert to ISO format with proper timezone
+        timeValues = parseTimeSlot(combinedTimeSlot, date);
+      }
+
+      // Prepare the booking update payload with any changes
+      const bookingUpdate = {
+        room: roomId,
+        purpose: purpose.trim(),
+        participants: attendees.toString(),
+        notes: notes,
+        status: "APPROVED", // Force status to APPROVED
+      };
+
+      // Only add time values if they were changed
+      if (timeValues && timeValues.start_time && timeValues.end_time) {
+        bookingUpdate.start_time = timeValues.start_time;
+        bookingUpdate.end_time = timeValues.end_time;
+      }
+
+      console.log("Approving with changes:", bookingUpdate);
+
+      // First approve the booking to ensure status is updated
+      const approvalResponse = await api.post(
+        `/bookings/approval/${bookingId}/`,
+        { action: "approve" }
+      );
+
+      if (approvalResponse.status !== 200) {
+        throw new Error("Failed to approve booking");
+      }
+
+      // Then update the booking with changes
+      const updateResponse = await api.patch(
+        `/bookings/${bookingId}/`,
+        bookingUpdate
+      );
+
+      if (updateResponse.status === 200) {
+        setAlert({
+          show: true,
+          type: "success",
+          message: "Booking updated and approved successfully!",
+        });
+
+        // Get complete room data for the updated booking
+        let roomName = booking.room;
+        let buildingName = booking.building;
+
+        try {
+          const roomResponse = await api.get(`/rooms/${roomId}/`);
+          if (roomResponse.status === 200) {
+            roomName = roomResponse.data.name || roomName;
+            buildingName = roomResponse.data.building_name || buildingName;
+          }
+        } catch (error) {
+          console.warn("Could not fetch room details:", error);
+        }
+
+        // Create a modified response that includes the complete updated booking data
+        const updatedBookingData = {
+          ...updateResponse.data,
+          status: "APPROVED",
+          action: "APPROVED", // Flag for parent component
+          room_name: roomName,
+          building_name: buildingName,
+          id: bookingId,
+        };
+
+        console.log("Prepared updated booking data:", updatedBookingData);
+
+        // Close modal after a short delay
+        setTimeout(() => {
+          onClose(updatedBookingData); // Pass the updated booking data to parent component
+        }, 2000);
+      } else {
+        throw new Error("Failed to update booking after approval");
+      }
+    } catch (error) {
+      console.error("Error approving booking with changes:", error);
+      setAlert({
+        show: true,
+        type: "danger",
+        message: "Failed to approve booking. Please try again.",
       });
     }
   };
@@ -1262,6 +1591,135 @@ const ModifyBookingModal = ({ booking, onClose, onCancel }) => {
         )}
 
         <form onSubmit={handleSubmit} className="space-y-6">
+          {/* Room Change Section for Administrators Only */}
+          {isAdmin && (
+            <div className="bg-blue-900/20 border border-blue-800/30 rounded-lg p-4 mb-2">
+              <h3 className="font-medium text-blue-300 mb-3 flex items-center">
+                <Building size={18} className="mr-2" />
+                Administrator Room Change
+              </h3>
+
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                {/* Building Selection */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-300 mb-2">
+                    Building
+                  </label>
+                  <div className="relative">
+                    {loadingBuildings && (
+                      <Loader2
+                        size={16}
+                        className="absolute right-3 top-3 animate-spin text-gray-400"
+                      />
+                    )}
+                    <select
+                      value={selectedBuildingId}
+                      onChange={(e) => {
+                        setSelectedBuildingId(e.target.value);
+                        setSelectedFloorId("");
+                        setSelectedRoomId("");
+                      }}
+                      disabled={loadingBuildings}
+                      className="w-full bg-plek-background rounded-lg p-3 focus:outline-none focus:ring-2 focus:ring-blue-400"
+                    >
+                      <option value="">Select Building</option>
+                      {buildings.map((building) => (
+                        <option key={building.id} value={building.id}>
+                          {building.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+
+                {/* Floor Selection */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-300 mb-2">
+                    Floor
+                  </label>
+                  <div className="relative">
+                    {loadingFloors && (
+                      <Loader2
+                        size={16}
+                        className="absolute right-3 top-3 animate-spin text-gray-400"
+                      />
+                    )}
+                    <select
+                      value={selectedFloorId}
+                      onChange={(e) => {
+                        setSelectedFloorId(e.target.value);
+                        setSelectedRoomId("");
+                      }}
+                      disabled={!selectedBuildingId || loadingFloors}
+                      className="w-full bg-plek-background rounded-lg p-3 focus:outline-none focus:ring-2 focus:ring-blue-400"
+                    >
+                      <option value="">Select Floor</option>
+                      {floors.map((floor) => (
+                        <option key={floor.id} value={floor.id}>
+                          {floor.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+
+                {/* Room Selection */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-300 mb-2">
+                    Room
+                  </label>
+                  <div className="relative">
+                    {loadingRooms && (
+                      <Loader2
+                        size={16}
+                        className="absolute right-3 top-3 animate-spin text-gray-400"
+                      />
+                    )}
+                    <select
+                      value={selectedRoomId}
+                      onChange={(e) => {
+                        const newRoomId = e.target.value;
+                        setSelectedRoomId(newRoomId);
+
+                        // If room has changed, clear any previous error
+                        if (newRoomId !== originalRoomId) {
+                          setRoomChangeError(null);
+                        }
+                      }}
+                      disabled={!selectedFloorId || loadingRooms}
+                      className="w-full bg-plek-background rounded-lg p-3 focus:outline-none focus:ring-2 focus:ring-blue-400"
+                    >
+                      <option value="">Select Room</option>
+                      {rooms.map((room) => (
+                        <option key={room.id} value={room.id}>
+                          {room.name} (Capacity: {room.capacity})
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+              </div>
+
+              {roomChangeError && (
+                <div className="mt-2 text-red-400 text-sm">
+                  {roomChangeError}
+                </div>
+              )}
+
+              {selectedRoomId && selectedRoomId !== originalRoomId && (
+                <div className="mt-3 p-2 bg-blue-900/30 rounded border border-blue-700/30">
+                  <p className="text-xs text-blue-300">
+                    <AlertTriangle size={12} className="inline-block mr-1" />
+                    Changing the room will update available time slots and may
+                    affect your booking. If you've already selected time slots,
+                    please verify they are still suitable after changing the
+                    room.
+                  </p>
+                </div>
+              )}
+            </div>
+          )}
+
           <div>
             <label className="block text-sm font-medium text-gray-300 mb-2">
               Purpose of Booking
@@ -1339,6 +1797,15 @@ const ModifyBookingModal = ({ booking, onClose, onCancel }) => {
               <Trash2 size={18} />
               <span>Cancel Booking</span>
             </button>
+            {isPending && (
+              <button
+                type="button"
+                onClick={handleApprove}
+                className="flex-1 py-3 bg-green-600 hover:bg-green-700 rounded-lg transition-colors"
+              >
+                Approve
+              </button>
+            )}
             <button
               type="button"
               onClick={onClose}
@@ -1346,15 +1813,16 @@ const ModifyBookingModal = ({ booking, onClose, onCancel }) => {
             >
               Discard Changes
             </button>
-            <button
-              type="submit"
-              className="flex-1 py-3 bg-plek-purple hover:bg-purple-700 rounded-lg transition-colors"
-              disabled={loadingTimeSlots}
-            >
-              {policies?.enable_auto_approval
-                ? "Save & Apply"
-                : "Request Changes"}
-            </button>
+            {/* Only show the Save Changes/Submit button when not in pending mode */}
+            {!isPending && (
+              <button
+                type="submit"
+                className="flex-1 py-3 bg-plek-purple hover:bg-purple-700 rounded-lg transition-colors"
+                disabled={loadingTimeSlots}
+              >
+                Save Changes
+              </button>
+            )}
           </div>
         </form>
       </div>

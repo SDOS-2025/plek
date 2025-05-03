@@ -36,6 +36,7 @@ class RoomListView(APIView):
         end_time = request.query_params.get("end_time")
         capacity = request.query_params.get("capacity")
         building_id = request.query_params.get("building_id")
+        floor = request.query_params.get("floor")  # Add direct floor parameter
         floor_number = request.query_params.get("floor_number")
         floor_name = request.query_params.get("floor_name")
         department_id = request.query_params.get("department_id")
@@ -46,6 +47,7 @@ class RoomListView(APIView):
             end_datetime = datetime.fromisoformat(end_time) if end_time else None
             capacity = int(capacity) if capacity else None
             floor_number = int(floor_number) if floor_number else None
+            floor_id = int(floor) if floor else None  # Parse floor ID parameter
             department_id = int(department_id) if department_id else None
         except (ValueError, TypeError):
             return Response(
@@ -72,6 +74,10 @@ class RoomListView(APIView):
 
         if building_id:
             rooms = rooms.filter(building_id=building_id)
+            
+        # Add direct floor ID filtering
+        if floor_id:
+            rooms = rooms.filter(floor_id=floor_id)
 
         if floor_number is not None:
             rooms = rooms.filter(floor__number=floor_number)

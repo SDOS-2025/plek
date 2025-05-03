@@ -143,37 +143,43 @@ class BookingSerializer(serializers.ModelSerializer):
             )
 
         # Minimum gap validation
-        min_gap = policy.min_gap_between_bookings_minutes or 15
-        min_gap_delta = timedelta(minutes=min_gap)
-        room = data["room"]
+        min_gap = policy.min_gap_between_bookings_minutes
+        
+        # Skip minimum gap validation if the gap is set to 0
+        if min_gap > 0:
+            min_gap_delta = timedelta(minutes=min_gap)
+            room = data["room"]
 
-        adjacent_bookings = Booking.objects.filter(
-            room=room,
-            status=Booking.APPROVED,
-        ).filter(
-            Q(
-                end_time__range=(
-                    booking_start - min_gap_delta,
-                    booking_start + min_gap_delta,
+            adjacent_bookings = Booking.objects.filter(
+                room=room,
+                status=Booking.APPROVED,
+            ).filter(
+                Q(
+                    end_time__range=(
+                        booking_start - min_gap_delta,
+                        booking_start + min_gap_delta,
+                    )
+                )
+                | Q(
+                    start_time__range=(
+                        booking_end - min_gap_delta,
+                        booking_end + min_gap_delta,
+                    )
                 )
             )
-            | Q(
-                start_time__range=(
-                    booking_end - min_gap_delta,
-                    booking_end + min_gap_delta,
+
+            if self.instance:
+                adjacent_bookings = adjacent_bookings.exclude(id=self.instance.id)
+
+            if adjacent_bookings.exists():
+                raise serializers.ValidationError(
+                    {
+                        "time": f"Must maintain a gap of at least {min_gap} minutes between bookings"
+                    }
                 )
-            )
-        )
-
-        if self.instance:
-            adjacent_bookings = adjacent_bookings.exclude(id=self.instance.id)
-
-        if adjacent_bookings.exists():
-            raise serializers.ValidationError(
-                {
-                    "time": f"Must maintain a gap of at least {min_gap} minutes between bookings"
-                }
-            )
+        else:
+            # When min_gap is 0, we still need to set room for subsequent validations
+            room = data["room"]
 
         # Overlap validation
         approved_conflicts = Booking.objects.filter(

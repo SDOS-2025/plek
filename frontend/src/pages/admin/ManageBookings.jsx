@@ -1197,6 +1197,13 @@ function ManageBookings() {
                       {activeTab === "requests" ? (
                         <div className="flex justify-end space-x-2">
                           <button
+                            onClick={() => handleModifyClick(booking)}
+                            className="p-2 hover:bg-gray-700 rounded-lg transition-colors"
+                            title="Modify"
+                          >
+                            <Pencil size={18} className="text-gray-400" />
+                          </button>
+                          <button
                             onClick={() => handleApprove(booking.id)}
                             className="p-2 hover:bg-plek-purple/20 rounded-lg transition-colors"
                             title="Approve"
@@ -1247,8 +1254,68 @@ function ManageBookings() {
       {showModifyModal && selectedBooking && (
         <ModifyBookingModal
           booking={selectedBooking}
-          onClose={() => setShowModifyModal(false)}
+          onClose={(updatedBookingData) => {
+            setShowModifyModal(false);
+
+            // Check if we got updated data back from the modal
+            if (!updatedBookingData) {
+              // Just close the modal without any updates
+              return;
+            }
+
+            console.log(
+              "Booking data received from modal:",
+              updatedBookingData
+            );
+
+            // Check if this is a booking that was approved from the modal
+            if (
+              updatedBookingData.status === "APPROVED" ||
+              updatedBookingData.action === "APPROVED"
+            ) {
+              console.log("Booking was approved:", updatedBookingData);
+
+              // First remove the booking from requests
+              const updatedRequests = bookingRequests.filter(
+                (req) => parseInt(req.id) !== parseInt(updatedBookingData.id)
+              );
+
+              // Create the approved booking object
+              const approvedBooking = {
+                ...selectedBooking,
+                status: "APPROVED",
+                // Update other fields that might have changed
+                notes: updatedBookingData.notes || selectedBooking.notes,
+                purpose: updatedBookingData.purpose || selectedBooking.purpose,
+                participants:
+                  updatedBookingData.participants ||
+                  selectedBooking.participants,
+                attendees:
+                  updatedBookingData.participants || selectedBooking.attendees,
+                room: updatedBookingData.room_name || selectedBooking.room,
+                roomId: updatedBookingData.room || selectedBooking.roomId,
+                building:
+                  updatedBookingData.building_name || selectedBooking.building,
+                start_time:
+                  updatedBookingData.start_time || selectedBooking.start_time,
+                end_time:
+                  updatedBookingData.end_time || selectedBooking.end_time,
+                id: updatedBookingData.id || selectedBooking.id,
+              };
+
+              // Update the state with the removed pending booking and added approved booking
+              setBookingRequests(updatedRequests);
+              setApprovedBookings([...approvedBookings, approvedBooking]);
+
+              // Show success message
+              showAlert("success", "Booking request approved successfully!");
+            } else {
+              // For regular updates, just refresh the data from the backend
+              fetchBookingsForTab(activeTab);
+            }
+          }}
           onCancel={handleDeleteClick}
+          isPending={activeTab === "requests"}
         />
       )}
 
