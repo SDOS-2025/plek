@@ -8,6 +8,7 @@ import {
   Calendar,
   BarChart,
   ActivitySquare,
+  AlertCircle,
 } from "lucide-react";
 import NavBar from "../../components/NavBar";
 import Footer from "../../components/Footer";
@@ -18,6 +19,77 @@ function Analytics() {
   const [data, setData] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [userRole, setUserRole] = useState(null);
+  const [coordinatorResources, setCoordinatorResources] = useState({
+    buildings: [],
+    floors: [],
+    departments: [],
+  });
+
+  // Fetch user profile to determine role
+  useEffect(() => {
+    const fetchUserProfile = async () => {
+      try {
+        // Fetch the user profile to get accurate role information
+        const profileResponse = await api.get("/api/accounts/profile/");
+        const userProfile = profileResponse.data;
+        console.log("User profile:", userProfile);
+
+        // Determine role from groups in the profile
+        const groups = userProfile.groups || [];
+        const groupNames = groups.map((group) =>
+          typeof group === "string"
+            ? group.toLowerCase()
+            : group.name.toLowerCase()
+        );
+
+        if (userProfile.is_superuser || groupNames.includes("superadmin")) {
+          setUserRole("superadmin");
+          console.log("User role: superadmin");
+        } else if (groupNames.includes("admin")) {
+          setUserRole("admin");
+          console.log("User role: admin");
+        } else if (groupNames.includes("coordinator")) {
+          setUserRole("coordinator");
+          console.log("User role: coordinator");
+
+          // For coordinators, fetch their assigned resources
+          try {
+            const coordResponse = await api.get("/bookings/floor-dept/");
+            console.log(
+              "Coordinator resources fetched:",
+              coordResponse.data
+            );
+
+            // Extract managed resources from the response
+            const managedBuildingsData =
+              coordResponse.data.managed_buildings || [];
+            const managedFloorsData = coordResponse.data.managed_floors || [];
+            const managedDepartmentsData =
+              coordResponse.data.managed_departments || [];
+
+            // Set coordinator resources from API response
+            setCoordinatorResources({
+              buildings: managedBuildingsData,
+              floors: managedFloorsData,
+              departments: managedDepartmentsData,
+            });
+          } catch (coordError) {
+            console.error("Error fetching coordinator data:", coordError);
+          }
+        } else {
+          setUserRole("user");
+          console.log("User role: regular user");
+        }
+      } catch (error) {
+        console.error("Error fetching user profile:", error);
+        // Fallback to a safe default
+        setUserRole("user");
+      }
+    };
+
+    fetchUserProfile();
+  }, []);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -659,6 +731,103 @@ function Analytics() {
 
       {/* Main Content */}
       <div className="main-content">
+        {/* Coordinator info banner */}
+        {userRole === "coordinator" && (
+          <div className="mb-6 p-4 bg-blue-900/30 border border-blue-700 rounded-lg">
+            <div className="flex items-start text-blue-200">
+              <AlertCircle className="h-5 w-5 mr-2 mt-0.5 flex-shrink-0" />
+              <div>
+                <p className="font-medium">Coordinator View</p>
+                <p className="text-sm">
+                  You're viewing analytics for your assigned rooms only.
+                </p>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-x-4 gap-y-1 mt-2 text-sm">
+                  <div>
+                    <span className="font-medium">Managed Buildings:</span>{" "}
+                    {coordinatorResources.buildings &&
+                    coordinatorResources.buildings.length > 0
+                      ? coordinatorResources.buildings
+                          .filter(
+                            (b) => b && (typeof b === "object" ? b.name : b)
+                          )
+                          .map((b) => {
+                            if (typeof b === "object") {
+                              return b.name || `Building ${b.id}`;
+                            } else if (typeof b === "number") {
+                              // If it's just a number ID, try to find the corresponding building object
+                              const buildingObj = coordinatorResources.floors
+                                .filter(
+                                  (f) =>
+                                    f &&
+                                    typeof f === "object" &&
+                                    f.building_id === b
+                                )
+                                .map((f) => f.building_name)[0];
+                              return buildingObj || `Building ${b}`;
+                            }
+                            return String(b);
+                          })
+                          .filter(Boolean) // Remove any undefined/null values
+                          .join(", ")
+                      : "None"}
+                  </div>
+                  <div>
+                    <span className="font-medium">Managed Floors:</span>{" "}
+                    {coordinatorResources.floors &&
+                    coordinatorResources.floors.length > 0
+                      ? [
+                          ...new Set(
+                            coordinatorResources.floors
+                              .filter(
+                                (f) =>
+                                  f &&
+                                  (typeof f === "object"
+                                    ? f.id || f.number || f.name
+                                    : f)
+                              )
+                              .map((f) => {
+                                if (typeof f === "object") {
+                                  // Format floor as "Floor X" or use the floor name if available
+                                  const floorName = f.name
+                                    ? f.name
+                                    : `Floor ${f.number}`;
+                                  return floorName;
+                                }
+                                return f;
+                              })
+                          ),
+                        ]
+                          .sort()
+                          .join(", ")
+                      : "None"}
+                  </div>
+                  <div className="md:col-span-2">
+                    <span className="font-medium">Managed Departments:</span>{" "}
+                    {coordinatorResources.departments &&
+                    coordinatorResources.departments.length > 0
+                      ? coordinatorResources.departments
+                          .filter((d) => d && typeof d === "object")
+                          .map((d) => {
+                            if (typeof d === "object") {
+                              // Return department name with code if available
+                              return (
+                                d.name ||
+                                (d.code
+                                  ? `${d.code} Department`
+                                  : `Department ${d.id}`)
+                              );
+                            }
+                            return `Department ${d}`; // Fallback for non-object values
+                          })
+                          .join(", ")
+                      : "None"}
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
         <div className="section-card">
           {/* Analytics Navigation */}
           <div className="mb-6 border-b border-gray-800 pb-4">

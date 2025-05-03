@@ -12,7 +12,8 @@ django.setup()
 
 # Import models
 from django.contrib.auth import get_user_model
-from rooms.models import Room, Building, Amenity, Floor
+from django.contrib.auth.models import Group
+from rooms.models import Room, Building, Amenity, Floor, Department
 from bookings.models import Booking
 
 User = get_user_model()
@@ -25,12 +26,17 @@ def create_test_data():
         email="admin@example.com",
         defaults={
             "is_staff": True,
-            "is_superuser": True
+            "is_superuser": True,
+            "first_name": "Admin",
+            "last_name": "User"
         }
     )
     if created:
         admin_user.set_password("adminpass")
         admin_user.save()
+        # Add admin user to SuperAdmin group
+        superadmin_group, _ = Group.objects.get_or_create(name="SuperAdmin")
+        admin_user.groups.add(superadmin_group)
         print("Created admin user: admin@example.com / adminpass")
     else:
         print("Admin user already exists")
@@ -50,6 +56,30 @@ def create_test_data():
             user.save()
             print(f"Created regular user: user{i}@example.com / userpass{i}")
         users.append(user)
+    
+    # Create academic departments
+    departments = []
+    department_data = [
+        {"name": "Computer Science and Engineering", "code": "CSE", "description": "Department of Computer Science and Engineering"},
+        {"name": "Electronics & Communication Engineering", "code": "ECE", "description": "Department of Electronics & Communication Engineering"},
+        {"name": "Computational Biology", "code": "CB", "description": "Department of Computational Biology"},
+        {"name": "Human Centered Design", "code": "HCD", "description": "Department of Human Centered Design"},
+        {"name": "Mathematics", "code": "MATH", "description": "Department of Mathematics"},
+        {"name": "Social Sciences and Humanities", "code": "SSH", "description": "Department of Social Sciences and Humanities"}
+    ]
+    
+    for dept_info in department_data:
+        dept, created = Department.objects.get_or_create(
+            name=dept_info["name"],
+            defaults={
+                "code": dept_info["code"],
+                "description": dept_info["description"],
+                "is_active": True
+            }
+        )
+        if created:
+            print(f"Created department: {dept.name} ({dept.code})")
+        departments.append(dept)
     
     # Create rooms based on provided information
     room_data = [
@@ -119,6 +149,78 @@ def create_test_data():
                 defaults={"name": floor_name}
             )
             floors[key] = floor
+    
+    # Now create coordinator users for each department (AFTER buildings and floors are defined)
+    coordinator_group, _ = Group.objects.get_or_create(name="Coordinator")
+    user_group, _ = Group.objects.get_or_create(name="User")
+    coordinators = []
+    
+    # Get all buildings and floors for distribution
+    all_buildings = list(buildings.values())
+    all_floors = list(floors.values())
+    
+    for i, dept in enumerate(departments):
+        coord_num = i + 1
+        coordinator, created = User.objects.get_or_create(
+            email=f"coordinator{coord_num}@example.com",
+            defaults={
+                "first_name": f"Coordinator",
+                "last_name": dept.code,
+                "is_staff": True
+            }
+        )
+        if created:
+            coordinator.set_password(f"coord{coord_num}pass")
+            coordinator.save()
+        
+        # Ensure coordinator is ONLY in the Coordinator group
+        # First remove from any User group if present
+        if coordinator.groups.filter(name="User").exists():
+            coordinator.groups.remove(user_group)
+        
+        # Add to coordinator group if not already there
+        if not coordinator.groups.filter(name="Coordinator").exists():
+            coordinator.groups.add(coordinator_group)
+            
+        # Assign the department to be managed by this coordinator
+        coordinator.managed_departments.add(dept)
+        
+        # Assign buildings and floors to coordinators
+        # Each coordinator gets 1-2 buildings to manage based on index
+        building_assignments = []
+        if all_buildings:
+            # Select 1 or 2 buildings to assign (cycling through available buildings)
+            num_buildings = min(1 + (i % 2), len(all_buildings))
+            for b in range(num_buildings):
+                building_index = (i + b) % len(all_buildings)
+                building = all_buildings[building_index]
+                coordinator.managed_buildings.add(building)
+                building_assignments.append(building.name)
+        
+        # Assign floors - 2 floors per coordinator
+        floor_assignments = []
+        if all_floors:
+            # Select floors preferably from their assigned buildings
+            building_floors = [f for f in all_floors if any(b.id == f.building.id for b in coordinator.managed_buildings.all())]
+            floors_to_assign = building_floors if building_floors else all_floors
+            
+            # Take up to 2 floors, cycling through them based on coordinator index
+            num_floors = min(2, len(floors_to_assign))
+            for f in range(num_floors):
+                floor_index = (i + f) % len(floors_to_assign)
+                floor = floors_to_assign[floor_index]
+                coordinator.managed_floors.add(floor)
+                floor_assignments.append(f"{floor.name} ({floor.building.name})")
+            
+        if created:
+            print(f"Created coordinator for {dept.name}: coordinator{coord_num}@example.com / coord{coord_num}pass")
+        else:
+            print(f"Updated existing coordinator for {dept.name}: coordinator{coord_num}@example.com")
+            
+        print(f"  - Manages buildings: {', '.join(building_assignments)}")
+        print(f"  - Manages floors: {', '.join(floor_assignments)}")
+        
+        coordinators.append(coordinator)
     
     # Create amenities
     amenity_names = ["Projector", "Whiteboard", "Air Conditioning"]
