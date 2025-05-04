@@ -44,13 +44,39 @@ export const AuthProvider = ({ children }) => {
         console.log("login: Attempting social login with /api/auth/google/");
         const response = await api.post("/api/auth/google/", socialData);
         console.log("login: Social login success - Response:", response.data);
+        
+        // Set initial user data from social login
         setUser(response.data.user);
+        
+        // Fetch complete user profile after successful social login
+        try {
+          const profileResponse = await api.get("/api/auth/user");
+          console.log("login: Social profile fetch success - Response:", profileResponse.data);
+          setUser(profileResponse.data);
+        } catch (profileErr) {
+          console.error("login: Social profile fetch failed -", profileErr);
+          // Keep the initial user data if profile fetch fails
+        }
+        
         return response.data;
       } else {
         console.log("login: Attempting to post /api/auth/login/");
         const response = await api.post("/api/auth/login", { email, password });
         console.log("login: Success - Response:", response.data);
+        
+        // Set user from response data
         setUser(response.data);
+        
+        // Fetch complete user profile after successful login
+        try {
+          const profileResponse = await api.get("/api/auth/user");
+          console.log("login: Profile fetch success - Response:", profileResponse.data);
+          setUser(profileResponse.data);
+        } catch (profileErr) {
+          console.error("login: Profile fetch failed -", profileErr);
+          // Keep the initial user data if profile fetch fails
+        }
+        
         return response.data;
       }
     } catch (err) {
