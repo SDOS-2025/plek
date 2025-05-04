@@ -44,6 +44,7 @@ INSTALLED_APPS = [
     "notifications",
     "settings",
     "analytics",
+    "audit.apps.AuditConfig",  # Use the app config instead of just 'audit'
 ]
 
 SITE_ID = 1
@@ -66,6 +67,7 @@ MIDDLEWARE = [
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
     "allauth.account.middleware.AccountMiddleware",
+    "audit.middleware.AuditLogMiddleware",
 ]
 
 CORS_ALLOWED_ORIGINS = ["http://localhost:3000"]
