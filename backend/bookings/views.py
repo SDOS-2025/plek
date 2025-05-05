@@ -26,17 +26,27 @@ class BookingCreateView(APIView):
     permission_classes = [CanCreateBooking]
 
     def post(self, request):
+        # Get the institute policy to check if auto-approval is enabled
+        from settings.models import InstitutePolicy
+        institute_policy = InstitutePolicy.objects.first()
+        
         serializer = BookingSerializer(data=request.data, context={"request": request})
         if serializer.is_valid():
-            booking = serializer.save(user=request.user)
+            # Set initial status based on auto-approval setting
+            initial_status = Booking.APPROVED if (institute_policy and institute_policy.enable_auto_approval) else Booking.PENDING
+            
+            booking = serializer.save(user=request.user, status=initial_status)
+            
             logger.info(
                 f"Booking created by user {request.user.email} for purpose: {booking.purpose[:50]}... "
-                f"with {booking.participants or 'no'} participants"
+                f"with {booking.participants or 'no'} participants. "
+                f"Status: {booking.status} (Auto-approval: {'Enabled' if institute_policy and institute_policy.enable_auto_approval else 'Disabled'})"
             )
             
-            # Send email notification if the booking is auto-approved
-            if booking.status == Booking.APPROVED:
-                send_booking_status_email(booking, status_change='auto_approved')
+            # Send email notification based on approval status
+            status_change = 'auto_approved' if booking.status == Booking.APPROVED else None
+            if status_change:
+                send_booking_status_email(booking, status_change=status_change)
                 
             return Response(serializer.data, status=status.HTTP_201_CREATED)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)

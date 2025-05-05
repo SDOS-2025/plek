@@ -166,7 +166,7 @@ def create_test_data():
             defaults={
                 "first_name": f"Coordinator",
                 "last_name": dept.code,
-                "is_staff": True
+                "is_staff": False  # Changed from True to False as requested
             }
         )
         if created:
