@@ -9,7 +9,7 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # See https://docs.djangoproject.com/en/5.1/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = "django-insecure-6o%xz-iu8-u_#iqhrvm#2!#167=w4sxgsgz+=qc8h)=o5r*234"
+SECRET_KEY = config('SECRET_KEY')
 
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
@@ -134,22 +134,33 @@ ACCOUNT_LOGIN_METHODS = {"email"}
 ACCOUNT_SIGNUP_FIELDS = ["email*", "password1*", "password2*"]
 ACCOUNT_USER_MODEL_USERNAME_FIELD = None
 SOCIALACCOUNT_LOGIN_ON_GET = True
-LOGIN_REDIRECT_URL = "http://localhost:3000/"
+LOGIN_REDIRECT_URL = "http://localhost:3000/dashboard"
 ACCOUNT_LOGOUT_REDIRECT_URL = "/"
 
 SOCIALACCOUNT_PROVIDERS = {
     "google": {
         "APP": {
-            "client_id": "47840497232-2q9v23fnco2ijfok7l56hlh8356of7lb.apps.googleusercontent.com",
-            "secret": "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",
+            "client_id": config('GOOGLE_CLIENT_ID'),
+            "secret": config('GOOGLE_CLIENT_SECRET'),
             "key": "",
         },
-        "SCOPE": ["profile", "email"],
+        "SCOPE": [
+            "profile", 
+            "email",
+            "https://www.googleapis.com/auth/calendar",
+            "https://www.googleapis.com/auth/calendar.events"
+        ],
         "AUTH_PARAMS": {
-            "access_type": "online",
+            "access_type": "offline",  # Changed to offline to get refresh tokens
         },
     }
 }
+
+# Base URL for OAuth callbacks
+CALLBACK_URL_BASE = "http://localhost:8000"
+
+# Custom OAuth callbacks
+SOCIALACCOUNT_ADAPTER = "backend.adapters.CustomSocialAccountAdapter"
 
 REST_AUTH = {
     "USE_JWT": True,

@@ -6,6 +6,7 @@ export const AuthContext = createContext();
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [authChecked, setAuthChecked] = useState(false);
 
   useEffect(() => {
     const fetchInitialCsrfToken = async () => {
@@ -18,25 +19,53 @@ export const AuthProvider = ({ children }) => {
     fetchInitialCsrfToken();
   }, []);
 
+  // Function to check auth status that can be called multiple times
+  const checkAuth = async () => {
+    try {
+      console.log("checkAuth: Attempting to fetch /api/auth/user/");
+      setLoading(true);
+      const response = await api.get("/api/auth/user");
+      console.log("checkAuth: Success - Response:", response.data);
+      setUser(response.data);
+      return true;
+    } catch (err) {
+      console.error(
+        "checkAuth: Failed - Error:",
+        err.response?.data || err.message
+      );
+      setUser(null);
+      return false;
+    } finally {
+      setLoading(false);
+      setAuthChecked(true);
+    }
+  };
+
+  // Initial auth check on component mount
   useEffect(() => {
-    const checkAuth = async () => {
-      try {
-        console.log("checkAuth: Attempting to fetch /api/auth/user/");
-        const response = await api.get("/api/auth/user");
-        console.log("checkAuth: Success - Response:", response.data);
-        setUser(response.data);
-      } catch (err) {
-        console.error(
-          "checkAuth: Failed - Error:",
-          err.response?.data || err.message
-        );
-        setUser(null);
-      } finally {
-        setLoading(false);
-      }
-    };
     checkAuth();
   }, []);
+
+  // Listen for URL changes which might indicate an OAuth redirect has happened
+  useEffect(() => {
+    const handleRouteChange = () => {
+      // If we're on the dashboard and haven't confirmed auth yet, check again
+      if (window.location.pathname === '/dashboard' && !user && authChecked) {
+        console.log("Route changed to dashboard, rechecking auth...");
+        checkAuth();
+      }
+    };
+
+    // Check immediately on mount
+    handleRouteChange();
+
+    // Also add a listener for history changes
+    window.addEventListener('popstate', handleRouteChange);
+    
+    return () => {
+      window.removeEventListener('popstate', handleRouteChange);
+    };
+  }, [user, authChecked]);
 
   const login = async ({ email, password, social = false, socialData }) => {
     try {
@@ -80,7 +109,7 @@ export const AuthProvider = ({ children }) => {
   };
 
   return (
-    <AuthContext.Provider value={{ user, login, logout, loading }}>
+    <AuthContext.Provider value={{ user, login, logout, loading, checkAuth }}>
       {children}
     </AuthContext.Provider>
   );

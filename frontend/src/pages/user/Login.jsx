@@ -8,7 +8,6 @@ export default function Login() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
-  const [googleSdkLoaded, setGoogleSdkLoaded] = useState(false);
   const navigate = useNavigate();
   const { user, login, loading } = useContext(AuthContext);
 
@@ -17,41 +16,6 @@ export default function Login() {
       navigate("/dashboard");
     }
   }, [user, loading, navigate]);
-
-  useEffect(() => {
-    if (window.google && window.google.accounts) {
-      console.log("Google SDK loaded, initializing...");
-      window.google.accounts.id.initialize({
-        client_id:
-          "47840497232-2q9v23fnco2ijfok7l56hlh8356of7lb.apps.googleusercontent.com",
-        callback: handleGoogleLogin,
-        auto_select: false,
-      });
-      window.google.accounts.id.renderButton(
-        document.getElementById("google-signin-button"),
-        {
-          type: "standard",
-          size: "large",
-          text: "sign_in_with",
-          shape: "rectangular",
-          theme: "filled_black",
-          logo_alignment: "left",
-          width: "300",
-        }
-      );
-      setGoogleSdkLoaded(true);
-    } else {
-      console.warn("Google SDK not loaded");
-      const checkGoogleSdk = setInterval(() => {
-        if (window.google && window.google.accounts) {
-          console.log("Google SDK loaded on retry");
-          setGoogleSdkLoaded(true);
-          clearInterval(checkGoogleSdk);
-        }
-      }, 100);
-      return () => clearInterval(checkGoogleSdk);
-    }
-  }, []);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -74,30 +38,10 @@ export default function Login() {
     }
   };
 
-  const handleGoogleLogin = async (response) => {
-    try {
-      setError("");
-      console.log("Google login response:", response);
-      const socialData = { access_token: response.credential };
-      const res = await login({ social: true, socialData });
-      console.log("Google login response:", res);
-      navigate("/dashboard");
-    } catch (err) {
-      console.error("Google login error:", {
-        message: err.message,
-        response: err.response?.data,
-        status: err.response?.status,
-      });
-      setError(
-        err.response?.data?.error ||
-          "Failed to sign in with Google. Please try again."
-      );
-    }
-  };
-
-  const handleManualGoogleLogin = () => {
-    console.log("Manual Google login triggered");
-    window.location.href = "http://localhost:8000/api/auth/google/";
+  const handleGoogleLogin = () => {
+    console.log("Google login triggered");
+    // Redirect directly to the allauth Google login URL which will redirect to Google's OAuth consent screen
+    window.location.href = "http://localhost:8000/accounts/google/login/?process=login";
   };
 
   return (
@@ -173,24 +117,18 @@ export default function Login() {
               </div>
             </div>
 
-            <div
-              id="google-signin-button"
-              className="flex justify-center"
-            ></div>
-            {!googleSdkLoaded && (
-              <button
-                type="button"
-                onClick={handleManualGoogleLogin}
-                className="w-full flex items-center justify-center gap-2 bg-white hover:bg-gray-100 text-gray-800 font-semibold py-3 px-4 rounded transition-colors mt-4"
-              >
-                <img
-                  src="https://www.google.com/favicon.ico"
-                  alt="Google"
-                  className="w-4 h-4"
-                />
-                Sign in with Google (Fallback)
-              </button>
-            )}
+            <button
+              type="button"
+              onClick={handleGoogleLogin}
+              className="w-full flex items-center justify-center gap-2 bg-white hover:bg-gray-100 text-gray-800 font-semibold py-3 px-4 rounded transition-colors"
+            >
+              <img
+                src="https://www.google.com/favicon.ico"
+                alt="Google"
+                className="w-4 h-4"
+              />
+              Sign in with Google
+            </button>
           </div>
 
           <div className="mt-6 text-center text-sm text-gray-400">
