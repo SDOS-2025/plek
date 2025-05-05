@@ -6,7 +6,8 @@ from django.http import JsonResponse
 from django.urls import include, path
 from django.views.decorators.csrf import ensure_csrf_cookie
 from rest_framework_simplejwt.views import TokenBlacklistView
-from .views import GoogleLogin
+from .views import GoogleLogin, CustomOAuth2CallbackView
+from allauth.socialaccount.providers.google.views import GoogleOAuth2Adapter
 
 
 @ensure_csrf_cookie
@@ -20,9 +21,19 @@ urlpatterns = [
     path("admin/", admin.site.urls),
     path("api/auth/", include("dj_rest_auth.urls")),
     path("api/auth/register/", include("dj_rest_auth.registration.urls")),
+    
+    # Include our custom password reset endpoints
+    path("api/auth/", include("backend.auth_urls")),
+    
     path("api/token/blacklist/", TokenBlacklistView.as_view(), name="token_blacklist"),
     path("api/auth/csrf/", get_csrf_token, name="csrf_token"),
     path("api/auth/google/", GoogleLogin.as_view(), name="google_login"),
+    # Custom OAuth callback view
+    path(
+        "accounts/google/login/callback/",
+        CustomOAuth2CallbackView.adapter_view(GoogleOAuth2Adapter),
+        name="google_callback",
+    ),
     # Social auth
     path("accounts/", include("allauth.urls")),
     # API endpoints
@@ -34,6 +45,8 @@ urlpatterns = [
     # Main app functionality
     path("", include("rooms.urls")),
     path("", include("bookings.urls")),
+    # Chatbot functionality
+    path("chatbot/", include("chatbot.urls")),
 ]
 
 # Serve media files in development

@@ -6,9 +6,12 @@ import LandingPage from "./pages/LandingPage";
 // User Pages
 import Login from "./pages/user/Login";
 import Signup from "./pages/user/Signup";
+import ForgotPassword from "./pages/user/ForgotPassword";
+import ResetPassword from "./pages/user/ResetPassword";
 import Dashboard from "./pages/user/Dashboard";
 import Booking from "./pages/user/Booking";
 import MyBookings from "./pages/user/MyBookings";
+import ChatBot from "./pages/user/ChatBot";
 
 // Admin Pages
 import AdminLogin from "./pages/admin/AdminLogin";
@@ -27,6 +30,8 @@ function App() {
       <Route path="/" element={<LandingPage />} />
       <Route path="/login" element={<Login />} />
       <Route path="/signup" element={<Signup />} />
+      <Route path="/forgot-password" element={<ForgotPassword />} />
+      <Route path="/reset-password" element={<ResetPassword />} />
       <Route path="/admin/login" element={<AdminLogin />} />
 
       {/* Protected Routes */}
@@ -35,6 +40,7 @@ function App() {
         <Route path="/dashboard" element={<Dashboard />} />
         <Route path="/booking" element={<Booking />} />
         <Route path="/my-bookings" element={<MyBookings />} />
+        <Route path="/chatbot" element={<ChatBot />} />
 
         {/* Admin Routes */}
         <Route path="/admin/dashboard" element={<DashboardAdmin />} />

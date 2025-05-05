@@ -435,22 +435,13 @@ class BookingAgent:
             }
 
     def _format_agent_response(self, result: Dict[str, Any], user_input: str) -> str:
-        """Generate user-friendly response"""
+        """Generate user-friendly response using LLM for all cases"""
         if isinstance(result, str):
             # If result is already a string, return it directly
             return result
         
-        if result.get('success'):
-            return result.get('message', "Operation completed successfully!")
-        
-        # Ensure error is a dictionary before calling get
-        error = result.get('error', {})
-        if isinstance(error, dict):
-            error_message = error.get('detail', "Unknown error")
-        else:
-            error_message = str(error)
-        
-        return self.llm_manager.generate_response(user_input, {"error": error_message})
+        # Send both success and error cases to the LLM for natural language responses
+        return self.llm_manager.generate_response(user_input, result)
 
 def main():
     """CLI entry point"""

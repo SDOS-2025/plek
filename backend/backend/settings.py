@@ -9,7 +9,7 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # See https://docs.djangoproject.com/en/5.1/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = "django-insecure-6o%xz-iu8-u_#iqhrvm#2!#167=w4sxgsgz+=qc8h)=o5r*234"
+SECRET_KEY = config('SECRET_KEY')
 
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
@@ -45,6 +45,7 @@ INSTALLED_APPS = [
     "settings",
     "analytics",
     "audit.apps.AuditConfig",  # Use the app config instead of just 'audit'
+    "chatbot",
 ]
 
 SITE_ID = 1
@@ -113,7 +114,7 @@ SIMPLE_JWT = {
 TEMPLATES = [
     {
         "BACKEND": "django.template.backends.django.DjangoTemplates",
-        "DIRS": [],
+        "DIRS": [BASE_DIR / "templates"],
         "APP_DIRS": True,
         "OPTIONS": {
             "context_processors": [
@@ -133,22 +134,33 @@ ACCOUNT_LOGIN_METHODS = {"email"}
 ACCOUNT_SIGNUP_FIELDS = ["email*", "password1*", "password2*"]
 ACCOUNT_USER_MODEL_USERNAME_FIELD = None
 SOCIALACCOUNT_LOGIN_ON_GET = True
-LOGIN_REDIRECT_URL = "http://localhost:3000/"
+LOGIN_REDIRECT_URL = "http://localhost:3000/dashboard"
 ACCOUNT_LOGOUT_REDIRECT_URL = "/"
 
 SOCIALACCOUNT_PROVIDERS = {
     "google": {
         "APP": {
-            "client_id": "47840497232-2q9v23fnco2ijfok7l56hlh8356of7lb.apps.googleusercontent.com",
-            "secret": "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",
+            "client_id": config('GOOGLE_CLIENT_ID'),
+            "secret": config('GOOGLE_CLIENT_SECRET'),
             "key": "",
         },
-        "SCOPE": ["profile", "email"],
+        "SCOPE": [
+            "profile", 
+            "email",
+            "https://www.googleapis.com/auth/calendar",
+            "https://www.googleapis.com/auth/calendar.events"
+        ],
         "AUTH_PARAMS": {
-            "access_type": "online",
+            "access_type": "offline",  # Changed to offline to get refresh tokens
         },
     }
 }
+
+# Base URL for OAuth callbacks
+CALLBACK_URL_BASE = "http://localhost:8000"
+
+# Custom OAuth callbacks
+SOCIALACCOUNT_ADAPTER = "backend.adapters.CustomSocialAccountAdapter"
 
 REST_AUTH = {
     "USE_JWT": True,
@@ -166,8 +178,14 @@ REST_AUTH = {
 
 WSGI_APPLICATION = "backend.wsgi.application"
 
-# For Testing Purposes need to be changed to production
-EMAIL_BACKEND = "django.core.mail.backends.console.EmailBackend"
+# SMTP Email Configuration
+EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
+EMAIL_HOST = config('EMAIL_HOST', default='smtp.gmail.com')
+EMAIL_PORT = config('EMAIL_PORT', default=587, cast=int)
+EMAIL_USE_TLS = config('EMAIL_USE_TLS', default=True, cast=bool)
+EMAIL_HOST_USER = config('EMAIL_HOST_USER', default='')
+EMAIL_HOST_PASSWORD = config('EMAIL_HOST_PASSWORD', default='')
+DEFAULT_FROM_EMAIL = config('DEFAULT_FROM_EMAIL', default='noreply.plek@gmail.com')
 
 
 # Database
@@ -252,3 +270,7 @@ LOGGING = {
 
 MEDIA_URL = "/media/"
 MEDIA_ROOT = BASE_DIR / "media"
+
+# Configure password reset
+PASSWORD_RESET_TIMEOUT = 3600  # 1 hour expiry for password reset links
+FRONTEND_URL = 'http://localhost:3000'  # Used for password reset email links

@@ -41,6 +41,8 @@ class RoomListView(APIView):
         floor_name = request.query_params.get("floor_name")
         department_id = request.query_params.get("department_id")
         is_active = request.query_params.get("is_active")
+        # Fix: Ensure view_all is properly parsed from the query parameter
+        view_all = request.query_params.get("view_all", "false").lower() == "true"
 
         try:
             start_datetime = datetime.fromisoformat(start_time) if start_time else None
@@ -62,12 +64,21 @@ class RoomListView(APIView):
         is_coordinator = "coordinator" in user_groups
         is_admin_or_superadmin = ("admin" in user_groups or "superadmin" in user_groups or 
                                   request.user.is_staff or request.user.is_superuser)
+        
+        # Log the values for debugging
+        logger.debug(f"User: {request.user.email}, view_all parameter: {view_all}")
+        logger.debug(f"Is coordinator: {is_coordinator}, Is admin/superadmin: {is_admin_or_superadmin}")
 
         # Start with all rooms, then filter
         rooms = Room.objects.all()
         
         # Handle special coordinator permissions
-        if is_coordinator and not is_admin_or_superadmin:
+        # Only apply coordinator filtering if:
+        # 1. User is a coordinator, AND
+        # 2. User is not an admin/superadmin, AND
+        # 3. view_all parameter is NOT true
+        if is_coordinator and not is_admin_or_superadmin and not view_all:
+            logger.debug("Applying coordinator filtering")
             managed_floor_ids = list(request.user.managed_floors.values_list('id', flat=True)) or []
             managed_dept_ids = list(request.user.managed_departments.values_list('id', flat=True)) or []
             
@@ -95,6 +106,8 @@ class RoomListView(APIView):
                     floor_id__in=managed_floor_ids,
                     departments__isnull=True
                 )
+        else:
+            logger.debug("Skipping coordinator filtering, showing all rooms")
         
         # Filter by available status
         rooms = rooms.filter(available=True)
@@ -130,6 +143,7 @@ class RoomListView(APIView):
                 start_time__lt=end_datetime,
                 end_time__gt=start_datetime,
             ).values_list("room_id", flat=True)
+            
             rooms = rooms.exclude(id__in=conflicting_bookings)
 
         serializer = RoomSerializer(rooms, many=True)

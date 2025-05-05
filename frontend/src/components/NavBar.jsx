@@ -91,6 +91,7 @@ const NavBar = ({ activePage }) => {
     { name: "Dashboard", path: "/dashboard", id: "dashboard" },
     { name: "Book a Room", path: "/booking", id: "booking" },
     { name: "My Bookings", path: "/my-bookings", id: "my-bookings" },
+    { name: "Chat Assistant", path: "/chatbot", id: "chatbot" },
   ];
 
   // Admin navigation links (base links that everyone in admin section can see)

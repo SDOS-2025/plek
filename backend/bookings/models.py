@@ -23,7 +23,7 @@ class Booking(models.Model):
         (REJECTED, "Rejected"),
         (CANCELLED, "Cancelled"),
     ]
-    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default=PENDING)
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default=APPROVED)
     approved_by = models.ForeignKey(
         CustomUser,
         on_delete=models.SET_NULL,
