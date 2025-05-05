@@ -114,7 +114,7 @@ SIMPLE_JWT = {
 TEMPLATES = [
     {
         "BACKEND": "django.template.backends.django.DjangoTemplates",
-        "DIRS": [],
+        "DIRS": [BASE_DIR / "templates"],
         "APP_DIRS": True,
         "OPTIONS": {
             "context_processors": [
@@ -270,3 +270,7 @@ LOGGING = {
 
 MEDIA_URL = "/media/"
 MEDIA_ROOT = BASE_DIR / "media"
+
+# Configure password reset
+PASSWORD_RESET_TIMEOUT = 3600  # 1 hour expiry for password reset links
+FRONTEND_URL = 'http://localhost:3000'  # Used for password reset email links

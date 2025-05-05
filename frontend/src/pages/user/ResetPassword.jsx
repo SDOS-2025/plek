@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { Link, useNavigate, useLocation } from "react-router-dom";
+import { Link, useNavigate, useLocation, useParams } from "react-router-dom";
 import api from "../../api";
 import Footer from "../../components/Footer";
 
@@ -13,16 +13,27 @@ export default function ResetPassword() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const navigate = useNavigate();
   const location = useLocation();
+  const params = useParams();
 
-  // Extract token and uid from URL query parameters
+  // Extract token and uid from URL parameters or route params
   useEffect(() => {
+    // First try getting from URL search params
     const searchParams = new URLSearchParams(location.search);
-    const tokenParam = searchParams.get("token");
-    const uidParam = searchParams.get("uid");
+    let tokenParam = searchParams.get("token");
+    let uidParam = searchParams.get("uid");
+    
+    // If not in search params, try from route params
+    if (!tokenParam && params.token) {
+      tokenParam = params.token;
+    }
+    
+    if (!uidParam && params.uid) {
+      uidParam = params.uid;
+    }
     
     if (tokenParam) setToken(tokenParam);
     if (uidParam) setUid(uidParam);
-  }, [location]);
+  }, [location, params]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();

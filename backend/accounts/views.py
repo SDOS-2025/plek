@@ -18,6 +18,11 @@ from rest_framework_simplejwt.tokens import RefreshToken
 from django.contrib.auth import login
 from allauth.socialaccount.providers.google.views import GoogleOAuth2Adapter
 from allauth.socialaccount.providers.oauth2.client import OAuth2Client
+from django.shortcuts import redirect
+from django.conf import settings
+from django.contrib.auth.views import PasswordResetView, PasswordResetConfirmView
+from django.urls import reverse_lazy
+from django.core.mail import send_mail
 
 from .permissions import (
     CanModerateUsers,
@@ -25,6 +30,7 @@ from .permissions import (
     CanViewUsers,
 )
 from .serializers import CustomUserSerializer
+from .models import PasswordResetOTP
 
 User = get_user_model()
 logger = logging.getLogger(__name__)
@@ -458,3 +464,202 @@ class CheckSocialAccountLinkageView(APIView):
             return Response(
                 {"error": "User not found"}, status=status.HTTP_404_NOT_FOUND
             )
+
+
+class CustomPasswordResetView(PasswordResetView):
+    """
+    Custom password reset view to override default behavior
+    """
+    email_template_name = 'registration/password_reset_email.html'
+    subject_template_name = 'registration/password_reset_subject.txt'
+    success_url = reverse_lazy('password_reset_done')
+    
+    def form_valid(self, form):
+        # Get the user by email
+        UserModel = get_user_model()
+        email = form.cleaned_data["email"]
+        try:
+            user = UserModel.objects.get(email=email)
+            if not user.is_active:
+                # Handle inactive user
+                return super().form_invalid(form)
+        except UserModel.DoesNotExist:
+            # We don't want to reveal that the user doesn't exist
+            pass
+            
+        return super().form_valid(form)
+
+
+class CustomPasswordResetConfirmView(PasswordResetConfirmView):
+    """
+    Custom password reset confirm view that redirects to the frontend
+    """
+    success_url = reverse_lazy('password_reset_complete')
+    
+    def get_success_url(self):
+        # Redirect to frontend reset password success page
+        return "http://localhost:3000/login?reset_success=true"
+
+
+class RequestPasswordResetOTPView(APIView):
+    """
+    API view to request a password reset OTP
+    """
+    permission_classes = [AllowAny]
+    
+    def post(self, request):
+        """Generate and send OTP for password reset"""
+        email = request.data.get('email')
+        if not email:
+            return Response(
+                {"detail": "Email is required"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        try:
+            user = User.objects.get(email=email)
+            
+            # Generate OTP
+            otp_obj = PasswordResetOTP.generate_otp(user)
+            
+            # Send email with OTP
+            subject = "Password Reset OTP for Plek"
+            message = f"""
+Hello {user.first_name},
+
+You've requested to reset your password for your Plek account.
+
+Your OTP is: {otp_obj.otp}
+
+This OTP is valid for 10 minutes. If you didn't request this, please ignore this email.
+
+Thanks,
+The Plek Team
+            """
+            
+            send_mail(
+                subject,
+                message,
+                settings.DEFAULT_FROM_EMAIL,
+                [user.email],
+                fail_silently=False,
+            )
+            
+            return Response(
+                {"detail": "Password reset OTP has been sent to your email."},
+                status=status.HTTP_200_OK
+            )
+            
+        except User.DoesNotExist:
+            # Don't reveal that the user doesn't exist for security reasons
+            return Response(
+                {"detail": "If a user with this email exists, an OTP has been sent."},
+                status=status.HTTP_200_OK
+            )
+
+
+class VerifyOTPAndResetPasswordView(APIView):
+    """
+    API view to verify OTP and reset password
+    """
+    permission_classes = [AllowAny]
+    
+    def post(self, request):
+        """Verify OTP and reset password"""
+        email = request.data.get('email')
+        otp = request.data.get('otp')
+        new_password = request.data.get('new_password')
+        
+        if not all([email, otp, new_password]):
+            return Response(
+                {"detail": "Email, OTP, and new password are required"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        try:
+            user = User.objects.get(email=email)
+            
+            # Find the most recent unused OTP for this user
+            try:
+                otp_obj = PasswordResetOTP.objects.filter(
+                    user=user, 
+                    otp=otp, 
+                    is_used=False
+                ).latest('created_at')
+                
+                if not otp_obj.is_valid():
+                    return Response(
+                        {"detail": "OTP has expired. Please request a new one."},
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
+                
+                # OTP is valid, reset password
+                user.set_password(new_password)
+                user.save()
+                
+                # Mark OTP as used
+                otp_obj.is_used = True
+                otp_obj.save()
+                
+                return Response(
+                    {"detail": "Password has been reset successfully."},
+                    status=status.HTTP_200_OK
+                )
+                
+            except PasswordResetOTP.DoesNotExist:
+                return Response(
+                    {"detail": "Invalid OTP. Please try again."},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+                
+        except User.DoesNotExist:
+            return Response(
+                {"detail": "User with this email doesn't exist."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+
+class ChangePasswordView(APIView):
+    """
+    API view for changing password
+    """
+    permission_classes = [IsAuthenticated]
+    
+    def post(self, request):
+        old_password = request.data.get('old_password')
+        new_password1 = request.data.get('new_password1')
+        new_password2 = request.data.get('new_password2')
+        
+        if not all([old_password, new_password1, new_password2]):
+            return Response(
+                {"detail": "All password fields are required."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        if new_password1 != new_password2:
+            return Response(
+                {"detail": "New passwords don't match."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        user = request.user
+        
+        # Check if the old password is correct
+        if not user.check_password(old_password):
+            return Response(
+                {"detail": "Current password is incorrect."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Set the new password
+        user.set_password(new_password1)
+        user.save()
+        
+        # Update the session after password change
+        from django.contrib.auth import update_session_auth_hash
+        update_session_auth_hash(request, user)
+        
+        return Response(
+            {"detail": "Password changed successfully."},
+            status=status.HTTP_200_OK
+        )

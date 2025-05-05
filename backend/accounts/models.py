@@ -6,6 +6,10 @@ from django.contrib.auth.models import (
     Group,
 )
 from django.db import models
+from django.conf import settings
+from django.utils import timezone
+import random
+import string
 
 
 class CustomUserManager(BaseUserManager):
@@ -71,3 +75,35 @@ class CustomUser(AbstractBaseUser, PermissionsMixin):
                 any(dept in self.managed_departments.all() for dept in room.departments.all())
             )
         return False
+
+
+class PasswordResetOTP(models.Model):
+    """Model to store OTPs for password reset"""
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
+    otp = models.CharField(max_length=6)
+    created_at = models.DateTimeField(auto_now_add=True)
+    is_used = models.BooleanField(default=False)
+    
+    @classmethod
+    def generate_otp(cls, user):
+        """Generate a new OTP for the user"""
+        # Invalidate any existing OTPs for this user
+        cls.objects.filter(user=user, is_used=False).update(is_used=True)
+        
+        # Generate a 6-digit OTP
+        otp = ''.join(random.choices(string.digits, k=6))
+        
+        # Create and return the OTP object
+        return cls.objects.create(user=user, otp=otp)
+    
+    def is_valid(self):
+        """Check if the OTP is valid (not expired and not used)"""
+        if self.is_used:
+            return False
+            
+        # Check if OTP is expired (10 minutes)
+        expiry_time = self.created_at + timezone.timedelta(minutes=10)
+        return timezone.now() <= expiry_time
+    
+    def __str__(self):
+        return f"OTP for {self.user.email}"
