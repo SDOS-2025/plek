@@ -10,6 +10,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@coreui/react-chartjs": "^3.0.0",
     "axios": "^1.7.9",
     "bcryptjs": "^3.0.0",
     "lucide-react": "^0.475.0",

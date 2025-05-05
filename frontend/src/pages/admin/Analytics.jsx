@@ -10,6 +10,7 @@ import {
   ActivitySquare,
   AlertCircle,
 } from "lucide-react";
+import { CChart } from '@coreui/react-chartjs';
 import NavBar from "../../components/NavBar";
 import Footer from "../../components/Footer";
 import api from "../../api";
@@ -255,57 +256,64 @@ function Analytics() {
             <div className="section-card">
               <h3 className="card-header">Monthly Booking Trends</h3>
               
-              {/* Chart visualization - Improved bar sizing and spacing */}
-              <div className="h-64 p-4 w-full">
-                {data.length > 0 ? (
-                  <div className="h-full w-full flex items-end justify-between px-4">
-                    {data.map((item, index) => {
-                      // Calculate the max count for proper height scaling
-                      const maxCount = Math.max(...data.map(d => d.count));
-                      // Calculate height percentage with no minimum to show actual scale
-                      const heightPercentage = maxCount > 0 
-                        ? ((item.count / maxCount) * 100)
-                        : 0;
-                      
-                      return (
-                        <div
-                          key={index}
-                          className="flex flex-col items-center"
-                          style={{ 
-                            width: `${90 / data.length}%`,
-                            minWidth: '40px'
-                          }}
-                        >
-                          <div
-                            className="w-4/5 bg-blue-500 rounded-t-md transition-all duration-300 hover:bg-blue-400 relative group shadow-lg"
-                            style={{
-                              height: `${heightPercentage}%`,
-                              minHeight: item.count > 0 ? '2px' : '0',
-                              minWidth: '30px',
-                              maxWidth: '100px',
-                              margin: '0 auto',
-                              boxShadow: '0 4px 6px rgba(0, 0, 0, 0.3)'
-                            }}
-                          >
-                            {/* Tooltip showing the exact number on hover */}
-                            <div className="opacity-0 group-hover:opacity-100 absolute -top-8 left-1/2 transform -translate-x-1/2 bg-blue-600 px-2 py-1 rounded text-xs whitespace-nowrap shadow-lg">
-                              {item.count} bookings
-                            </div>
-                          </div>
-                          <div className="text-xs text-gray-400 mt-2 text-center w-full truncate">
-                            {item.month}
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                ) : (
-                  <div className="h-full flex items-center justify-center">
-                    <p className="text-gray-400">No booking data available</p>
-                  </div>
-                )}
+              {/* Chart visualization */}
+              <div className="mt-6 mb-8 bg-plek-lightgray/30 p-4 rounded-lg">
+                <CChart
+                  type="bar"
+                  data={{
+                    labels: data.map(item => item.month),
+                    datasets: [
+                      {
+                        label: 'Total Bookings',
+                        backgroundColor: 'rgba(129, 74, 198, 0.8)',
+                        data: data.map(item => item.count),
+                        borderRadius: 4,
+                      }
+                    ],
+                  }}
+                  options={{
+                    plugins: {
+                      legend: {
+                        labels: {
+                          color: 'rgba(255, 255, 255, 0.8)',
+                          font: {
+                            family: 'Inter, sans-serif',
+                          }
+                        }
+                      }
+                    },
+                    scales: {
+                      x: {
+                        grid: {
+                          color: 'rgba(255, 255, 255, 0.1)',
+                        },
+                        ticks: {
+                          color: 'rgba(255, 255, 255, 0.8)',
+                          font: {
+                            family: 'Inter, sans-serif',
+                          }
+                        }
+                      },
+                      y: {
+                        grid: {
+                          color: 'rgba(255, 255, 255, 0.1)',
+                        },
+                        ticks: {
+                          color: 'rgba(255, 255, 255, 0.8)',
+                          font: {
+                            family: 'Inter, sans-serif',
+                          }
+                        }
+                      }
+                    },
+                    responsive: true,
+                    maintainAspectRatio: false,
+                  }}
+                  style={{ height: '300px' }}
+                />
               </div>
               
+              {/* Data grid (unchanged) */}
               <div className="mt-6 grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
                 {data.map((item, index) => (
                   <div
@@ -333,58 +341,62 @@ function Analytics() {
           <div className="space-y-6">
             <div className="section-card">
               <h3 className="card-header">Peak Booking Hours</h3>
-              <div className="h-64 p-4 w-full bg-plek-lightgray/10 rounded-lg">
-                {/* Chart visualization - Completely redesigned for better proportional display */}
-                <div className="h-full w-full flex items-end justify-between px-4">
-                  {data.map((item, index) => {
-                    const maxCount = Math.max(...data.map((d) => d.count));
-                    // Ensure clear heights with proper proportion
-                    const heightPercentage = maxCount > 0 
-                      ? Math.max(5, (item.count / maxCount * 100)) // Use 90% of height max to ensure visibility
-                      : 0;
-                    
-                    // Color gradient based on booking count percentage
-                    const getBarColor = () => {
-                      const percentage = maxCount > 0 ? (item.count / maxCount) : 0;
-                      if (percentage > 0.7) return 'bg-blue-500';
-                      if (percentage > 0.4) return 'bg-blue-400';
-                      if (percentage > 0.1) return 'bg-blue-300';
-                      return 'bg-blue-200';
-                    };
-                    
-                    return (
-                      <div
-                        key={index}
-                        className="flex flex-col items-center"
-                        style={{ 
-                          width: `${Math.max(12, 85 / data.length)}%`,
-                          minWidth: '20px',
-                          maxWidth: '45px'
-                        }}
-                      >
-                        {/* The bar with dynamic height and width */}
-                        <div className="relative w-full flex items-end justify-center h-[90%]">
-                          <div
-                            className={`${getBarColor()} rounded-t-md w-full transition-all duration-300 hover:brightness-110 relative group`}
-                            style={{
-                              height: `${heightPercentage}%`,
-                              minHeight: item.count > 0 ? '4px' : '0',
-                            }}
-                          >
-                            {/* Value display on top of the bar */}
-                            <div className="absolute -top-6 left-1/2 transform -translate-x-1/2 text-xs text-white font-medium">
-                              {item.count > 0 ? item.count : ''}
-                            </div>
-                          </div>
-                        </div>
-                        {/* Hour label */}
-                        <div className="text-xs text-gray-400 mt-2 text-center w-full">
-                          {item.hour}
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
+              
+              {/* Chart visualization */}
+              <div className="mt-6 mb-8 bg-plek-lightgray/30 p-4 rounded-lg">
+                <CChart
+                  type="bar"
+                  data={{
+                    labels: data.map(item => item.hour),
+                    datasets: [
+                      {
+                        label: 'Bookings Count',
+                        backgroundColor: 'rgba(66, 133, 244, 0.8)',
+                        data: data.map(item => item.count),
+                        borderRadius: 4,
+                      }
+                    ],
+                  }}
+                  options={{
+                    plugins: {
+                      legend: {
+                        labels: {
+                          color: 'rgba(255, 255, 255, 0.8)',
+                          font: {
+                            family: 'Inter, sans-serif',
+                          }
+                        }
+                      }
+                    },
+                    scales: {
+                      x: {
+                        grid: {
+                          color: 'rgba(255, 255, 255, 0.1)',
+                        },
+                        ticks: {
+                          color: 'rgba(255, 255, 255, 0.8)',
+                          font: {
+                            family: 'Inter, sans-serif',
+                          }
+                        }
+                      },
+                      y: {
+                        grid: {
+                          color: 'rgba(255, 255, 255, 0.1)',
+                        },
+                        ticks: {
+                          color: 'rgba(255, 255, 255, 0.8)',
+                          font: {
+                            family: 'Inter, sans-serif',
+                          }
+                        }
+                      }
+                    },
+                    responsive: true,
+                    maintainAspectRatio: false,
+                  }}
+                  style={{ height: '300px' }}
+                />
               </div>
               
               <div className="mt-8 grid grid-cols-2 lg:grid-cols-4 gap-4">
@@ -534,15 +546,11 @@ function Analytics() {
                     className="bg-plek-lightgray/30 p-5 rounded-lg flex items-start gap-4"
                   >
                     <div
-                      className={`flex-shrink-0 p-3 rounded-lg ${
-                        isLeast ? "bg-yellow-900/30" : "bg-plek-purple/30"
-                      }`}
+                      className={`flex-shrink-0 p-3 rounded-lg bg-plek-purple/30`}
                     >
                       <Building
                         size={24}
-                        className={
-                          isLeast ? "text-yellow-500" : "text-plek-purple"
-                        }
+                        className="text-plek-purple"
                       />
                     </div>
                     <div className="flex-grow">
@@ -551,11 +559,7 @@ function Analytics() {
                           Room {room.room}
                         </h4>
                         <span
-                          className={`px-2 py-1 text-xs font-bold rounded-full ${
-                            isLeast
-                              ? "bg-yellow-900/30 text-yellow-400"
-                              : "bg-purple-900/30 text-purple-400"
-                          }`}
+                          className="px-2 py-1 text-xs font-bold rounded-full bg-purple-900/30 text-purple-400"
                         >
                           {room.bookings} bookings
                         </span>
@@ -590,7 +594,7 @@ function Analytics() {
                   <div className="flex items-center">
                     <div className="relative w-full h-6 bg-plek-background rounded-full overflow-hidden">
                       <div
-                        className="absolute top-0 left-0 h-full bg-gradient-to-r from-green-500 to-plek-purple rounded-full"
+                        className="absolute top-0 left-0 h-full bg-gradient-to-r from-blue-500 to-plek-purple rounded-full"
                         style={{
                           width: `${
                             data.reduce(
