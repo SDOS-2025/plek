@@ -249,15 +249,29 @@ class UserProfileView(APIView):
 
     def patch(self, request):
         """Update current user's profile"""
-        # Limited fields users can update about themselves
-        allowed_fields = {"first_name", "last_name"}
-        data = {k: v for k, v in request.data.items() if k in allowed_fields}
-
+        # Users can update their name and profile picture
+        allowed_fields = {"first_name", "last_name", "profile_picture"}
+        
+        # Handle both form data and JSON requests
+        if request.content_type and 'multipart/form-data' in request.content_type:
+            # For multipart form data (file uploads)
+            data = request.data
+        else:
+            # For JSON data - filter only allowed fields
+            data = {k: v for k, v in request.data.items() if k in allowed_fields}
+        
         serializer = CustomUserSerializer(request.user, data=data, partial=True)
         if serializer.is_valid():
-            serializer.save()
+            updated_user = serializer.save()
+            
+            # Include profile picture URL in response if it exists
+            response_data = serializer.data
+            if updated_user.profile_picture:
+                response_data['profile_picture'] = request.build_absolute_uri(updated_user.profile_picture.url)
+            
             logger.info(f"User {request.user.email} updated their profile")
-            return Response(serializer.data)
+            return Response(response_data)
+        
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
