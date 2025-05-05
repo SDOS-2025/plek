@@ -57,6 +57,24 @@ function ProfileMenu() {
     }
   }, [userData]);
 
+  // Get full profile picture URL with backend domain
+  const getProfilePictureUrl = () => {
+    // Check if we have a profile picture URL
+    const profilePicture = userData?.profile_picture || user?.profile_picture;
+    
+    if (!profilePicture) return null;
+    
+    // If it's already a full URL (starts with http), return it as is
+    if (profilePicture.startsWith('http')) {
+      return profilePicture;
+    }
+    
+    // Otherwise, prepend the backend URL
+    // Make sure this matches your backend URL in development/production
+    const backendUrl = 'http://localhost:8000';
+    return `${backendUrl}${profilePicture}`;
+  };
+
   // Get display name
   const getDisplayName = () => {
     if (loading) return "Loading...";
@@ -145,6 +163,11 @@ function ProfileMenu() {
     try {
       let endpoint = "/api/accounts/profile/";
       let data = new FormData();
+      let config = {
+        headers: {
+          'Content-Type': 'multipart/form-data'
+        }
+      };
 
       if (editMode === "name") {
         data.append("first_name", formData.firstName);
@@ -155,29 +178,61 @@ function ProfileMenu() {
         data.append("old_password", formData.currentPassword);
         data.append("new_password1", formData.newPassword);
         data.append("new_password2", formData.confirmPassword);
+        // Regular JSON for password changes, not FormData
+        config = {};
       } else if (editMode === "picture" && formData.profilePicture) {
         data.append("profile_picture", formData.profilePicture);
       }
 
-      const response = await api.patch(endpoint, data);
+      const response = await api.patch(endpoint, data, config);
 
       if (response.status === 200) {
         // Update local user data
-        setUserData((prev) => ({
-          ...prev,
-          first_name: formData.firstName || prev.first_name,
-          last_name: formData.lastName || prev.last_name,
-        }));
-
-        setEditMode(null);
-        // Force refresh if needed
-        if (editMode === "picture") {
-          // Force a reload of the user data to get the new picture URL
-          setUserData(null);
+        if (editMode === "name") {
+          setUserData((prev) => ({
+            ...prev,
+            first_name: formData.firstName || prev.first_name,
+            last_name: formData.lastName || prev.last_name,
+          }));
+        } else if (editMode === "picture" && response.data.profile_picture) {
+          // Update the profile picture in userData
+          setUserData((prev) => ({
+            ...prev,
+            profile_picture: response.data.profile_picture
+          }));
+          
+          // Also update in localStorage if that's where it's being stored
+          if (localStorage.getItem("user")) {
+            const storedUser = JSON.parse(localStorage.getItem("user"));
+            storedUser.profile_picture = response.data.profile_picture;
+            localStorage.setItem("user", JSON.stringify(storedUser));
+          }
         }
+
+        // Show success feedback
+        alert("Profile updated successfully");
+        
+        // Clear form and close edit mode
+        if (editMode === "picture") {
+          setFormData(prev => ({ ...prev, profilePicture: null }));
+        }
+        setEditMode(null);
       }
     } catch (error) {
       console.error("Error updating profile:", error);
+      let errorMessage = "Failed to update profile";
+      
+      if (error.response) {
+        if (error.response.data.detail) {
+          errorMessage = error.response.data.detail;
+        } else if (error.response.data.error) {
+          errorMessage = error.response.data.error;
+        } else if (typeof error.response.data === "string") {
+          errorMessage = error.response.data;
+        }
+      }
+      
+      alert(errorMessage);
     }
   };
 
@@ -196,9 +251,9 @@ function ProfileMenu() {
         aria-haspopup="true"
       >
         <div className="h-8 w-8 bg-plek-purple rounded-full flex items-center justify-center hover:opacity-90 transition-all hover:shadow-md">
-          {userData?.profile_picture || user?.profile_picture ? (
+          {getProfilePictureUrl() ? (
             <img
-              src={userData?.profile_picture || user?.profile_picture}
+              src={getProfilePictureUrl()}
               alt={`${getDisplayName()}'s profile`}
               className="h-8 w-8 rounded-full object-cover"
             />
@@ -274,9 +329,9 @@ function ProfileMenu() {
               <div className="flex flex-col items-center justify-center mb-4">
                 <div className="relative">
                   <div className="h-20 w-20 bg-plek-purple rounded-full flex items-center justify-center">
-                    {userData?.profile_picture || user?.profile_picture ? (
+                    {getProfilePictureUrl() ? (
                       <img
-                        src={userData?.profile_picture || user?.profile_picture}
+                        src={getProfilePictureUrl()}
                         alt="Profile Picture"
                         className="h-20 w-20 rounded-full object-cover"
                       />

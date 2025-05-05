@@ -17,6 +17,7 @@ from accounts.permissions import (
 
 from .models import Booking
 from .serializers import BookingSerializer
+from .utils import send_booking_status_email
 
 logger = logging.getLogger(__name__)
 
@@ -32,6 +33,11 @@ class BookingCreateView(APIView):
                 f"Booking created by user {request.user.email} for purpose: {booking.purpose[:50]}... "
                 f"with {booking.participants or 'no'} participants"
             )
+            
+            # Send email notification if the booking is auto-approved
+            if booking.status == Booking.APPROVED:
+                send_booking_status_email(booking, status_change='auto_approved')
+                
             return Response(serializer.data, status=status.HTTP_201_CREATED)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
@@ -177,6 +183,9 @@ class BookingManageView(APIView):
         booking.status = Booking.CANCELLED
         booking.cancellation_reason = cancellation_reason
         booking.save()
+
+        # Send cancellation email notification
+        send_booking_status_email(booking)
 
         logger.info(
             f"Booking {booking_id} cancelled by user {request.user.email}. "
@@ -357,6 +366,9 @@ class BookingApprovalView(APIView):
                 if booking.participants
                 else ""
             )
+            
+            # Send email notification for approval
+            send_booking_status_email(booking, status_change='approved')
         else:
             booking.status = Booking.REJECTED
             # Store rejection reason if provided
@@ -366,6 +378,9 @@ class BookingApprovalView(APIView):
                 log_message = f"Booking {booking_id} rejected by user {request.user.email}. Reason: {rejection_reason[:50]}"
             else:
                 log_message = f"Booking {booking_id} rejected by user {request.user.email}. No reason provided."
+            
+            # Send email notification for rejection
+            send_booking_status_email(booking, status_change='rejected')
 
         booking.save()
         logger.info(log_message)
@@ -420,7 +435,9 @@ class OverrideBookingView(APIView):
                 {"detail": "Booking not found"}, status=status.HTTP_404_NOT_FOUND
             )
 
+        original_status = booking.status
         serializer = BookingSerializer(booking, data=request.data, partial=True)
+        
         if serializer.is_valid():
             updated_booking = serializer.save(approved_by=request.user)
 
@@ -432,8 +449,21 @@ class OverrideBookingView(APIView):
                 override_details.append(
                     f"participants: {updated_booking.participants or 'none'}"
                 )
-            if "status" in request.data:
+            
+            # Check if status was changed and handle email notifications
+            status_changed = False
+            if "status" in request.data and original_status != updated_booking.status:
+                status_changed = True
                 override_details.append(f"status: {updated_booking.status}")
+
+                # Send the appropriate email notification based on new status
+                if updated_booking.status == Booking.APPROVED:
+                    send_booking_status_email(updated_booking, status_change='approved')
+                elif updated_booking.status == Booking.REJECTED:
+                    send_booking_status_email(updated_booking, status_change='rejected')
+                else:
+                    # For other status changes like cancellation
+                    send_booking_status_email(updated_booking)
 
                 # If booking was rejected or cancelled, log reason if provided
                 if (

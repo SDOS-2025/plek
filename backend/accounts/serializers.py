@@ -35,6 +35,7 @@ class CustomUserSerializer(serializers.ModelSerializer):
         queryset=Department.objects.all(),
         required=False,
     )
+    profile_picture = serializers.ImageField(required=False)
 
     class Meta:
         model = CustomUser
@@ -43,6 +44,7 @@ class CustomUserSerializer(serializers.ModelSerializer):
             "email",
             "first_name",
             "last_name",
+            "profile_picture",
             "is_active",
             "is_staff",
             "managed_buildings",

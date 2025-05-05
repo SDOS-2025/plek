@@ -21,6 +21,10 @@ urlpatterns = [
     path("admin/", admin.site.urls),
     path("api/auth/", include("dj_rest_auth.urls")),
     path("api/auth/register/", include("dj_rest_auth.registration.urls")),
+    
+    # Include our custom password reset endpoints
+    path("api/auth/", include("backend.auth_urls")),
+    
     path("api/token/blacklist/", TokenBlacklistView.as_view(), name="token_blacklist"),
     path("api/auth/csrf/", get_csrf_token, name="csrf_token"),
     path("api/auth/google/", GoogleLogin.as_view(), name="google_login"),

@@ -234,164 +234,185 @@ function Dashboard() {
       <NavBar activePage="dashboard" />
 
       {/* Main Content */}
-      <div className="main-content">
+      <div className="flex-grow bg-plek-background px-4 py-6 md:px-6 lg:px-8">
         {/* Welcome Section */}
-        <div className="section-card bg-plek-dark border-l-4 border-plek-purple mb-6">
+        <div className="section-card bg-gradient-to-r from-plek-dark to-plek-lightgray border-l-4 border-plek-purple mb-8 p-6 rounded-lg shadow-lg">
           <div className="flex flex-col md:flex-row justify-between items-start md:items-center">
             <div>
-              <h1 className="text-2xl font-bold mb-2">Welcome, {firstName}</h1>
-              <p className="text-sm text-gray-300">
+              <h1 className="text-2xl md:text-3xl font-bold mb-2 text-white">Welcome, {firstName}</h1>
+              <p className="text-sm md:text-base text-gray-300">
                 Here are your upcoming bookings and frequently booked rooms.
               </p>
             </div>
+            <Link 
+              to="/booking" 
+              className="mt-4 md:mt-0 btn btn-primary"
+            >
+              Book Now
+            </Link>
           </div>
         </div>
 
-        {/* Central Content */}
-        <div className="max-w-4xl mx-auto">
-          {/* Upcoming Bookings */}
-          <div className="section-card mb-8">
-            <h2 className="card-header">
-              <Calendar className="h-5 w-5 mr-2 text-purple-500" />
-              Upcoming Bookings
-            </h2>
-            <div className="space-y-4 max-h-64 overflow-y-auto custom-scrollbar pr-2">
-              {loading.bookings ? (
-                <div className="flex justify-center items-center py-8">
-                  <Loader2
-                    size={30}
-                    className="animate-spin text-purple-500 mr-2"
-                  />
-                  <span>Loading your bookings...</span>
-                </div>
-              ) : error.bookings ? (
-                <div className="bg-red-900/20 border border-red-800 text-red-300 p-4 rounded-lg text-center">
-                  <p>{error.bookings}</p>
-                </div>
-              ) : upcomingBookings.length === 0 ? (
-                <div className="text-center py-10 text-gray-400">
-                  <p>You don't have any upcoming bookings.</p>
-                  <Link
-                    to="/booking"
-                    className="text-purple-400 hover:text-purple-300 mt-2 inline-block"
-                  >
-                    Book a room now
-                  </Link>
-                </div>
-              ) : (
-                upcomingBookings.map((booking, index) => (
-                  <div
-                    key={booking.id || index}
-                    className="bg-gray-700/50 p-6 rounded-lg"
-                  >
-                    <div className="flex justify-between items-start">
-                      <div>
-                        <h3 className="text-lg font-medium">
-                          Room: {booking.room}
-                        </h3>
-                        <p className="text-gray-400 mt-1">{booking.building}</p>
-                        <div className="mt-3 flex flex-wrap items-center gap-4">
-                          <div className="flex items-center">
-                            <Clock className="h-4 w-4 text-gray-400 mr-1" />
-                            <span className="text-sm text-gray-300">
-                              {booking.slot}
-                            </span>
-                          </div>
-                          <div className="flex items-center">
-                            <Calendar className="h-4 w-4 text-gray-400 mr-1" />
-                            <span className="text-sm text-gray-300">
-                              {booking.date}
-                            </span>
-                          </div>
-                          <div className="flex items-center">
-                            <Users className="h-4 w-4 text-gray-400 mr-1" />
-                            <span className="text-sm text-gray-300">
-                              Capacity: {booking.capacity}
-                            </span>
-                          </div>
-                        </div>
-                      </div>
-                      <button
-                        onClick={() => handleModifyClick(booking)}
-                        className="bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-md transition-colors"
-                      >
-                        Modify
-                      </button>
-                    </div>
+        {/* Content Wrapper */}
+        <div className="max-w-6xl mx-auto">
+          <div className="grid-layout-2 gap-8">
+            {/* Upcoming Bookings */}
+            <div className="card-container p-6">
+              <h2 className="card-header text-white border-b border-gray-700 pb-4">
+                <Calendar className="h-5 w-5 mr-3 text-plek-purple" />
+                Upcoming Bookings
+              </h2>
+              <div className="space-y-4 max-h-[400px] overflow-y-auto custom-scrollbar pr-2 mt-6">
+                {loading.bookings ? (
+                  <div className="flex justify-center items-center py-10">
+                    <Loader2
+                      size={30}
+                      className="animate-spin text-plek-purple mr-2"
+                    />
+                    <span className="text-gray-300">Loading your bookings...</span>
                   </div>
-                ))
-              )}
+                ) : error.bookings ? (
+                  <div className="bg-plek-error/20 border border-plek-error text-red-300 p-4 rounded-lg text-center">
+                    <p>{error.bookings}</p>
+                  </div>
+                ) : upcomingBookings.length === 0 ? (
+                  <div className="text-center py-10 bg-plek-lightgray/30 rounded-lg">
+                    <p className="text-gray-400 mb-3">You don't have any upcoming bookings.</p>
+                    <Link
+                      to="/booking"
+                      className="text-plek-purple hover:text-purple-300 underline"
+                    >
+                      Book a room now
+                    </Link>
+                  </div>
+                ) : (
+                  upcomingBookings.map((booking, index) => (
+                    <div
+                      key={booking.id || index}
+                      className="bg-plek-lightgray/30 p-5 rounded-lg hover:bg-plek-hover transition-colors shadow-sm"
+                    >
+                      <div className="flex flex-col md:flex-row justify-between items-start gap-4">
+                        <div>
+                          <h3 className="text-lg font-medium text-white">
+                            {booking.room}
+                          </h3>
+                          <p className="text-gray-400 mt-1 text-sm">{booking.building}</p>
+                          <div className="mt-3 flex flex-wrap items-center gap-3">
+                            <div className="flex items-center bg-plek-dark px-3 py-1 rounded-full">
+                              <Clock className="h-4 w-4 text-plek-purple mr-1.5" />
+                              <span className="text-sm text-gray-300">
+                                {booking.slot}
+                              </span>
+                            </div>
+                            <div className="flex items-center bg-plek-dark px-3 py-1 rounded-full">
+                              <Calendar className="h-4 w-4 text-plek-purple mr-1.5" />
+                              <span className="text-sm text-gray-300">
+                                {booking.date}
+                              </span>
+                            </div>
+                            <div className="flex items-center bg-plek-dark px-3 py-1 rounded-full">
+                              <Users className="h-4 w-4 text-plek-purple mr-1.5" />
+                              <span className="text-sm text-gray-300">
+                                {booking.capacity}
+                              </span>
+                            </div>
+                          </div>
+                          {booking.purpose && (
+                            <p className="mt-3 text-sm text-gray-400">
+                              <span className="font-medium text-gray-300">Purpose:</span> {booking.purpose}
+                            </p>
+                          )}
+                        </div>
+                        <button
+                          onClick={() => handleModifyClick(booking)}
+                          className="btn btn-primary"
+                        >
+                          Modify
+                        </button>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+              <div className="flex justify-center mt-6 pt-4 border-t border-gray-700">
+                <Link
+                  to="/my-bookings"
+                  className="btn btn-secondary"
+                >
+                  View All Bookings
+                </Link>
+              </div>
             </div>
-            <div className="flex justify-center mt-4">
-              <Link
-                to="/my-bookings"
-                className="bg-plek-purple hover:bg-purple-700 text-white px-6 py-2 rounded-lg transition-colors inline-flex items-center"
-              >
-                View All Bookings
-              </Link>
-            </div>
-          </div>
 
-          {/* Frequently Booked Rooms */}
-          <div className="section-card">
-            <h2 className="card-header">
-              <BookMarked className="h-5 w-5 mr-2 text-purple-500" />
-              Frequently Booked Rooms
-            </h2>
-            <div className="space-y-4 max-h-64 overflow-y-auto custom-scrollbar pr-2">
-              {loading.frequentRooms ? (
-                <div className="flex justify-center items-center py-8">
-                  <Loader2
-                    size={30}
-                    className="animate-spin text-purple-500 mr-2"
-                  />
-                  <span>Loading frequently booked rooms...</span>
-                </div>
-              ) : error.frequentRooms ? (
-                <div className="bg-red-900/20 border border-red-800 text-red-300 p-4 rounded-lg text-center">
-                  <p>{error.frequentRooms}</p>
-                </div>
-              ) : frequentRooms.length === 0 ? (
-                <div className="text-center py-10 text-gray-400">
-                  <p>No room booking history found.</p>
-                </div>
-              ) : (
-                frequentRooms.map((room, index) => (
-                  <div
-                    key={room.id || index}
-                    className="bg-gray-700/50 p-6 rounded-lg"
-                  >
-                    <div className="flex justify-between items-start">
-                      <div>
-                        <h3 className="text-lg font-medium">
-                          Room: {room.room}
-                        </h3>
-                        <p className="text-gray-400 mt-1">{room.building}</p>
-                        <div className="mt-3 flex items-center">
-                          <Users className="h-4 w-4 text-gray-400 mr-1" />
-                          <span className="text-sm text-gray-300">
-                            Capacity: {room.capacity}
-                          </span>
-                        </div>
-                      </div>
-                      <button
-                        onClick={() => handleBookClick(room)}
-                        className="bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-md transition-colors"
-                      >
-                        Book
-                      </button>
-                    </div>
+            {/* Frequently Booked Rooms */}
+            <div className="card-container p-6">
+              <h2 className="card-header text-white border-b border-gray-700 pb-4">
+                <BookMarked className="h-5 w-5 mr-3 text-plek-purple" />
+                Frequently Booked Rooms
+              </h2>
+              <div className="space-y-4 max-h-[400px] overflow-y-auto custom-scrollbar pr-2 mt-6">
+                {loading.frequentRooms ? (
+                  <div className="flex justify-center items-center py-10">
+                    <Loader2
+                      size={30}
+                      className="animate-spin text-plek-purple mr-2"
+                    />
+                    <span className="text-gray-300">Loading frequently booked rooms...</span>
                   </div>
-                ))
-              )}
-            </div>
-            <div className="flex justify-center mt-4">
-              <Link
-                to="/booking"
-                className="bg-plek-purple hover:bg-purple-700 text-white px-6 py-2 rounded-lg transition-colors inline-flex items-center"
-              >
-                Book a New Room
-              </Link>
+                ) : error.frequentRooms ? (
+                  <div className="bg-plek-error/20 border border-plek-error text-red-300 p-4 rounded-lg text-center">
+                    <p>{error.frequentRooms}</p>
+                  </div>
+                ) : frequentRooms.length === 0 ? (
+                  <div className="text-center py-10 bg-plek-lightgray/30 rounded-lg">
+                    <p className="text-gray-400">No room booking history found.</p>
+                  </div>
+                ) : (
+                  frequentRooms.map((room, index) => (
+                    <div
+                      key={room.id || index}
+                      className="bg-plek-lightgray/30 p-5 rounded-lg hover:bg-plek-hover transition-colors shadow-sm"
+                    >
+                      <div className="flex flex-col md:flex-row justify-between items-start gap-4">
+                        <div>
+                          <h3 className="text-lg font-medium text-white">
+                            {room.room}
+                          </h3>
+                          <p className="text-gray-400 mt-1 text-sm">{room.building}</p>
+                          <div className="mt-3 flex flex-wrap items-center gap-2">
+                            <div className="flex items-center bg-plek-dark px-3 py-1 rounded-full">
+                              <Users className="h-4 w-4 text-plek-purple mr-1.5" />
+                              <span className="text-sm text-gray-300">
+                                Capacity: {room.capacity}
+                              </span>
+                            </div>
+                            <div className="flex items-center bg-plek-dark px-3 py-1 rounded-full">
+                              <BookMarked className="h-4 w-4 text-plek-purple mr-1.5" />
+                              <span className="text-sm text-gray-300">
+                                Booked {room.frequency} times
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+                        <button
+                          onClick={() => handleBookClick(room)}
+                          className="btn btn-primary"
+                        >
+                          Book
+                        </button>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+              <div className="flex justify-center mt-6 pt-4 border-t border-gray-700">
+                <Link
+                  to="/booking"
+                  className="btn btn-primary"
+                >
+                  Book a New Room
+                </Link>
+              </div>
             </div>
           </div>
         </div>
