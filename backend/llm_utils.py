@@ -7,15 +7,15 @@ from bookings.models import Booking
 from django.utils import timezone
 
 # Load environment variables
-load_dotenv("C:/Users/Rishi/Desktop/plek/backend/.env")
+load_dotenv()  # Load from default .env location instead of hardcoded path
 
 class LLMManager:
     def __init__(self):
-        self.api_key = os.getenv("OPENROUTER_API_KEY")
-        if not self.api_key:
-            raise ValueError("OPENROUTER_API_KEY not found in environment variables")
+        # Use the provided API key instead of looking for an environment variable
+        self.api_key = "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"
         self.base_url = "https://openrouter.ai/api/v1/chat/completions"
-        self.model = "google/gemma-3-12b-it:free"
+        # Use a reliable model from OpenRouter that's good at structured responses
+        self.model = "anthropic/claude-3-haiku"
     
     def extract_booking_intent(self, user_message: str) -> Dict[str, Any]:
         """Extract booking intent and parameters from user message using Gemma LLM"""
@@ -110,18 +110,59 @@ class LLMManager:
         # Return basic parsing
         return result
         
-    def generate_response(self, user_message: str, booking_info: Optional[Dict[str, Any]] = None) -> str:
+    def generate_response(self, user_message: str, context: Optional[Dict[str, Any]] = None) -> str:
         """Generate a natural language response"""
-        system_prompt = """You are a helpful room booking assistant. 
-        Respond to the user based on their message and the booking information provided.
-        Keep your responses conversational, helpful, and concise.
-        If the error message contains 'Operation cancelled by user', respond with a message indicating 
-        that the cancellation was aborted and the booking remains active.
+        system_prompt = """You are a helpful and friendly room booking assistant named Plek Assistant. 
+        Your personality is professional but warm, helpful, and slightly witty.
+        
+        Respond to the user based on their message and the context provided.
+        
+        Keep your responses conversational and natural-sounding while being informative.
+        Make references to previous parts of the conversation when relevant.
+        
+        When asking for missing information:
+        - Ask for ONE piece of information at a time in a natural, conversational way
+        - Don't use bullet points or numbered lists
+        - Frame your question as a natural follow-up to what the user said
+        - Avoid mentioning "missing parameters" or using technical terms
+        - For room_name: Ask which room they'd like to book
+        - For date: Ask when they need the room
+        - For start_time: Ask what time they'd like to start
+        - For end_time: Ask until what time they need the room
+        - For purpose: Ask what the meeting or event is about, or what the purpose of their booking is
+        - For participants: Ask how many people will be attending or if they'd like to add any specific attendees
+        - Also ask if they have any additional notes or requirements for their booking
+        - Acknowledge any information they've already provided
+        
+        When responding to booking-related actions:
+        - For successful actions: Be enthusiastic and congratulatory
+        - For errors: Be empathetic and helpful, suggesting solutions when possible
+        - For confirmations: Clearly state what the user is confirming but ask in a natural way
+        
+        Tailor your language based on the context - formal for business meetings, casual for social gatherings.
+        
+        Current date for reference: May 5, 2025.
         """
         
+        # If we're specifically asking for a single missing parameter, add to the system prompt
+        if context and context.get('ask_for_one_parameter') and context.get('missing_parameter'):
+            next_param = context['missing_parameter']
+            already_collected = context.get('already_collected', {})
+            
+            # Add specific instructions to focus on just one parameter
+            system_prompt += f"\n\nIn this response, ONLY ask for the '{next_param}' in a natural way."
+            system_prompt += "\nDon't list all required information or mention 'missing parameters'."
+            
+            # Include what we already know
+            if already_collected:
+                system_prompt += "\n\nInformation already collected:"
+                for key, value in already_collected.items():
+                    if key != 'intent':
+                        system_prompt += f"\n- {key}: {value}"
+        
         # Check if this was a cancelled operation
-        if booking_info and isinstance(booking_info.get('error'), str):
-            if 'Operation cancelled by user' in booking_info['error']:
+        if context and isinstance(context.get('error'), str):
+            if 'Operation cancelled by user' in context['error']:
                 return "Okay, I've kept your booking active. Let me know if you need anything else!"
         
         messages = [
@@ -129,19 +170,32 @@ class LLMManager:
             {"role": "user", "content": user_message}
         ]
         
-        # Add booking info if available
-        if booking_info:
-            booking_context = f"Context: {json.dumps(booking_info)}"
-            messages.append({"role": "user", "content": booking_context})
+        # Add conversation history if available
+        if context and 'conversation_history' in context:
+            # We'll skip this in the messages to the LLM since we'll use the history directly
+            history = context.pop('conversation_history')
+            if history and len(history) > 0:
+                # Insert the conversation history before the current user message
+                messages = [{"role": "system", "content": system_prompt}]
+                messages.extend(history[:-1])  # Add all but the last user message (which we already have)
+                messages.append({"role": "user", "content": user_message})
+        
+        # Add context if available
+        if context:
+            context_str = json.dumps(context)
+            messages.append({"role": "user", "content": f"Context: {context_str}"})
         
         try:
             payload = {
                 "model": self.model,
-                "messages": messages
+                "messages": messages,
+                "temperature": 0.7,
+                "max_tokens": 1000
             }
             
             headers = {
                 "HTTP-Referer": "https://plek.com",
+                "X-Title": "Plek Room Booking Assistant",
                 "Authorization": f"Bearer {self.api_key}",
                 "Content-Type": "application/json"
             }

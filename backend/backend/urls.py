@@ -34,6 +34,8 @@ urlpatterns = [
     # Main app functionality
     path("", include("rooms.urls")),
     path("", include("bookings.urls")),
+    # Chatbot functionality
+    path("chatbot/", include("chatbot.urls")),
 ]
 
 # Serve media files in development

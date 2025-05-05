@@ -170,20 +170,31 @@ class BookingTools:
         try:
             # Ensure we have a valid CSRF token
             csrf_token = self._ensure_csrf_token()
+            sessionid = self.session.cookies.get('sessionid')
+            
+            if not sessionid:
+                self.logger.error("No sessionid cookie found - user is not authenticated")
+                return {
+                    "success": False, 
+                    "error": {"detail": "Authentication required. Please log in again."}
+                }
+            
+            # Make sure cookies are properly set in the session
+            self.session.cookies.set('csrftoken', csrf_token)
+            self.session.cookies.set('sessionid', sessionid)
             
             # Include all necessary headers for authentication
             headers = {
                 "X-CSRFToken": csrf_token,
-                "Cookie": f"csrftoken={csrf_token}; sessionid={self.session.cookies.get('sessionid')}",
                 "Content-Type": "application/json",
                 "Accept": "application/json",
-                "Referer": self.base_url  # Add referer header
+                "Referer": f"{self.base_url}/bookings/"  # Add proper referer
             }
             
-            self._log_request("DELETE", f"{self.base_url}/bookings/{booking_id}/", {})
-            
-            # Log headers for debugging
-            self.logger.debug(f"Request Headers: {headers}")
+            # Log the request details for debugging
+            self.logger.debug(f"Cancel booking request - URL: {self.base_url}/bookings/{booking_id}/")
+            self.logger.debug(f"Headers: {headers}")
+            self.logger.debug(f"Cookies: {dict(self.session.cookies)}")
             
             # Make the DELETE request
             response = self.session.delete(
@@ -195,7 +206,6 @@ class BookingTools:
             self._log_response(response)
             
             if response.status_code in [200, 204]:
-                # Rest of success handling...
                 return {
                     "success": True,
                     "message": f"Booking {booking_id} cancelled successfully!"
@@ -380,11 +390,37 @@ class BookingTools:
         
         date_str = date_obj.strftime("%Y-%m-%d")
         
-        # Handle 12-hour format (e.g. "2 PM")
-        if "am" in time_str.lower() or "pm" in time_str.lower():
-            # Convert to 24-hour format
-            time_obj = datetime.datetime.strptime(time_str, "%I %p").time()
+        # Handle various time formats
+        try:
+            # Handle different time formats
+            time_lower = time_str.lower()
+            
+            # Try different formats based on the input pattern
+            if ("am" in time_lower or "pm" in time_lower):
+                if ":" in time_str:
+                    # Format like "4:00 PM" or "4:30 am"
+                    try:
+                        time_obj = datetime.datetime.strptime(time_str, "%I:%M %p").time()
+                    except ValueError:
+                        # Try alternative format with no space
+                        time_obj = datetime.datetime.strptime(time_str, "%I:%M%p").time()
+                else:
+                    # Format like "4 PM" or "4pm"
+                    try:
+                        time_obj = datetime.datetime.strptime(time_str, "%I %p").time()
+                    except ValueError:
+                        # Try alternative format with no space
+                        time_obj = datetime.datetime.strptime(time_str, "%I%p").time()
+            else:
+                # Assume 24-hour format
+                time_obj = datetime.datetime.strptime(time_str, "%H:%M").time()
+                
             time_str = time_obj.strftime("%H:%M")
+        except ValueError as e:
+            # If all parsing attempts fail, log the error and use a default time
+            print(f"Error parsing time format '{time_str}': {str(e)}")
+            # Default to noon if time parsing fails
+            time_str = "12:00"
         
         # Combine date and time in local timezone
         local_tz = datetime.timezone(datetime.timedelta(hours=5, minutes=30))  # IST timezone

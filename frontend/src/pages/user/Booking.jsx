@@ -76,7 +76,7 @@ function Booking() {
           departmentsResponse,
           amenitiesResponse,
         ] = await Promise.all([
-          api.get("rooms/"),
+          api.get("rooms/?view_all=true"), // Added view_all=true parameter
           api.get("floors/"),
           api.get("departments/"),
           api.get("amenities/"),
@@ -117,7 +117,7 @@ function Booking() {
     const intervalId = setInterval(() => {
       console.log("Refreshing room data...");
       api
-        .get("rooms/")
+        .get("rooms/?view_all=true") // Added view_all=true parameter
         .then((response) => {
           if (isMounted) {
             setRooms(response.data);
@@ -182,7 +182,9 @@ function Booking() {
     const matchesSearch =
       searchQuery === "" ||
       room.name.toLowerCase().includes(searchLower) ||
-      room.building.toLowerCase().includes(searchLower) ||
+      (room.building &&
+        typeof room.building === "string" &&
+        room.building.toLowerCase().includes(searchLower)) ||
       (room.floor_name &&
         room.floor_name.toLowerCase().includes(searchLower)) ||
       (room.amenity_names &&

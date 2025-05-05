@@ -9,6 +9,7 @@ import Signup from "./pages/user/Signup";
 import Dashboard from "./pages/user/Dashboard";
 import Booking from "./pages/user/Booking";
 import MyBookings from "./pages/user/MyBookings";
+import ChatBot from "./pages/user/ChatBot";
 
 // Admin Pages
 import AdminLogin from "./pages/admin/AdminLogin";
@@ -35,6 +36,7 @@ function App() {
         <Route path="/dashboard" element={<Dashboard />} />
         <Route path="/booking" element={<Booking />} />
         <Route path="/my-bookings" element={<MyBookings />} />
+        <Route path="/chatbot" element={<ChatBot />} />
 
         {/* Admin Routes */}
         <Route path="/admin/dashboard" element={<DashboardAdmin />} />

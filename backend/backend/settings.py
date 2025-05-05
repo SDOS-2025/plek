@@ -45,6 +45,7 @@ INSTALLED_APPS = [
     "settings",
     "analytics",
     "audit.apps.AuditConfig",  # Use the app config instead of just 'audit'
+    "chatbot",
 ]
 
 SITE_ID = 1
