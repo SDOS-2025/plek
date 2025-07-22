@@ -6,16 +6,15 @@ from dotenv import load_dotenv
 from bookings.models import Booking
 from django.utils import timezone
 
-# Load environment variables
-load_dotenv()  # Load from default .env location instead of hardcoded path
+load_dotenv("backend/.env")
 
 class LLMManager:
     def __init__(self):
-        # Use the provided API key instead of looking for an environment variable
-        self.api_key = "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"
+        self.api_key = os.getenv("OPENROUTER_API_KEY")
+        if not self.api_key:
+            raise ValueError("OPENROUTER_API_KEY not found in environment variables")
         self.base_url = "https://openrouter.ai/api/v1/chat/completions"
-        # Use a reliable model from OpenRouter that's good at structured responses
-        self.model = "anthropic/claude-3-haiku"
+        self.model = "google/gemma-3-12b-it:free"
     
     def extract_booking_intent(self, user_message: str) -> Dict[str, Any]:
         """Extract booking intent and parameters from user message using Gemma LLM"""
