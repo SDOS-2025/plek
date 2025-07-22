@@ -2,6 +2,9 @@
 
 Plek is a full-stack web application for managing room bookings in an institutional or corporate environment. It provides a robust backend built with Django and a modern frontend using React, with features for users, coordinators, and administrators.
 
+## Demo and Docs
+https://drive.google.com/drive/folders/1IJOQv5UZ_g-wDyXzXfyzFAUP2eUCp_bS?usp=drive_link
+
 ---
 
 ## Table of Contents
